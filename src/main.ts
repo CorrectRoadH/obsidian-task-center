@@ -52,11 +52,13 @@ export default class BetterTaskPlugin extends Plugin {
     this.registerView(VIEW_TYPE_BETTER_TASK, (leaf) => new BetterTaskView(leaf, this));
     this.addRibbonIcon("kanban-square", tr("ribbon.open"), () => this.activateView());
 
-    // Commands (Obsidian command palette)
+    // Commands (Obsidian command palette). Default hotkey Cmd/Ctrl+Shift+T is
+    // a suggestion — users can rebind in Settings → Hotkeys if it collides.
     this.addCommand({
       id: "open",
       name: tr("cmd.open"),
       callback: () => this.activateView(),
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "t" }],
     });
     this.addCommand({
       id: "quick-add",
