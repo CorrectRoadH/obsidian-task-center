@@ -203,6 +203,12 @@ function collectDescendants(task: ParsedTask, all: ParsedTask[]): ParsedTask[] {
 
 export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask[] {
   let filtered = [...all];
+  // By default, hide tasks whose ancestor is done / dropped. Only keep them
+  // when the caller explicitly asks for inherited-terminal context (e.g. status=done
+  // lookups) — the terminal status filter below overrides this where needed.
+  if (!filters.status || filters.status === "todo") {
+    filtered = filtered.filter((t) => !t.inheritsTerminal);
+  }
   if (filters.scheduled) {
     const r = resolveWhen(filters.scheduled);
     if (r.unscheduled) {
