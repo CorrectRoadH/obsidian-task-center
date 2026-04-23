@@ -1,6 +1,6 @@
-import { App, TFile } from "obsidian";
+import { App } from "obsidian";
 import { ParsedTask, TaskStatus } from "./types";
-import { parseVaultTasks, parseFileTasks, formatMinutes } from "./parser";
+import { parseVaultTasks, formatMinutes } from "./parser";
 import {
   resolveTaskRef,
   setScheduled,
@@ -17,14 +17,7 @@ import {
   renameTask,
   TaskWriterError,
 } from "./writer";
-import {
-  todayISO,
-  resolveWhen,
-  daysBetween,
-  isValidISO,
-  startOfWeek,
-  endOfWeek,
-} from "./dates";
+import { todayISO, resolveWhen, isValidISO } from "./dates";
 
 export interface ListFilters {
   scheduled?: string;
@@ -291,7 +284,7 @@ export interface StatsResult {
 export function computeStats(all: ParsedTask[], opts: StatsOpts): StatsResult {
   const today = todayISO();
   let from = opts.from ?? "";
-  let to = opts.to ?? today;
+  const to = opts.to ?? today;
   const days = opts.days ?? 7;
   if (!from) {
     const d = new Date(today);

@@ -1,6 +1,5 @@
 import { App, Modal, TextComponent } from "obsidian";
 import { todayISO, addDays, isValidISO } from "./dates";
-import { t as tr } from "./i18n";
 
 /**
  * Small modal that accepts a date as YYYY-MM-DD or a natural-language hint

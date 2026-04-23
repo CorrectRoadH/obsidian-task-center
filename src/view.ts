@@ -4,21 +4,14 @@ import {
   Menu,
   Notice,
   TFile,
-  App,
   EventRef,
   MarkdownView,
 } from "obsidian";
-import { ParsedTask, VIEW_TYPE_BETTER_TASK, BetterTaskSettings } from "./types";
+import { ParsedTask, VIEW_TYPE_BETTER_TASK } from "./types";
 import { parseVaultTasks, formatMinutes } from "./parser";
-import {
-  BetterTaskApi,
-  filterTasks,
-  formatShow,
-  computeStats,
-} from "./cli";
+import { BetterTaskApi, computeStats } from "./cli";
 import {
   todayISO,
-  toISO,
   fromISO,
   addDays,
   shiftMonth,

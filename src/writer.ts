@@ -1,6 +1,6 @@
 import { App, TFile, normalizePath } from "obsidian";
 import { ParsedTask } from "./types";
-import { parseTaskLine, cleanTitle, shortHash, parseDurationToMinutes, formatMinutes } from "./parser";
+import { parseTaskLine, formatMinutes } from "./parser";
 
 export interface TaskRef {
   path: string;

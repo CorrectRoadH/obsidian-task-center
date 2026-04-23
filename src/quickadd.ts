@@ -1,8 +1,8 @@
-import { App, Modal, Setting, TextComponent } from "obsidian";
+import { App, Modal, TextComponent } from "obsidian";
 import { BetterTaskApi } from "./cli";
 import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
-import { todayISO, addDays, resolveWhen, isValidISO } from "./dates";
+import { todayISO, addDays, isValidISO } from "./dates";
 import type { BetterTaskSettings } from "./types";
 
 export class QuickAddModal extends Modal {

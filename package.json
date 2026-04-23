@@ -7,17 +7,27 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc -noEmit",
-    "test": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs"
+    "test": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs",
+    "lint": "eslint src"
   },
-  "keywords": ["obsidian", "plugin", "tasks", "kanban", "energy-management"],
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "tasks",
+    "kanban",
+    "energy-management"
+  ],
   "author": "ctrdh",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.0",
     "builtin-modules": "^3.3.0",
     "esbuild": "^0.21.5",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "obsidian": "^1.5.7",
     "tslib": "^2.6.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.59.0"
   }
 }
