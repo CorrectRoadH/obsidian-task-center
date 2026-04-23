@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-better-task",
+  "version": "0.1.0",
+  "description": "Task board + CLI for energy-based task management on top of Obsidian Tasks syntax",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc -noEmit"
+  },
+  "keywords": ["obsidian", "plugin", "tasks", "kanban", "energy-management"],
+  "author": "ctrdh",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.7",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}
