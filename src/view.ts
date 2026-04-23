@@ -717,7 +717,12 @@ export class BetterTaskView extends ItemView {
         subCard.draggable = true;
         subCard.createDiv({ cls: "bt-sub-check", text: statusIcon(c.status) });
         subCard.createDiv({ cls: "bt-subcard-title", text: c.title });
+        if (c.scheduled && c.scheduled !== t.scheduled) {
+          // Flag when a subtask is scheduled to a different day than its parent
+          subCard.createDiv({ cls: "bt-sub-sched", text: `⏳${c.scheduled}` });
+        }
         if (c.estimate) subCard.createDiv({ cls: "bt-sub-est", text: formatMinutes(c.estimate) });
+        if (c.status === "done") subCard.addClass("done");
         this.wireCardEvents(subCard, c);
       }
     }

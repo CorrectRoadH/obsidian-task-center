@@ -362,6 +362,8 @@
 .better-task-view .bt-sub-check { width: 12px; color: var(--text-faint); }
 .better-task-view .bt-subcard-title { flex: 1; }
 .better-task-view .bt-sub-est { color: var(--text-faint); font-size: 10px; }
+.better-task-view .bt-sub-sched { color: var(--color-blue); font-size: 10px; }
+.better-task-view .bt-subcard.done { opacity: 0.5; text-decoration: line-through; }
 
 /* Drop zones */
 .better-task-view .drop-hover {
