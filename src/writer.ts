@@ -344,9 +344,24 @@ function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function todayFilename(folder: string): string {
+function todayFilename(folder: string, format?: string): string {
   const d = new Date();
-  const name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  // Respect the daily-notes plugin's moment-style format if provided. Subset
+  // of tokens that covers virtually all real-world daily-note formats.
+  // Unsupported tokens fall through to a literal YYYY-MM-DD.
+  let name: string;
+  if (format) {
+    name = format
+      .replace(/YYYY/g, d.getFullYear().toString())
+      .replace(/YY/g, String(d.getFullYear()).slice(-2))
+      .replace(/MM/g, pad(d.getMonth() + 1))
+      .replace(/DD/g, pad(d.getDate()))
+      .replace(/D/g, String(d.getDate()))
+      .replace(/ddd/g, ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()])
+      + ".md";
+  } else {
+    name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  }
   return normalizePath(folder ? `${folder}/${name}` : name);
 }
 
@@ -378,12 +393,15 @@ export async function addTask(
       const dnOpts =
         (app as unknown as {
           internalPlugins?: {
-            plugins?: Record<string, { instance?: { options?: { folder?: string } } }>;
+            plugins?: Record<
+              string,
+              { instance?: { options?: { folder?: string; format?: string } } }
+            >;
           };
         }).internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
       const dailyEnabled = !!dnOpts;
       if (dailyEnabled) {
-        targetPath = todayFilename(dnOpts?.folder ?? "");
+        targetPath = todayFilename(dnOpts?.folder ?? "", dnOpts?.format);
       } else {
         targetPath = opts.inboxFallback ?? "Tasks/Inbox.md";
       }
