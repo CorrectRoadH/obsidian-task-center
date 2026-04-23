@@ -478,6 +478,7 @@ export default class BetterTaskPlugin extends Plugin {
       estimate,
       parent: args.parent,
       stampCreated,
+      inboxFallback: this.settings.inboxPath,
     });
     void this.refreshOpenViews();
     return formatAdd(r);

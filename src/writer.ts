@@ -335,6 +335,9 @@ export interface AddTaskOpts {
   parent?: ParsedTask | null;
   checkbox?: string;
   stampCreated?: boolean;
+  // Fallback target when no targetPath, no parent, and no daily note exists.
+  // Typically plugin.settings.inboxPath (default "Tasks/Inbox.md").
+  inboxFallback?: string;
 }
 
 function pad(n: number): string {
@@ -371,8 +374,19 @@ export async function addTask(
     if (opts.parent) {
       targetPath = opts.parent.path;
     } else {
-      const folder = ((app as unknown as { internalPlugins: { plugins: { [k: string]: { instance?: { options?: { folder?: string } } } } } }).internalPlugins?.plugins["daily-notes"]?.instance?.options?.folder) ?? "";
-      targetPath = todayFilename(folder);
+      // Priority: today's daily note → inbox fallback ("Tasks/Inbox.md")
+      const dnOpts =
+        (app as unknown as {
+          internalPlugins?: {
+            plugins?: Record<string, { instance?: { options?: { folder?: string } } }>;
+          };
+        }).internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
+      const dailyEnabled = !!dnOpts;
+      if (dailyEnabled) {
+        targetPath = todayFilename(dnOpts?.folder ?? "");
+      } else {
+        targetPath = opts.inboxFallback ?? "Tasks/Inbox.md";
+      }
     }
   }
   targetPath = normalizePath(targetPath);

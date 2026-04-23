@@ -51,7 +51,11 @@ export class QuickAddModal extends Modal {
     if (!raw) return;
     try {
       const parsed = parseQuickAdd(raw);
-      await this.api.add({ ...parsed, stampCreated: this.settings?.stampCreated ?? true });
+      await this.api.add({
+        ...parsed,
+        stampCreated: this.settings?.stampCreated ?? true,
+        inboxFallback: this.settings?.inboxPath,
+      });
       this.close();
       if (this.onDone) this.onDone();
     } catch (e) {

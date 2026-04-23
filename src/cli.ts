@@ -150,6 +150,7 @@ export class BetterTaskApi {
     estimate?: number;
     parent?: string;
     stampCreated?: boolean;
+    inboxFallback?: string;
   }) {
     const all = await this.allTasks();
     let parent: ParsedTask | null = null;
@@ -166,6 +167,7 @@ export class BetterTaskApi {
       estimate: opts.estimate ?? null,
       parent,
       stampCreated: opts.stampCreated,
+      inboxFallback: opts.inboxFallback,
     });
   }
 
