@@ -1,0 +1,208 @@
+// Unit tests for pure CLI filters, stats, and formatters.
+// Run with: `node --test test/cli.test.mjs`
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+
+function compile() {
+  const result = spawnSync(
+    "npx",
+    [
+      "esbuild",
+      "src/cli.ts",
+      "--bundle",
+      "--format=esm",
+      "--platform=node",
+      "--outfile=test/.compiled/cli.bundle.js",
+      "--alias:obsidian=./test/obsidian-stub.mjs",
+    ],
+    { cwd: process.cwd(), stdio: "pipe", encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    throw new Error("esbuild failed:\n" + result.stderr);
+  }
+}
+
+compile();
+const { filterTasks, computeStats, formatList, formatStats, formatError } =
+  await import("../test/.compiled/cli.bundle.js");
+
+function mkTask(over = {}) {
+  return {
+    id: "f.md:L1",
+    path: "f.md",
+    line: 0,
+    indent: "",
+    checkbox: " ",
+    status: "todo",
+    title: "t",
+    rawTitle: "t",
+    rawLine: "- [ ] t",
+    tags: [],
+    scheduled: null,
+    deadline: null,
+    start: null,
+    completed: null,
+    cancelled: null,
+    created: null,
+    estimate: null,
+    actual: null,
+    parentLine: null,
+    parentIndex: null,
+    childrenLines: [],
+    hash: "abc123",
+    mtime: 0,
+    inheritsTerminal: false,
+    ...over,
+  };
+}
+
+test("filterTasks — scheduled=today", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = [
+    mkTask({ id: "a", scheduled: today }),
+    mkTask({ id: "b", scheduled: null }),
+    mkTask({ id: "c", scheduled: "2026-01-01" }),
+  ];
+  const r = filterTasks(all, { scheduled: "today" });
+  assert.deepEqual(r.map((t) => t.id), ["a"]);
+});
+
+test("filterTasks — unscheduled hides inherits-terminal by default", () => {
+  const all = [
+    mkTask({ id: "a" }),
+    mkTask({ id: "b", inheritsTerminal: true }),
+  ];
+  const r = filterTasks(all, { scheduled: "unscheduled" });
+  assert.deepEqual(r.map((t) => t.id), ["a"]);
+});
+
+test("filterTasks — status=done skips inherits-terminal filter", () => {
+  const all = [
+    mkTask({ id: "a", status: "done", inheritsTerminal: true }),
+    mkTask({ id: "b", status: "done" }),
+  ];
+  const r = filterTasks(all, { status: "done" });
+  assert.deepEqual(r.map((t) => t.id).sort(), ["a", "b"]);
+});
+
+test("filterTasks — tag filter accepts wildcard", () => {
+  const all = [
+    mkTask({ id: "a", tags: ["#2象限"] }),
+    mkTask({ id: "b", tags: ["#3象限"] }),
+    mkTask({ id: "c", tags: ["#基建"] }),
+  ];
+  const r = filterTasks(all, { tag: ["#*象限"] });
+  assert.deepEqual(r.map((t) => t.id).sort(), ["a", "b"]);
+});
+
+test("filterTasks — overdue only matches past-deadline todos", () => {
+  const all = [
+    mkTask({ id: "a", deadline: "2020-01-01" }),
+    mkTask({ id: "b", deadline: "2099-01-01" }),
+    mkTask({ id: "c" }),
+    mkTask({ id: "d", status: "done", deadline: "2020-01-01" }),
+  ];
+  const r = filterTasks(all, { overdue: true });
+  assert.deepEqual(r.map((t) => t.id), ["a"]);
+});
+
+test("filterTasks — search matches substring, case-insensitive", () => {
+  const all = [
+    mkTask({ id: "a", title: "go to Grocery store" }),
+    mkTask({ id: "b", title: "GROCERY list" }),
+    mkTask({ id: "c", title: "meeting" }),
+  ];
+  const r = filterTasks(all, { search: "grocery" });
+  assert.deepEqual(r.map((t) => t.id).sort(), ["a", "b"]);
+});
+
+test("filterTasks — limit truncates", () => {
+  const all = [mkTask({ id: "a" }), mkTask({ id: "b" }), mkTask({ id: "c" })];
+  const r = filterTasks(all, { limit: 2 });
+  assert.equal(r.length, 2);
+});
+
+test("computeStats — zero done tasks", () => {
+  const s = computeStats([], { days: 7 });
+  assert.equal(s.doneCount, 0);
+  assert.equal(s.sumActual, 0);
+  assert.equal(s.ratio, null);
+});
+
+test("computeStats — ratio + per-task mean", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = [
+    mkTask({ id: "a", status: "done", completed: today, estimate: 60, actual: 90 }),
+    mkTask({ id: "b", status: "done", completed: today, estimate: 30, actual: 30 }),
+  ];
+  const s = computeStats(all, { days: 1 });
+  assert.equal(s.doneCount, 2);
+  assert.equal(s.sumActual, 120);
+  assert.equal(s.sumEstimate, 90);
+  // ratio = 120 / 90 = 1.333
+  assert.ok(Math.abs(s.ratio - 120 / 90) < 1e-9);
+  // per-task ratios: 90/60=1.5, 30/30=1.0 → mean=1.25
+  assert.ok(Math.abs(s.perTaskMean - 1.25) < 1e-9);
+});
+
+test("computeStats — byTag aggregates minutes", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = [
+    mkTask({ id: "a", status: "done", completed: today, actual: 60, tags: ["#2象限"] }),
+    mkTask({ id: "b", status: "done", completed: today, actual: 30, tags: ["#2象限", "#基建"] }),
+  ];
+  const s = computeStats(all, { days: 1 });
+  const q2 = s.byTag.find((x) => x.tag === "#2象限");
+  assert.equal(q2.minutes, 90);
+  const jijian = s.byTag.find((x) => x.tag === "#基建");
+  assert.equal(jijian.minutes, 30);
+});
+
+test("computeStats — group prefix produces byGroup", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = [
+    mkTask({ id: "a", status: "done", completed: today, actual: 60, tags: ["#2象限"] }),
+    mkTask({ id: "b", status: "done", completed: today, actual: 30, tags: ["#3象限"] }),
+    mkTask({ id: "c", status: "done", completed: today, actual: 10, tags: ["#基建"] }),
+  ];
+  const s = computeStats(all, { days: 1, group: "象限" });
+  assert.ok(s.byGroup);
+  assert.equal(s.byGroup.prefix, "象限");
+  assert.equal(s.byGroup.entries.length, 2);
+});
+
+test("formatList — header + rows with ids", () => {
+  const all = [mkTask({ id: "f.md:L1", title: "a" })];
+  const out = formatList(all, "1 tasks · test");
+  assert.match(out, /1 tasks · test/);
+  assert.match(out, /f\.md:L1/);
+  assert.match(out, /\[ \]/);
+});
+
+test("formatStats — shows ratio + 'within band'", () => {
+  const s = {
+    periodFrom: "2026-04-17",
+    periodTo: "2026-04-23",
+    days: 7,
+    doneCount: 2,
+    sumActual: 120,
+    sumEstimate: 90,
+    ratio: 120 / 90,
+    perTaskMean: 1.25,
+    perTaskStd: 0.25,
+    withinBand: { count: 1, total: 2, pct: 50 },
+    byTag: [],
+  };
+  const out = formatStats(s);
+  assert.match(out, /Tasks done: 2/);
+  assert.match(out, /sum actual\s+120m/);
+  assert.match(out, /within band\s+1\/2/);
+});
+
+test("formatError — greppable code + message shape", () => {
+  const out = formatError("task_not_found", "no match");
+  assert.match(out, /^error\s+task_not_found/);
+  assert.match(out, /no match/);
+});
