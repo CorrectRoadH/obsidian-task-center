@@ -296,6 +296,7 @@ export class BetterTaskView extends ItemView {
       const dayTasks = this.tasks
         .filter((t) => t.scheduled === day && t.status === "todo")
         .filter(filter);
+      const topLevel = this.hideChildrenOfVisibleParents(dayTasks);
       const stats = col.createSpan({
         text: this.columnStats(dayTasks),
         cls: "bt-week-stats",
@@ -304,7 +305,7 @@ export class BetterTaskView extends ItemView {
 
       const list = col.createDiv({ cls: "bt-week-list" });
       this.makeDropZone(list, day);
-      for (const t of dayTasks) {
+      for (const t of topLevel) {
         this.renderCard(list, t);
       }
     }
@@ -314,6 +315,19 @@ export class BetterTaskView extends ItemView {
     const sum = tasks.reduce((s, t) => s + (t.estimate ?? 0), 0);
     if (sum === 0) return `${tasks.length}`;
     return `${tasks.length} · ${formatMinutes(sum)}`;
+  }
+
+  /**
+   * If a task's parent is also in the visible set, hide the child at the top
+   * level — it will still render inside the parent's children block.
+   */
+  private hideChildrenOfVisibleParents(visible: ParsedTask[]): ParsedTask[] {
+    const ids = new Set(visible.map((t) => t.id));
+    return visible.filter((t) => {
+      if (t.parentLine === null) return true;
+      const parentId = `${t.path}:L${t.parentLine + 1}`;
+      return !ids.has(parentId);
+    });
   }
 
   // ---------- Month ----------
@@ -351,9 +365,10 @@ export class BetterTaskView extends ItemView {
           (day === today ? " today" : "") +
           (isCurMonth ? "" : " other-month"),
       });
-      const dayTasks = this.tasks
+      const dayTasksAll = this.tasks
         .filter((t) => t.scheduled === day && t.status === "todo")
         .filter(filter);
+      const dayTasks = this.hideChildrenOfVisibleParents(dayTasksAll);
       const head = cell.createDiv({ cls: "bt-month-cell-head" });
       head.createSpan({ text: `${dObj.getDate()}`, cls: "bt-month-cell-date" });
       if (dayTasks.length > 0) {
@@ -442,9 +457,10 @@ export class BetterTaskView extends ItemView {
 
   private renderUnscheduledPool(parent: HTMLElement) {
     const filter = this.getTextFilter();
-    const unscheduled = this.tasks
+    const unscheduledAll = this.tasks
       .filter((t) => !t.scheduled && t.status === "todo")
       .filter(filter);
+    const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
     if (unscheduled.length === 0 && !this.state.showUnscheduledPool) return;
 
     const wrap = parent.createDiv({ cls: "bt-pool-wrap" });
@@ -506,9 +522,10 @@ export class BetterTaskView extends ItemView {
 
   private renderUnscheduledBig(parent: HTMLElement) {
     const filter = this.getTextFilter();
-    const unscheduled = this.tasks
+    const unscheduledAll = this.tasks
       .filter((t) => !t.scheduled && t.status === "todo")
       .filter(filter);
+    const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
 
     const wrap = parent.createDiv({ cls: "bt-unscheduled-big" });
     const head = wrap.createDiv({ cls: "bt-unscheduled-big-head" });
