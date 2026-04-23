@@ -257,7 +257,11 @@
   padding: 6px 8px;
   font-size: 12px;
   cursor: grab;
-  transition: transform 0.08s ease;
+  transition: transform 0.08s ease, border-color 0.1s ease, background-color 0.1s ease;
+}
+.better-task-view .bt-card:hover {
+  border-color: var(--interactive-accent-hover, var(--interactive-accent));
+  background: var(--background-primary-alt, var(--background-primary));
 }
 .better-task-view .bt-card:active {
   cursor: grabbing;
