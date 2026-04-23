@@ -96,7 +96,8 @@ function setInlineField(line: string, name: string, value: string | null): strin
 }
 
 function setCheckbox(line: string, char: string): string {
-  return line.replace(/^(\s*[-+*]\s+\[).(\])/, `$1${char}$2`);
+  // Accept optional callout `> ` prefix(es) in the indent.
+  return line.replace(/^(\s*(?:>\s*)*[-+*]\s+\[).(\])/, `$1${char}$2`);
 }
 
 function addTagIfMissing(line: string, tag: string): string {
@@ -218,7 +219,7 @@ export async function markDone(
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
   const dateStr = at ?? today();
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
-    if (/^\s*[-+*]\s+\[[xX]\]/.test(raw) && new RegExp(`✅\\s*${dateStr}`).test(raw)) {
+    if (/^\s*(?:>\s*)*[-+*]\s+\[[xX]\]/.test(raw) && new RegExp(`✅\\s*${dateStr}`).test(raw)) {
       return null;
     }
     let nl = setCheckbox(raw, "x");
@@ -233,7 +234,7 @@ export async function markUndone(
   task: ParsedTask,
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
-    if (/^\s*[-+*]\s+\[\s\]/.test(raw) && !/✅\s*\d{4}-\d{2}-\d{2}/.test(raw)) {
+    if (/^\s*(?:>\s*)*[-+*]\s+\[\s\]/.test(raw) && !/✅\s*\d{4}-\d{2}-\d{2}/.test(raw)) {
       return null;
     }
     let nl = setCheckbox(raw, " ");
@@ -251,7 +252,7 @@ export async function markDropped(
   const dateStr = at ?? today();
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     if (
-      /^\s*[-+*]\s+\[-\]/.test(raw) &&
+      /^\s*(?:>\s*)*[-+*]\s+\[-\]/.test(raw) &&
       new RegExp(`❌\\s*${dateStr}`).test(raw)
     ) {
       return null;
@@ -495,7 +496,7 @@ export async function moveSubtaskToDate(
   const targetPath = normalizePath(`${dailyFolder}/${targetDate}.md`);
   // Strike old
   await mutateLine(app, subtask.path, subtask.line, (raw) => {
-    if (/^\s*[-+*]\s+\[-\]/.test(raw)) return null;
+    if (/^\s*(?:>\s*)*[-+*]\s+\[-\]/.test(raw)) return null;
     return setCheckbox(raw, "-");
   });
 

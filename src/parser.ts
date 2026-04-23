@@ -9,7 +9,9 @@ const CANCELLED_RE = /❌\s*(\d{4}-\d{2}-\d{2})/;
 const CREATED_RE = /➕\s*(\d{4}-\d{2}-\d{2})/;
 const ESTIMATE_RE = /\[estimate::\s*([^\]]+)\]/i;
 const ACTUAL_RE = /\[actual::\s*([^\]]+)\]/i;
-const CHECKBOX_RE = /^(\s*)([-+*])\s+\[(.)\]\s?(.*)$/;
+// Accept optional callout prefix (`> ` or `>> ` etc. with interleaved
+// whitespace, used for tasks inside Obsidian callouts).
+const CHECKBOX_RE = /^(\s*(?:>\s*)*)([-+*])\s+\[(.)\]\s?(.*)$/;
 const TAG_RE = /#([^\s#\[\]()]+)/g;
 
 // Strip emoji metadata, inline fields, tags, block anchors, and recurrence
