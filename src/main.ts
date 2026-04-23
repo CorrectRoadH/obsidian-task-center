@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Notice, TFile } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, TFile, CliData } from "obsidian";
 import { BetterTaskSettings, DEFAULT_SETTINGS, VIEW_TYPE_BETTER_TASK } from "./types";
 import { BetterTaskSettingTab } from "./settings";
 import { BetterTaskView } from "./view";
@@ -16,27 +16,10 @@ import { todayISO } from "./dates";
 import { parseDurationToMinutes } from "./parser";
 import { TaskWriterError } from "./writer";
 
-// Obsidian exposes `app.cli.registerHandler` and the Plugin class wraps it via
-// `registerCliHandler(verb, description, flagsSpec, handler)`. This type is not
-// in obsidian.d.ts yet (API landed in 1.12.2), so we declare a minimal shape.
-declare module "obsidian" {
-  interface CliFlag {
-    value?: string;
-    description: string;
-  }
-  type CliFlagsSpec = Record<string, CliFlag>;
-  type CliArgs = Record<string, string | undefined>;
-  interface Plugin {
-    registerCliHandler(
-      verb: string,
-      description: string,
-      flags: CliFlagsSpec,
-      handler: (args: CliArgs) => string | Promise<string>,
-    ): void;
-  }
-}
-
-type CliArgs = Record<string, string | undefined>;
+// CliData / CliFlags / CliHandler come from obsidian.d.ts (since API 1.12.2).
+// CliData has an index signature of `string | 'true'` — boolean flags arrive
+// as the literal string "true".
+type CliArgs = CliData;
 
 export default class BetterTaskPlugin extends Plugin {
   settings!: BetterTaskSettings;
@@ -208,7 +191,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:show",
       "Show one task in full detail",
       {
-        ref: { value: "<path:line|hash>", description: "Task id (required)" },
+        ref: { value: "<path:line|hash>", description: "Task id", required: true },
       },
       (args) => this.cliShow(args),
     );
@@ -230,7 +213,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:schedule",
       "Set or clear ⏳ scheduled date on a task",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         date: { value: "<YYYY-MM-DD|null>", description: "'null' clears the date" },
       },
       (args) => this.cliSchedule(args),
@@ -240,7 +223,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:deadline",
       "Set or clear 📅 deadline on a task",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         date: { value: "<YYYY-MM-DD|null>", description: "'null' clears the date" },
       },
       (args) => this.cliDeadline(args),
@@ -250,7 +233,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:actual",
       "Set or add actual minutes ([actual:: Nm]) on a task",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         minutes: { value: "<Nm|+Nm>", description: "30m, 1h, +15m (additive)" },
       },
       (args) => this.cliActual(args),
@@ -260,7 +243,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:estimate",
       "Set or clear [estimate:: Nm] on a task",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         minutes: { value: "<Nm|null>", description: "'null' clears" },
       },
       (args) => this.cliEstimate(args),
@@ -270,7 +253,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:done",
       "Mark a task done (✅ today unless at= given)",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         at: { value: "<YYYY-MM-DD>", description: "Override completion date" },
       },
       (args) => this.cliDone(args),
@@ -280,7 +263,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:undone",
       "Unmark a task (remove ✅ and reset checkbox)",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
       },
       (args) => this.cliUndone(args),
     );
@@ -289,7 +272,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:drop",
       "Mark a task dropped ([-] + ❌ today; children cascade)",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
       },
       (args) => this.cliDrop(args),
     );
@@ -298,7 +281,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:add",
       "Create a new task line",
       {
-        text: { value: "<text>", description: "Task title (required)" },
+        text: { value: "<text>", description: "Task title", required: true },
         to: { value: "<path>", description: "Target file (default: today's daily note)" },
         tag: { value: "<tag,tag>", description: "Comma-separated tags" },
         scheduled: { value: "<YYYY-MM-DD>", description: "⏳ scheduled date" },
@@ -317,7 +300,7 @@ export default class BetterTaskPlugin extends Plugin {
       "better-task:tag",
       "Add or remove a tag on a task",
       {
-        ref: { value: "<id>", description: "Task id (required)" },
+        ref: { value: "<id>", description: "Task id", required: true },
         tag: { value: "<tag>", description: "Tag (with or without leading #)" },
         remove: { description: "Remove instead of add" },
       },
