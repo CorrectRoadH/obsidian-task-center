@@ -27,8 +27,13 @@ function compile() {
 }
 
 compile();
-const { setEmojiDate, setInlineField, setCheckbox, addTagIfMissing } =
-  await import("../test/.compiled/writer.bundle.js");
+const {
+  setEmojiDate,
+  setInlineField,
+  setCheckbox,
+  addTagIfMissing,
+  rebuildTaskLineWithNewTitle,
+} = await import("../test/.compiled/writer.bundle.js");
 
 test("setEmojiDate — inject into bare line", () => {
   const r = setEmojiDate("- [ ] task", "⏳", "2026-04-25");
@@ -106,4 +111,65 @@ test("addTagIfMissing — no-op if present", () => {
 
 test("addTagIfMissing — accepts bare tag", () => {
   assert.equal(addTagIfMissing("- [ ] task", "基建"), "- [ ] task #基建");
+});
+
+test("rebuildTaskLineWithNewTitle — plain", () => {
+  assert.equal(
+    rebuildTaskLineWithNewTitle("- [ ] old title", "new title"),
+    "- [ ] new title",
+  );
+});
+
+test("rebuildTaskLineWithNewTitle — preserves tags + ⏳ + [estimate::]", () => {
+  const raw = "- [ ] old title #2象限 ⏳ 2026-04-25 [estimate:: 30m]";
+  const r = rebuildTaskLineWithNewTitle(raw, "renamed");
+  assert.equal(r, "- [ ] renamed #2象限 ⏳ 2026-04-25 [estimate:: 30m]");
+});
+
+test("rebuildTaskLineWithNewTitle — preserves 📅 ✅ ❌ ➕ 🛫", () => {
+  const raw =
+    "- [x] x #tag 📅 2026-05-15 🛫 2026-04-20 ⏳ 2026-04-22 ➕ 2026-04-18 ✅ 2026-04-23";
+  const r = rebuildTaskLineWithNewTitle(raw, "y");
+  assert.equal(
+    r,
+    "- [x] y #tag 📅 2026-05-15 🛫 2026-04-20 ⏳ 2026-04-22 ➕ 2026-04-18 ✅ 2026-04-23",
+  );
+});
+
+test("rebuildTaskLineWithNewTitle — preserves recurrence", () => {
+  const raw = "- [ ] old 🔁 every week ⏳ 2026-04-24";
+  const r = rebuildTaskLineWithNewTitle(raw, "new");
+  // 🔁 greedy capture swallows trailing space but metadata survives.
+  assert.match(r, /🔁\s*every week\s*⏳\s*2026-04-24/);
+  assert.match(r, /\[\s\] new/);
+});
+
+test("rebuildTaskLineWithNewTitle — preserves priority glyphs", () => {
+  assert.equal(
+    rebuildTaskLineWithNewTitle("- [ ] old 🔺", "new"),
+    "- [ ] new 🔺",
+  );
+  assert.equal(
+    rebuildTaskLineWithNewTitle("- [ ] old ⏬ #x", "new"),
+    "- [ ] new ⏬ #x",
+  );
+});
+
+test("rebuildTaskLineWithNewTitle — preserves block anchor", () => {
+  assert.equal(
+    rebuildTaskLineWithNewTitle("- [ ] old ^abc123", "new"),
+    "- [ ] new ^abc123",
+  );
+});
+
+test("rebuildTaskLineWithNewTitle — callout prefix preserved", () => {
+  assert.equal(
+    rebuildTaskLineWithNewTitle("> - [ ] old #tag", "new"),
+    "> - [ ] new #tag",
+  );
+});
+
+test("rebuildTaskLineWithNewTitle — non-task returns null", () => {
+  assert.equal(rebuildTaskLineWithNewTitle("# heading", "x"), null);
+  assert.equal(rebuildTaskLineWithNewTitle("- plain bullet", "x"), null);
 });

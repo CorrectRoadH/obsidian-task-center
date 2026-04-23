@@ -267,6 +267,29 @@ export async function markDropped(
 }
 
 /**
+ * Pure helper — rebuild a task line with a new title, preserving all metadata
+ * (tags, Obsidian-Tasks emoji fields, priorities, recurrence, Dataview inline
+ * fields, block anchors). Returns null if `raw` isn't a task line.
+ * Exported for unit testing.
+ */
+export function rebuildTaskLineWithNewTitle(
+  raw: string,
+  newTitle: string,
+): string | null {
+  const parsed = parseTaskLine(raw);
+  if (!parsed) return null;
+  const META_TOKEN_RE =
+    /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|[🔺⏫🔼🔽⏬]|\[(?:estimate|actual|priority|id|recurrence)::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/gu;
+  const tokens: string[] = [];
+  let m;
+  while ((m = META_TOKEN_RE.exec(parsed.content)) !== null) {
+    tokens.push(m[0]);
+  }
+  const suffix = tokens.length > 0 ? " " + tokens.join(" ") : "";
+  return `${parsed.indent}${parsed.marker} [${parsed.checkbox}] ${newTitle.trim()}${suffix}`;
+}
+
+/**
  * Rename a task's title while preserving all metadata (tags, emoji dates,
  * inline fields, block anchors). Metadata tokens are collected in the order
  * they appear, then re-appended after the new title.
@@ -281,21 +304,8 @@ export async function renameTask(
     throw new TaskWriterError("invalid_date", "new title cannot be empty");
   }
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
-    const parsed = parseTaskLine(raw);
-    if (!parsed) return null;
-    // Preserve-in-order tokens: tags, Obsidian-Tasks emoji fields, priority
-    // markers (🔺⏫🔼🔽⏬), recurrence (🔁 … until next metadata), Dataview
-    // inline fields, and block reference anchors. Order within the line is
-    // kept from the original.
-    const META_TOKEN_RE =
-      /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|[🔺⏫🔼🔽⏬]|\[(?:estimate|actual|priority|id|recurrence)::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/gu;
-    const tokens: string[] = [];
-    let m;
-    while ((m = META_TOKEN_RE.exec(parsed.content)) !== null) {
-      tokens.push(m[0]);
-    }
-    const suffix = tokens.length > 0 ? " " + tokens.join(" ") : "";
-    const rebuilt = `${parsed.indent}${parsed.marker} [${parsed.checkbox}] ${cleanNew}${suffix}`;
+    const rebuilt = rebuildTaskLineWithNewTitle(raw, cleanNew);
+    if (rebuilt === null) return null;
     return rebuilt === raw ? null : rebuilt;
   });
   return { before, after, unchanged: before === after };
