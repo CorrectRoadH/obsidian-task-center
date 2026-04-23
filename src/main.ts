@@ -81,7 +81,17 @@ export default class BetterTaskPlugin extends Plugin {
     // All verbs are colon-grouped under `better-task:…`, matching the Obsidian
     // convention (compare `daily:read`, `base:query`).
     if (typeof (this as Plugin).registerCliHandler === "function") {
-      this.registerAllCliHandlers();
+      try {
+        this.registerAllCliHandlers();
+      } catch (e) {
+        // A collision with another plugin registering the same verb is a soft
+        // failure — the GUI remains fully usable without the shell CLI.
+        console.error("[better-task] CLI registration failed:", e);
+        new Notice(
+          "Better Task: CLI verbs failed to register (likely a namespace collision). GUI still works.",
+          6000,
+        );
+      }
     } else {
       console.warn(
         "[better-task] app.cli.registerHandler not available — upgrade Obsidian to ≥ 1.12.2 for the CLI.",
