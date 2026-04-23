@@ -4,3 +4,4 @@ main.js.map
 .DS_Store
 *.log
 .claude/ralph-loop.local.md
+test/.compiled/
