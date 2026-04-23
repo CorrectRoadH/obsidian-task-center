@@ -128,6 +128,13 @@ export default class BetterTaskPlugin extends Plugin {
     }
   }
 
+  onunload() {
+    if (this.statusBarTimer !== null) {
+      window.clearTimeout(this.statusBarTimer);
+      this.statusBarTimer = null;
+    }
+  }
+
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
