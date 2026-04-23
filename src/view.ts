@@ -725,10 +725,12 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       el.removeClass("drop-hover");
       try {
-        await this.api.schedule(id, targetDate);
-        new Notice(
-          targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
-        );
+        const r = await this.api.schedule(id, targetDate);
+        if (!r.unchanged) {
+          new Notice(
+            targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
+          );
+        }
       } catch (err) {
         new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
       }
