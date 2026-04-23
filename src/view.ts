@@ -1110,7 +1110,16 @@ export class BetterTaskView extends ItemView {
       const newVal = input.value.trim();
       if (save && newVal && newVal !== oldText) {
         try {
-          await this.api.rename(task.id, newVal);
+          const r = await this.api.rename(task.id, newVal);
+          if (!r.unchanged) {
+            this.pushUndo({
+              path: task.path,
+              line: task.line,
+              before: r.before,
+              after: r.after,
+              label: `rename "${oldText.slice(0, 20)}" → "${newVal.slice(0, 20)}"`,
+            });
+          }
         } catch (e) {
           new Notice(tr("notice.error", { msg: (e as Error).message }), 4000);
         }
