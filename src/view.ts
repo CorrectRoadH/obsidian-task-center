@@ -330,6 +330,12 @@ export class BetterTaskView extends ItemView {
       const dayTasks = this.tasks
         .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
         .filter(filter);
+      dayTasks.sort((a, b) => {
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return 0;
+      });
       const topLevel = this.hideChildrenOfVisibleParents(dayTasks);
       const stats = col.createSpan({
         text: this.columnStats(dayTasks),
