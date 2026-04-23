@@ -384,6 +384,9 @@ export async function addTask(
   app: App,
   opts: AddTaskOpts,
 ): Promise<{ path: string; line: number; created: string }> {
+  if (!opts.text || !opts.text.trim()) {
+    throw new TaskWriterError("invalid_date", "task text cannot be empty");
+  }
   let targetPath = opts.targetPath;
   if (!targetPath) {
     if (opts.parent) {
