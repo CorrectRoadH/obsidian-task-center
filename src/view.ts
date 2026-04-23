@@ -800,9 +800,13 @@ export class BetterTaskView extends ItemView {
       e.dataTransfer.setData("text/task-id", t.id);
       e.dataTransfer.effectAllowed = "move";
       el.addClass("dragging");
+      // View-wide "a drag is in progress" marker so drop zones (esp. the
+      // trash bin) can attract attention without waiting for direct hover.
+      this.contentEl.addClass("dragging-active");
     });
     el.addEventListener("dragend", () => {
       el.removeClass("dragging");
+      this.contentEl.removeClass("dragging-active");
     });
 
     // Click → select

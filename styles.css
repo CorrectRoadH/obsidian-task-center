@@ -412,6 +412,12 @@
   background: rgba(255, 0, 0, 0.08);
   color: var(--color-red);
 }
+/* A drag is in progress anywhere on the board — nudge the trash border
+   so users know it's a valid target without having to hover directly. */
+.better-task-view.dragging-active .bt-trash {
+  border-color: var(--color-red);
+  border-style: solid;
+}
 .better-task-view .bt-trash-icon {
   font-size: 28px;
   line-height: 1;
