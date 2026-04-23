@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Notice } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, TFile } from "obsidian";
 import { BetterTaskSettings, DEFAULT_SETTINGS, VIEW_TYPE_BETTER_TASK } from "./types";
 import { BetterTaskSettingTab } from "./settings";
 import { BetterTaskView } from "./view";
@@ -41,6 +41,8 @@ type CliArgs = Record<string, string | undefined>;
 export default class BetterTaskPlugin extends Plugin {
   settings!: BetterTaskSettings;
   api!: BetterTaskApi;
+  private statusBar: HTMLElement | null = null;
+  private statusBarTimer: number | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -84,9 +86,48 @@ export default class BetterTaskPlugin extends Plugin {
       );
     }
 
+    // Status bar — shows the active todo count, refreshed on vault changes.
+    this.statusBar = this.addStatusBarItem();
+    this.statusBar.addClass("better-task-status");
+    this.statusBar.addEventListener("click", () => this.activateView());
+    this.app.workspace.onLayoutReady(() => this.refreshStatusBar());
+    this.registerEvent(
+      this.app.vault.on("modify", (f) => {
+        if (f instanceof TFile && f.extension === "md") this.scheduleStatusBarRefresh();
+      }),
+    );
+    this.registerEvent(
+      this.app.metadataCache.on("resolved", () => this.scheduleStatusBarRefresh()),
+    );
+
     // Open on startup
     if (this.settings.openOnStartup) {
       this.app.workspace.onLayoutReady(() => this.activateView());
+    }
+  }
+
+  private scheduleStatusBarRefresh() {
+    if (this.statusBarTimer !== null) window.clearTimeout(this.statusBarTimer);
+    this.statusBarTimer = window.setTimeout(() => {
+      this.statusBarTimer = null;
+      this.refreshStatusBar();
+    }, 500);
+  }
+
+  async refreshStatusBar() {
+    if (!this.statusBar) return;
+    try {
+      const all = await this.api.allTasks();
+      const today = todayISO();
+      const todo = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+      const todayCount = todo.filter((t) => t.scheduled === today).length;
+      const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
+      const parts = [`📋 ${todayCount} today`];
+      if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
+      this.statusBar.setText(parts.join(" · "));
+      this.statusBar.title = "Click to open Task Board";
+    } catch {
+      // ignore
     }
   }
 
