@@ -45,6 +45,18 @@
   margin-bottom: -1px;
   font-weight: 600;
 }
+.better-task-view .bt-tab-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.better-task-view .bt-tab:not(.active) .bt-tab-count {
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+}
 .better-task-view .bt-hotkey {
   font-size: 10px;
   color: var(--text-faint);

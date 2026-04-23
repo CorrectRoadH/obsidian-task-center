@@ -197,15 +197,30 @@ export class BetterTaskView extends ItemView {
 
   private renderTabBar(parent: HTMLElement) {
     const bar = parent.createDiv({ cls: "bt-tabbar" });
-    const tabs: Array<{ key: TabKey; label: string; hotkey: string }> = [
-      { key: "week", label: tr("tab.week"), hotkey: "⌃1" },
-      { key: "month", label: tr("tab.month"), hotkey: "⌃2" },
-      { key: "completed", label: tr("tab.completed"), hotkey: "⌃3" },
-      { key: "unscheduled", label: tr("tab.unscheduled"), hotkey: "⌃4" },
+    const today = todayISO();
+    const weekStart = startOfWeek(today, this.plugin.settings.weekStartsOn);
+    const weekEnd = addDays(weekStart, 6);
+    const monthStart = startOfMonth(today);
+    const monthEnd = endOfMonth(today);
+    const activeTodos = this.tasks.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+    const counts = {
+      week: activeTodos.filter((t) => t.scheduled && t.scheduled >= weekStart && t.scheduled <= weekEnd).length,
+      month: activeTodos.filter((t) => t.scheduled && t.scheduled >= monthStart && t.scheduled <= monthEnd).length,
+      completed: this.tasks.filter((t) => t.status === "done").length,
+      unscheduled: activeTodos.filter((t) => !t.scheduled).length,
+    };
+    const tabs: Array<{ key: TabKey; label: string; hotkey: string; count: number }> = [
+      { key: "week", label: tr("tab.week"), hotkey: "⌃1", count: counts.week },
+      { key: "month", label: tr("tab.month"), hotkey: "⌃2", count: counts.month },
+      { key: "completed", label: tr("tab.completed"), hotkey: "⌃3", count: counts.completed },
+      { key: "unscheduled", label: tr("tab.unscheduled"), hotkey: "⌃4", count: counts.unscheduled },
     ];
     for (const t of tabs) {
       const btn = bar.createDiv({ cls: "bt-tab" + (this.state.tab === t.key ? " active" : "") });
       btn.createSpan({ text: t.label });
+      if (t.count > 0) {
+        btn.createSpan({ text: String(t.count), cls: "bt-tab-count" });
+      }
       btn.createSpan({ text: t.hotkey, cls: "bt-hotkey" });
       btn.addEventListener("click", () => this.setTab(t.key));
     }
