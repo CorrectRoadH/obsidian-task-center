@@ -550,6 +550,18 @@ export class BetterTaskView extends ItemView {
     const unscheduledAll = this.tasks
       .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
       .filter(filter);
+    // Sort for triage: deadline ascending first (nearest deadline is urgent),
+    // tasks without deadline fall to the end; tie-break by created date desc
+    // (newer tasks first). Children-of-visible-parents dedup happens after.
+    unscheduledAll.sort((a, b) => {
+      if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      if (a.created && b.created) return b.created.localeCompare(a.created);
+      if (a.created) return -1;
+      if (b.created) return 1;
+      return 0;
+    });
     const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
     if (unscheduled.length === 0 && !this.state.showUnscheduledPool) return;
 
@@ -615,6 +627,15 @@ export class BetterTaskView extends ItemView {
     const unscheduledAll = this.tasks
       .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
       .filter(filter);
+    unscheduledAll.sort((a, b) => {
+      if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      if (a.created && b.created) return b.created.localeCompare(a.created);
+      if (a.created) return -1;
+      if (b.created) return 1;
+      return 0;
+    });
     const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
 
     const wrap = parent.createDiv({ cls: "bt-unscheduled-big" });
