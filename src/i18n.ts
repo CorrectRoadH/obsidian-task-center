@@ -74,7 +74,7 @@ const EN = {
   "footer.status": "{todo} todo · {done} done · {overdue} overdue",
   "footer.selected": "selected",
   "footer.hint":
-    "1-4 quadrant · ←/→ day · D date · Space done · E edit · Delete drop",
+    "1-4 quadrant · ←/→ day · D date · Space done · E edit · Delete drop · Ctrl+Z undo · / search",
 
   // Notices
   "notice.scheduled": "→ ⏳ {date}",
@@ -184,7 +184,7 @@ const ZH: Partial<typeof EN> = {
   "footer.status": "{todo} 待办 · {done} 完成 · {overdue} 逾期",
   "footer.selected": "已选",
   "footer.hint":
-    "1-4 象限 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃",
+    "1-4 象限 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃 · Ctrl+Z 撤销 · / 搜索",
 
   "notice.scheduled": "→ ⏳ {date}",
   "notice.clearedSchedule": "已清除排期",
