@@ -514,6 +514,18 @@
   padding: 6px 10px;
   background: var(--background-secondary);
   font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.better-task-view .bt-completed-week-head:hover {
+  background: var(--background-modifier-hover);
+}
+.better-task-view .bt-completed-toggle {
+  color: var(--text-muted);
+  width: 10px;
+}
+.better-task-view .bt-completed-week.collapsed .bt-completed-list {
+  display: none;
 }
 .better-task-view .bt-completed-week-label {
   font-weight: 600;

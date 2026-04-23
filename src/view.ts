@@ -38,6 +38,7 @@ interface ViewState {
   selectedTaskId: string | null;
   filter: string;
   showUnscheduledPool: boolean;
+  collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
 }
 
 const WEEKDAY_KEYS = [
@@ -74,6 +75,7 @@ export class BetterTaskView extends ItemView {
       selectedTaskId: null,
       filter: "",
       showUnscheduledPool: true,
+      collapsedWeeks: new Set(),
     };
   }
 
@@ -422,7 +424,8 @@ export class BetterTaskView extends ItemView {
     }
 
     for (const wk of weekKeys) {
-      const group = wrap.createDiv({ cls: "bt-completed-week" });
+      const collapsed = this.state.collapsedWeeks.has(wk);
+      const group = wrap.createDiv({ cls: "bt-completed-week" + (collapsed ? " collapsed" : "") });
       const items = weeks.get(wk)!;
       const sumActual = items.reduce((s, t) => s + (t.actual ?? 0), 0);
       const sumEst = items.reduce((s, t) => s + (t.estimate ?? 0), 0);
@@ -433,24 +436,31 @@ export class BetterTaskView extends ItemView {
           : tr("completed.total", { actual: sumActual });
 
       const head = group.createDiv({ cls: "bt-completed-week-head" });
+      head.createSpan({ text: collapsed ? "▸" : "▾", cls: "bt-completed-toggle" });
       head.createSpan({ text: tr("completed.weekOf", { date: wk }), cls: "bt-completed-week-label" });
       head.createSpan({ text: tr("completed.tasks", { n: items.length }), cls: "bt-completed-count" });
       head.createSpan({ text: accLabel, cls: "bt-completed-accuracy" });
+      head.addEventListener("click", () => {
+        if (this.state.collapsedWeeks.has(wk)) this.state.collapsedWeeks.delete(wk);
+        else this.state.collapsedWeeks.add(wk);
+        this.render();
+      });
 
-      const list = group.createDiv({ cls: "bt-completed-list" });
-      for (const t of items) {
-        const row = list.createDiv({ cls: "bt-completed-row" });
-        row.dataset.taskId = t.id;
-        row.createSpan({ text: `${t.completed}`, cls: "bt-completed-date" });
-        const titleEl = row.createSpan({ text: t.title, cls: "bt-completed-title" });
-        const meta = row.createSpan({ cls: "bt-completed-meta" });
-        if (t.estimate || t.actual) {
-          meta.setText(
-            `${t.actual ? formatMinutes(t.actual) : "—"} / ${t.estimate ? formatMinutes(t.estimate) : "—"}`,
-          );
+      if (!collapsed) {
+        const list = group.createDiv({ cls: "bt-completed-list" });
+        for (const t of items) {
+          const row = list.createDiv({ cls: "bt-completed-row" });
+          row.dataset.taskId = t.id;
+          row.createSpan({ text: `${t.completed}`, cls: "bt-completed-date" });
+          row.createSpan({ text: t.title, cls: "bt-completed-title" });
+          const meta = row.createSpan({ cls: "bt-completed-meta" });
+          if (t.estimate || t.actual) {
+            meta.setText(
+              `${t.actual ? formatMinutes(t.actual) : "—"} / ${t.estimate ? formatMinutes(t.estimate) : "—"}`,
+            );
+          }
+          row.addEventListener("click", () => this.openAtSource(t));
         }
-        // click → jump to source
-        row.addEventListener("click", () => this.openAtSource(t));
       }
     }
   }
@@ -763,6 +773,19 @@ export class BetterTaskView extends ItemView {
       // Ctrl+T / Cmd+T — quick add
       e.preventDefault();
       this.openQuickAdd();
+      return;
+    }
+
+    // Focus search
+    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      const search = this.contentEl.querySelector(".bt-search") as HTMLInputElement | null;
+      if (search) {
+        search.focus();
+        search.select();
+      }
       return;
     }
 
