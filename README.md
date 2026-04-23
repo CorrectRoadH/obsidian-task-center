@@ -68,6 +68,8 @@ Select a card (click), then:
 | `Space` | Toggle done |
 | `E` / `Enter` | Open source file at the task's line |
 | `Delete` / `Backspace` | Drop |
+| `⌘/Ctrl+Z` | Undo the last drag/date mutation made in this view (stack depth 20) |
+| `/` | Focus the filter input |
 
 Click the title text to rename in place (Enter commits, Escape reverts). All metadata (tags, emojis, inline fields) is preserved.
 

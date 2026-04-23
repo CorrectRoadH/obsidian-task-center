@@ -43,6 +43,14 @@ interface ViewState {
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
 }
 
+interface UndoEntry {
+  path: string;
+  line: number;
+  before: string;
+  after: string;
+  label: string; // short human description for the toast
+}
+
 const WEEKDAY_KEYS = [
   "weekday.0",
   "weekday.1",
@@ -66,6 +74,10 @@ export class BetterTaskView extends ItemView {
   private refreshTimer: number | null = null;
   private modifyRef: EventRef | null = null;
   private metadataRef: EventRef | null = null;
+  // Undo stack — only records writes initiated from this view (drag / keyboard).
+  // CLI writes are not captured. Max 20 entries.
+  private undoStack: UndoEntry[] = [];
+  private static UNDO_MAX = 20;
 
   constructor(leaf: WorkspaceLeaf, plugin: BetterTaskPlugin) {
     super(leaf);
@@ -761,8 +773,16 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       el.removeClass("drop-hover");
       try {
+        const task = this.tasks.find((t) => t.id === id);
         const r = await this.api.schedule(id, targetDate);
-        if (!r.unchanged) {
+        if (!r.unchanged && task) {
+          this.pushUndo({
+            path: task.path,
+            line: task.line,
+            before: r.before,
+            after: r.after,
+            label: targetDate ? `⏳ ${targetDate}` : "⏳ cleared",
+          });
           new Notice(
             targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
           );
@@ -835,6 +855,16 @@ export class BetterTaskView extends ItemView {
       }
     }
 
+    // Undo (Ctrl/Cmd+Z) — view-scoped undo of the most recent drag/keyboard mutation.
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey && !e.altKey) {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.performUndo();
+      return;
+    }
+
     // Quick add
     if ((e.ctrlKey || e.metaKey) && e.key === "t" && !e.shiftKey && !e.altKey) {
       // Ctrl+T / Cmd+T — quick add
@@ -872,7 +902,16 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       const delta = e.key === "ArrowRight" ? 1 : -1;
       const newDate = addDays(sel.scheduled, delta);
-      await this.api.schedule(sel.id, newDate);
+      const r = await this.api.schedule(sel.id, newDate);
+      if (!r.unchanged) {
+        this.pushUndo({
+          path: sel.path,
+          line: sel.line,
+          before: r.before,
+          after: r.after,
+          label: `⏳ ${newDate}`,
+        });
+      }
       this.scheduleRefresh();
       return;
     }
@@ -903,6 +942,45 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       this.openAtSource(sel);
       return;
+    }
+  }
+
+  private pushUndo(entry: UndoEntry) {
+    this.undoStack.push(entry);
+    if (this.undoStack.length > BetterTaskView.UNDO_MAX) {
+      this.undoStack.shift();
+    }
+  }
+
+  private async performUndo() {
+    const entry = this.undoStack.pop();
+    if (!entry) {
+      new Notice("nothing to undo");
+      return;
+    }
+    const file = this.app.vault.getAbstractFileByPath(entry.path);
+    if (!(file instanceof TFile)) {
+      new Notice(`file not found: ${entry.path}`);
+      return;
+    }
+    try {
+      await this.app.vault.process(file, (data) => {
+        const lines = data.split("\n");
+        if (lines[entry.line] !== entry.after) {
+          // Line content has changed since we made our mutation — refuse to
+          // overwrite the user's intervening edit. Put the entry back so a
+          // future undo attempt won't lose further context.
+          throw new Error("line diverged — skipping undo");
+        }
+        lines[entry.line] = entry.before;
+        return lines.join("\n");
+      });
+      new Notice(`undo: ${entry.label}`);
+      this.scheduleRefresh();
+    } catch (e) {
+      new Notice(`cannot undo: ${(e as Error).message}`, 4000);
+      // If it failed because file diverged, don't re-push; the user edited
+      // over our change on purpose.
     }
   }
 
@@ -996,10 +1074,19 @@ export class BetterTaskView extends ItemView {
       this.app,
       tr("prompt.setScheduled", { title: task.title }),
       task.scheduled ?? todayISO(),
-      (resolved) => {
-        // resolved: ISO string | null (clear) | undefined (rejected → modal keeps open)
+      async (resolved) => {
         if (resolved === undefined) return;
-        this.api.schedule(task.id, resolved).then(() => this.scheduleRefresh());
+        const r = await this.api.schedule(task.id, resolved);
+        if (!r.unchanged) {
+          this.pushUndo({
+            path: task.path,
+            line: task.line,
+            before: r.before,
+            after: r.after,
+            label: resolved ? `⏳ ${resolved}` : "⏳ cleared",
+          });
+        }
+        this.scheduleRefresh();
       },
     ).open();
   }
