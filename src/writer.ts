@@ -69,14 +69,15 @@ export async function resolveTaskRef(
 }
 
 // Reparse one line to compute the updated ParsedTask
-// Inject or replace an emoji+date field (⏳ / 📅 / ✅ / 🛫)
+// Inject or replace an emoji+date field (⏳ / 📅 / ✅ / 🛫 / ❌ / ➕).
+// Removes all occurrences (defensively — duplicates shouldn't exist but can
+// creep in from manual edits) then appends a fresh one before any trailing
+// Dataview inline field.
 function setEmojiDate(line: string, emoji: string, date: string | null): string {
   const escaped = emoji.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-  const re = new RegExp(`\\s*${escaped}\\s*\\d{4}-\\d{2}-\\d{2}`);
+  const re = new RegExp(`\\s*${escaped}\\s*\\d{4}-\\d{2}-\\d{2}`, "g");
   const stripped = line.replace(re, "");
   if (date === null) return stripped;
-  // Inject before any existing inline fields + before trailing whitespace
-  // Simple: append before a trailing inline field bracket or at end.
   const trailingIdx = stripped.search(/(\s*\[[a-z]+::)/i);
   const injection = ` ${emoji} ${date}`;
   if (trailingIdx === -1) {
