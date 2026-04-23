@@ -281,8 +281,12 @@ export async function renameTask(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const parsed = parseTaskLine(raw);
     if (!parsed) return null;
+    // Preserve-in-order tokens: tags, Obsidian-Tasks emoji fields, priority
+    // markers (🔺⏫🔼🔽⏬), recurrence (🔁 … until next metadata), Dataview
+    // inline fields, and block reference anchors. Order within the line is
+    // kept from the original.
     const META_TOKEN_RE =
-      /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|\[(?:estimate|actual|priority|id|recurrence)::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/g;
+      /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|[🔺⏫🔼🔽⏬]|\[(?:estimate|actual|priority|id|recurrence)::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/gu;
     const tokens: string[] = [];
     let m;
     while ((m = META_TOKEN_RE.exec(parsed.content)) !== null) {

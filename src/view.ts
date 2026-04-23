@@ -270,12 +270,13 @@ export class BetterTaskView extends ItemView {
     search.value = this.state.filter;
     search.addEventListener("input", () => {
       this.state.filter = search.value;
+      const caret = search.selectionStart;
       this.render();
-      // keep focus
       const el = this.contentEl.querySelector(".bt-search") as HTMLInputElement | null;
       if (el) {
         el.focus();
-        el.selectionStart = el.selectionEnd = el.value.length;
+        const pos = caret ?? el.value.length;
+        el.selectionStart = el.selectionEnd = pos;
       }
     });
 

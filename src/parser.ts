@@ -12,8 +12,9 @@ const ACTUAL_RE = /\[actual::\s*([^\]]+)\]/i;
 const CHECKBOX_RE = /^(\s*)([-+*])\s+\[(.)\]\s?(.*)$/;
 const TAG_RE = /#([^\s#\[\]()]+)/g;
 
-// Strip emoji metadata, inline fields, and tags from title for display
-const META_STRIP_RE = /(⏳|📅|🛫|✅|❌|⌛|🔁|🔺|⏫|🔼|🔽|⏬|➕)\s*(\d{4}-\d{2}-\d{2})?/g;
+// Strip emoji metadata, inline fields, tags, block anchors, and recurrence
+// (`🔁 every week` style — consumed greedily to the next metadata boundary).
+const META_STRIP_RE = /🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|(⏳|📅|🛫|✅|❌|⌛|🔺|⏫|🔼|🔽|⏬|➕)\s*(\d{4}-\d{2}-\d{2})?/gu;
 const INLINE_FIELD_STRIP_RE = /\[(estimate|actual|priority|id|recurrence)::\s*[^\]]+\]/gi;
 const TAG_STRIP_RE = /(?:^|\s)#[^\s#\[\]()]+/g;
 // Obsidian block reference anchors: `^blockid` at a word boundary
