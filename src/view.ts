@@ -27,6 +27,7 @@ import {
   pad,
 } from "./dates";
 import { QuickAddModal } from "./quickadd";
+import { DatePromptModal } from "./dateprompt";
 import { t as tr, getLocale } from "./i18n";
 import type BetterTaskPlugin from "./main";
 
@@ -925,29 +926,16 @@ export class BetterTaskView extends ItemView {
   }
 
   openDatePrompt(task: ParsedTask) {
-    const input = window.prompt(
+    new DatePromptModal(
+      this.app,
       tr("prompt.setScheduled", { title: task.title }),
       task.scheduled ?? todayISO(),
-    );
-    if (input === null) return;
-    const trimmed = input.trim();
-    if (trimmed === "") {
-      this.api.schedule(task.id, null).then(() => this.scheduleRefresh());
-      return;
-    }
-    if (trimmed === "today") {
-      this.api.schedule(task.id, todayISO()).then(() => this.scheduleRefresh());
-      return;
-    }
-    if (trimmed === "tomorrow") {
-      this.api.schedule(task.id, addDays(todayISO(), 1)).then(() => this.scheduleRefresh());
-      return;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      this.api.schedule(task.id, trimmed).then(() => this.scheduleRefresh());
-      return;
-    }
-    new Notice(tr("notice.invalidDate"));
+      (resolved) => {
+        // resolved: ISO string | null (clear) | undefined (rejected → modal keeps open)
+        if (resolved === undefined) return;
+        this.api.schedule(task.id, resolved).then(() => this.scheduleRefresh());
+      },
+    ).open();
   }
 
   openQuickAdd() {
