@@ -424,8 +424,15 @@ export class BetterTaskView extends ItemView {
       return;
     }
 
+    const currentWeek = startOfWeek(todayISO(), this.plugin.settings.weekStartsOn);
     for (const wk of weekKeys) {
-      const collapsed = this.state.collapsedWeeks.has(wk);
+      // Default: collapse weeks older than the current week on first render.
+      // User's explicit expand/collapse lives in collapsedWeeks and overrides.
+      const hasUserPreference =
+        this.state.collapsedWeeks.has(wk) || this.state.collapsedWeeks.has("EXPANDED:" + wk);
+      const collapsed = hasUserPreference
+        ? this.state.collapsedWeeks.has(wk)
+        : wk < currentWeek;
       const group = wrap.createDiv({ cls: "bt-completed-week" + (collapsed ? " collapsed" : "") });
       const items = weeks.get(wk)!;
       const sumActual = items.reduce((s, t) => s + (t.actual ?? 0), 0);
@@ -442,8 +449,14 @@ export class BetterTaskView extends ItemView {
       head.createSpan({ text: tr("completed.tasks", { n: items.length }), cls: "bt-completed-count" });
       head.createSpan({ text: accLabel, cls: "bt-completed-accuracy" });
       head.addEventListener("click", () => {
-        if (this.state.collapsedWeeks.has(wk)) this.state.collapsedWeeks.delete(wk);
-        else this.state.collapsedWeeks.add(wk);
+        const wasCollapsed = collapsed;
+        if (wasCollapsed) {
+          this.state.collapsedWeeks.delete(wk);
+          this.state.collapsedWeeks.add("EXPANDED:" + wk); // mark as user-chosen expanded
+        } else {
+          this.state.collapsedWeeks.delete("EXPANDED:" + wk);
+          this.state.collapsedWeeks.add(wk);
+        }
         this.render();
       });
 
