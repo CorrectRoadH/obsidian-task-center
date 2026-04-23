@@ -108,16 +108,19 @@ export class BetterTaskView extends ItemView {
     await this.reloadTasks();
     this.render();
 
-    // Subscribe to file modifications
-    this.modifyRef = this.app.vault.on("modify", (f) => {
+    // Subscribe to file mutations — modify, create, delete, rename all can
+    // change the task set. Metadata cache resolve is a coarser backstop.
+    const onChange = (f: unknown) => {
       if (f instanceof TFile && f.extension === "md") {
         this.scheduleRefresh();
       }
-    });
-    this.metadataRef = this.app.metadataCache.on("resolved", () => {
-      this.scheduleRefresh();
-    });
+    };
+    this.modifyRef = this.app.vault.on("modify", onChange);
+    this.metadataRef = this.app.metadataCache.on("resolved", () => this.scheduleRefresh());
     this.registerEvent(this.modifyRef);
+    this.registerEvent(this.app.vault.on("create", onChange));
+    this.registerEvent(this.app.vault.on("delete", onChange));
+    this.registerEvent(this.app.vault.on("rename", onChange));
     this.registerEvent(this.metadataRef);
 
     // Keyboard

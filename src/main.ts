@@ -103,11 +103,13 @@ export default class BetterTaskPlugin extends Plugin {
     this.statusBar.addClass("better-task-status");
     this.statusBar.addEventListener("click", () => this.activateView());
     this.app.workspace.onLayoutReady(() => this.refreshStatusBar());
-    this.registerEvent(
-      this.app.vault.on("modify", (f) => {
-        if (f instanceof TFile && f.extension === "md") this.scheduleStatusBarRefresh();
-      }),
-    );
+    const onVaultChange = (f: unknown) => {
+      if (f instanceof TFile && f.extension === "md") this.scheduleStatusBarRefresh();
+    };
+    this.registerEvent(this.app.vault.on("modify", onVaultChange));
+    this.registerEvent(this.app.vault.on("create", onVaultChange));
+    this.registerEvent(this.app.vault.on("delete", onVaultChange));
+    this.registerEvent(this.app.vault.on("rename", onVaultChange));
     this.registerEvent(
       this.app.metadataCache.on("resolved", () => this.scheduleStatusBarRefresh()),
     );
