@@ -63,7 +63,6 @@ export class BetterTaskView extends ItemView {
   private refreshTimer: number | null = null;
   private modifyRef: EventRef | null = null;
   private metadataRef: EventRef | null = null;
-  private overdueBlinkTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: BetterTaskPlugin) {
     super(leaf);
@@ -108,20 +107,11 @@ export class BetterTaskView extends ItemView {
     // Keyboard
     this.contentEl.tabIndex = 0;
     this.registerDomEvent(this.contentEl, "keydown", (e) => this.handleKey(e));
-
-    // Overdue blink — toggles a class every 1s
-    this.overdueBlinkTimer = window.setInterval(() => {
-      this.contentEl.toggleClass("blink-on", true);
-      window.setTimeout(() => this.contentEl.removeClass("blink-on"), 500);
-    }, 1200);
   }
 
   async onClose(): Promise<void> {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
-    }
-    if (this.overdueBlinkTimer !== null) {
-      window.clearInterval(this.overdueBlinkTimer);
     }
   }
 

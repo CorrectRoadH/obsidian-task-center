@@ -236,6 +236,12 @@ export async function parseVaultTasks(app: App): Promise<ParsedTask[]> {
   const files = app.vault.getMarkdownFiles();
   const all: ParsedTask[] = [];
   for (const f of files) {
+    // Fast skip: if Obsidian's metadata cache reports no list items, there's
+    // no way this file has a task. Avoids a cachedRead per non-task file.
+    const cache = app.metadataCache.getFileCache(f);
+    const hasTaskListItem =
+      cache?.listItems?.some((li) => li.task !== undefined) ?? false;
+    if (!hasTaskListItem) continue;
     try {
       const fileTasks = await parseFileTasks(app, f);
       all.push(...fileTasks);

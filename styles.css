@@ -258,9 +258,7 @@
 .better-task-view .bt-card.q4 { border-left-color: #757575; }
 .better-task-view .bt-card.overdue {
   box-shadow: 0 0 0 1px var(--color-red) inset;
-}
-.better-task-view.blink-on .bt-card.overdue {
-  background: rgba(255, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--color-red) 6%, var(--background-primary));
 }
 .better-task-view .bt-card.near-deadline {
   box-shadow: 0 0 0 1px var(--color-orange) inset;
