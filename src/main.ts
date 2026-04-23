@@ -219,6 +219,7 @@ export default class BetterTaskPlugin extends Plugin {
         group: { value: "<prefix>", description: "Aggregate tags by substring (e.g. 象限)" },
         from: { value: "<YYYY-MM-DD>", description: "Explicit period start" },
         to: { value: "<YYYY-MM-DD>", description: "Explicit period end" },
+        format: { value: "text|json", description: "Output format (default: text)" },
       },
       (args) => this.cliStats(args),
     );
@@ -381,6 +382,7 @@ export default class BetterTaskPlugin extends Plugin {
       from: args.from,
       to: args.to,
     });
+    if (args.format === "json") return JSON.stringify(stats, null, 2);
     return formatStats(stats);
   }
 
