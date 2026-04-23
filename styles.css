@@ -514,6 +514,65 @@
   flex-direction: column;
   gap: 10px;
 }
+
+.better-task-view .bt-stats-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.better-task-view .bt-stats-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.better-task-view .bt-stats-period {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.better-task-view .bt-stats-ratio {
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.better-task-view .bt-stats-ratio.bt-stats-ok {
+  color: var(--color-green);
+  background: color-mix(in srgb, var(--color-green) 12%, transparent);
+}
+.better-task-view .bt-stats-ratio.bt-stats-off {
+  color: var(--color-orange);
+  background: color-mix(in srgb, var(--color-orange) 14%, transparent);
+}
+.better-task-view .bt-stats-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.better-task-view .bt-stats-tags {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.better-task-view .bt-stats-chip {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  font-size: 10px;
+}
+.better-task-view .bt-stats-chip-tag {
+  color: var(--text-normal);
+}
+.better-task-view .bt-stats-chip-min {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .better-task-view .bt-completed-week {
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;

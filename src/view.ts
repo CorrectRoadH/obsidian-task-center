@@ -14,6 +14,7 @@ import {
   BetterTaskApi,
   filterTasks,
   formatShow,
+  computeStats,
 } from "./cli";
 import {
   todayISO,
@@ -424,6 +425,41 @@ export class BetterTaskView extends ItemView {
       .sort((a, b) => (b.completed! < a.completed! ? -1 : 1));
 
     const wrap = parent.createDiv({ cls: "bt-completed" });
+
+    // 7-day headline: estimate ratio + top 4 tags. Gives the GUI user the same
+    // calibration signal the CLI `stats` verb surfaces to an AI.
+    const stats = computeStats(this.tasks, { days: 7 });
+    if (stats.doneCount > 0) {
+      const header = wrap.createDiv({ cls: "bt-stats-header" });
+      const left = header.createDiv({ cls: "bt-stats-left" });
+      left.createSpan({
+        text: `7-day · ${stats.doneCount} done`,
+        cls: "bt-stats-period",
+      });
+      if (stats.ratio !== null) {
+        const delta = Math.round((stats.ratio - 1) * 100);
+        const sign = delta >= 0 ? "+" : "";
+        const cls =
+          stats.ratio >= 0.8 && stats.ratio <= 1.25
+            ? "bt-stats-ok"
+            : "bt-stats-off";
+        left.createSpan({
+          text: `ratio ${stats.ratio.toFixed(2)} (${sign}${delta}%)`,
+          cls: "bt-stats-ratio " + cls,
+        });
+        left.createSpan({
+          text: `${stats.sumActual}m / ${stats.sumEstimate}m`,
+          cls: "bt-stats-time",
+        });
+      }
+      const tagsRow = header.createDiv({ cls: "bt-stats-tags" });
+      for (const t of stats.byTag.slice(0, 4)) {
+        const chip = tagsRow.createDiv({ cls: "bt-stats-chip" });
+        chip.createSpan({ text: t.tag, cls: "bt-stats-chip-tag" });
+        chip.createSpan({ text: `${t.minutes}m`, cls: "bt-stats-chip-min" });
+      }
+    }
+
 
     // Group by week
     const weeks = new Map<string, ParsedTask[]>();
