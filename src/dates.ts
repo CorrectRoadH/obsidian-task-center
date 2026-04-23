@@ -26,6 +26,17 @@ export function addDays(iso: string, days: number): string {
   return toISO(d);
 }
 
+export function shiftMonth(iso: string, months: number): string {
+  const d = fromISO(iso);
+  const origDay = d.getDate();
+  d.setDate(1); // avoid end-of-month rollover (e.g. Jan 31 + 1 month = Mar 3)
+  d.setMonth(d.getMonth() + months);
+  // Clamp to last day of target month when original day doesn't exist
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(origDay, lastDay));
+  return toISO(d);
+}
+
 export function startOfWeek(iso: string, weekStart: 0 | 1 = 1): string {
   const d = fromISO(iso);
   const day = d.getDay(); // 0 Sun .. 6 Sat

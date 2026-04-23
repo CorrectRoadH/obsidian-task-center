@@ -21,6 +21,7 @@ import {
   toISO,
   fromISO,
   addDays,
+  shiftMonth,
   startOfWeek,
   startOfMonth,
   endOfMonth,
@@ -254,11 +255,17 @@ export class BetterTaskView extends ItemView {
       const label = nav.createSpan({ cls: "bt-nav-label" });
       label.setText(this.navLabel());
       prev.addEventListener("click", () => {
-        this.state.anchorISO = addDays(this.state.anchorISO, this.state.tab === "week" ? -7 : -28);
+        this.state.anchorISO =
+          this.state.tab === "week"
+            ? addDays(this.state.anchorISO, -7)
+            : shiftMonth(this.state.anchorISO, -1);
         this.render();
       });
       next.addEventListener("click", () => {
-        this.state.anchorISO = addDays(this.state.anchorISO, this.state.tab === "week" ? 7 : 28);
+        this.state.anchorISO =
+          this.state.tab === "week"
+            ? addDays(this.state.anchorISO, 7)
+            : shiftMonth(this.state.anchorISO, 1);
         this.render();
       });
       today.addEventListener("click", () => {
