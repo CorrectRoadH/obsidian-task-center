@@ -38,6 +38,9 @@ export interface BetterTaskSettings {
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
   stampCreated: boolean;
+  // Last tab the user was on when they closed the board. Persists across
+  // Obsidian restarts so morning-open lands where evening-close left off.
+  lastTab: "week" | "month" | "completed" | "unscheduled" | null;
 }
 
 export const DEFAULT_SETTINGS: BetterTaskSettings = {
@@ -47,6 +50,7 @@ export const DEFAULT_SETTINGS: BetterTaskSettings = {
   openOnStartup: false,
   weekStartsOn: 1,
   stampCreated: true,
+  lastTab: null,
 };
 
 export const VIEW_TYPE_BETTER_TASK = "better-task-board";

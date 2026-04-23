@@ -45,6 +45,10 @@
   margin-bottom: -1px;
   font-weight: 600;
 }
+.better-task-view .bt-tab.drag-hover {
+  outline: 2px dashed var(--interactive-accent);
+  outline-offset: -1px;
+}
 .better-task-view .bt-tab-count {
   font-size: 10px;
   font-weight: 600;

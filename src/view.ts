@@ -85,7 +85,8 @@ export class BetterTaskView extends ItemView {
     this.plugin = plugin;
     this.api = plugin.api;
     this.state = {
-      tab: plugin.settings.defaultView ?? "week",
+      // Priority: last-closed tab → defaultView setting → "week"
+      tab: plugin.settings.lastTab ?? plugin.settings.defaultView ?? "week",
       anchorISO: todayISO(),
       selectedTaskId: null,
       filter: "",
@@ -150,6 +151,9 @@ export class BetterTaskView extends ItemView {
 
   setTab(tab: TabKey) {
     this.state.tab = tab;
+    // Persist so next Obsidian open lands on the same tab.
+    this.plugin.settings.lastTab = tab;
+    this.plugin.saveSettings().catch(() => undefined);
     this.render();
   }
 
@@ -240,6 +244,32 @@ export class BetterTaskView extends ItemView {
       }
       btn.createSpan({ text: t.hotkey, cls: "bt-hotkey" });
       btn.addEventListener("click", () => this.setTab(t.key));
+
+      // Cross-tab drag: hover a card over a tab for 350ms to switch to it
+      // mid-drag (the tab itself doesn't accept drops — user picks a day
+      // within the newly-switched view).
+      let hoverTimer: number | null = null;
+      btn.addEventListener("dragover", (e) => {
+        const dt = e.dataTransfer;
+        if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
+        e.preventDefault();
+        dt.dropEffect = "move";
+        btn.addClass("drag-hover");
+        if (this.state.tab === t.key) return;
+        if (hoverTimer === null) {
+          hoverTimer = window.setTimeout(() => {
+            hoverTimer = null;
+            this.setTab(t.key);
+          }, 350);
+        }
+      });
+      btn.addEventListener("dragleave", () => {
+        btn.removeClass("drag-hover");
+        if (hoverTimer !== null) {
+          window.clearTimeout(hoverTimer);
+          hoverTimer = null;
+        }
+      });
     }
   }
 
