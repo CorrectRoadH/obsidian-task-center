@@ -294,7 +294,7 @@ export class BetterTaskView extends ItemView {
       head.createSpan({ text: `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, cls: "bt-week-date" });
 
       const dayTasks = this.tasks
-        .filter((t) => t.scheduled === day && t.status === "todo")
+        .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
         .filter(filter);
       const topLevel = this.hideChildrenOfVisibleParents(dayTasks);
       const stats = col.createSpan({
@@ -366,7 +366,7 @@ export class BetterTaskView extends ItemView {
           (isCurMonth ? "" : " other-month"),
       });
       const dayTasksAll = this.tasks
-        .filter((t) => t.scheduled === day && t.status === "todo")
+        .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
         .filter(filter);
       const dayTasks = this.hideChildrenOfVisibleParents(dayTasksAll);
       const head = cell.createDiv({ cls: "bt-month-cell-head" });
@@ -458,7 +458,7 @@ export class BetterTaskView extends ItemView {
   private renderUnscheduledPool(parent: HTMLElement) {
     const filter = this.getTextFilter();
     const unscheduledAll = this.tasks
-      .filter((t) => !t.scheduled && t.status === "todo")
+      .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
       .filter(filter);
     const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
     if (unscheduled.length === 0 && !this.state.showUnscheduledPool) return;
@@ -523,7 +523,7 @@ export class BetterTaskView extends ItemView {
   private renderUnscheduledBig(parent: HTMLElement) {
     const filter = this.getTextFilter();
     const unscheduledAll = this.tasks
-      .filter((t) => !t.scheduled && t.status === "todo")
+      .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
       .filter(filter);
     const unscheduled = this.hideChildrenOfVisibleParents(unscheduledAll);
 
@@ -718,10 +718,10 @@ export class BetterTaskView extends ItemView {
   private renderFooter(parent: HTMLElement) {
     const foot = parent.createDiv({ cls: "bt-footer" });
     const info = foot.createDiv({ cls: "bt-footer-info" });
-    const total = this.tasks.filter((t) => t.status === "todo").length;
+    const total = this.tasks.filter((t) => t.status === "todo" && !t.inheritsTerminal).length;
     const done = this.tasks.filter((t) => t.status === "done").length;
     const overdue = this.tasks.filter(
-      (t) => t.status === "todo" && t.deadline && t.deadline < todayISO(),
+      (t) => t.status === "todo" && !t.inheritsTerminal && t.deadline && t.deadline < todayISO(),
     ).length;
     info.setText(tr("footer.status", { todo: total, done, overdue }));
 

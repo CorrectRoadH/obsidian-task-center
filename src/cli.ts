@@ -126,7 +126,12 @@ export class BetterTaskApi {
     const all = await this.allTasks();
     const task = await resolveTaskRef(this.app, id, all);
     if (!task) throw new TaskWriterError("task_not_found", id);
-    const targets = cascade ? [task, ...collectDescendants(task, all)] : [task];
+    // Cascade only to descendants that are still `todo` — don't overwrite a
+    // done `[x] ✅ …` with a dropped `[-] ❌ …`; that would destroy history.
+    const descendants = cascade
+      ? collectDescendants(task, all).filter((t) => t.status === "todo")
+      : [];
+    const targets = [task, ...descendants];
     // Drop bottom-up so descending line numbers stay stable across each mutation
     targets.sort((a, b) => b.line - a.line);
     let lastResult = await markDropped(this.app, targets[0]);

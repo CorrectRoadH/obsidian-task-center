@@ -147,6 +147,7 @@ export function parseTaskFromLine(
     childrenLines: [],
     hash,
     mtime,
+    inheritsTerminal: false,
   };
 }
 
@@ -164,27 +165,60 @@ export async function parseFileTasks(
 
   if (listItems && listItems.length > 0) {
     const byLine = new Map<number, ParsedTask>();
+    // Include non-task list items too so we can walk ancestor status / tags for
+    // `inheritsTerminal` propagation through bullet-list section headers.
+    interface AncestorNode {
+      line: number;
+      parentLine: number; // non-negative or -1 for root
+      task: string | undefined; // checkbox char or undefined for bullets
+      tags: string[];
+      content: string;
+    }
+    const allNodes = new Map<number, AncestorNode>();
     for (const li of listItems) {
-      if (li.task === undefined) continue;
       const lineNum = li.position.start.line;
-      const line = lines[lineNum];
-      if (line === undefined) continue;
-      const task = parseTaskFromLine(file.path, lineNum, line, li, mtime);
-      if (task) {
-        // Obsidian convention: `li.parent` is the parent's LINE NUMBER.
-        //   Non-negative → parent exists at that line
-        //   Negative     → no parent; `-(line+1)` encodes the first item of the list
-        task.parentIndex = li.parent;
-        byLine.set(lineNum, task);
+      const raw = lines[lineNum];
+      if (raw === undefined) continue;
+      // Extract content after bullet marker (for parsing tags on non-tasks too).
+      const bulletMatch = raw.match(/^\s*[-+*]\s+(?:\[.\]\s*)?(.*)$/);
+      const content = bulletMatch ? bulletMatch[1] : raw;
+      const tags = Array.from(content.matchAll(/#([^\s#\[\]()]+)/g)).map((m) => "#" + m[1]);
+      const parent = li.parent !== undefined && li.parent >= 0 ? li.parent : -1;
+      allNodes.set(lineNum, { line: lineNum, parentLine: parent, task: li.task, tags, content });
+
+      if (li.task !== undefined) {
+        const task = parseTaskFromLine(file.path, lineNum, raw, li, mtime);
+        if (task) {
+          task.parentIndex = li.parent;
+          byLine.set(lineNum, task);
+        }
       }
     }
-    // Resolve parents/children using line numbers
+    // Resolve parents/children among tasks only (for nested rendering)
     for (const [lineNum, task] of byLine) {
       if (task.parentIndex !== null && task.parentIndex !== undefined && task.parentIndex >= 0) {
         const parentLine = task.parentIndex;
         task.parentLine = parentLine;
         const parent = byLine.get(parentLine);
         if (parent) parent.childrenLines.push(lineNum);
+      }
+    }
+    // Compute inheritsTerminal by walking ancestor chain through ALL list items
+    const isTerminal = (node: AncestorNode): boolean => {
+      if (node.task === "x" || node.task === "X" || node.task === "-") return true;
+      if (node.tags.includes("#dropped")) return true;
+      return false;
+    };
+    for (const [, task] of byLine) {
+      let cursor = task.parentIndex;
+      while (cursor !== null && cursor !== undefined && cursor >= 0) {
+        const node = allNodes.get(cursor);
+        if (!node) break;
+        if (isTerminal(node)) {
+          task.inheritsTerminal = true;
+          break;
+        }
+        cursor = node.parentLine >= 0 ? node.parentLine : null;
       }
     }
     tasks.push(...Array.from(byLine.values()).sort((a, b) => a.line - b.line));

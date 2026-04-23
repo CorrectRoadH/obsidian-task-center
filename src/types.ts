@@ -24,6 +24,11 @@ export interface ParsedTask {
   childrenLines: number[];
   hash: string;
   mtime: number;
+  // True if any ancestor list item (task OR bullet) is in a terminal state —
+  // `[x]` done, `[-]` dropped, or tagged `#dropped`. A terminated ancestor
+  // suppresses its descendants from todo/unscheduled views (finishing or
+  // abandoning a section implicitly finishes everything below it).
+  inheritsTerminal: boolean;
 }
 
 export interface BetterTaskSettings {
