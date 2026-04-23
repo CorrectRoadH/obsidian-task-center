@@ -69,7 +69,7 @@ obsidian better-task:list status=todo search=携号
 - ISO `YYYY-MM-DD`
 - range `YYYY-MM-DD..YYYY-MM-DD`
 
-Other flags: `overdue`, `has-deadline`, `status=todo|done|dropped`, `tag=<comma-sep>` (supports `#*象限`), `parent=<id>`, `search=<text>`, `limit=N`.
+Other flags: `overdue`, `has-deadline`, `status=todo|done|dropped`, `tag=<comma-sep>` (supports `#*象限`), `parent=<id>`, `search=<text>`, `limit=N`, `format=text|json` (JSON gives a structured array with every field — prefer it when you plan to parse).
 
 ### `better-task:show ref=<id>`
 

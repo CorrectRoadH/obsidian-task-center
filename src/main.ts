@@ -197,6 +197,7 @@ export default class BetterTaskPlugin extends Plugin {
         parent: { value: "<id>", description: "Children of parent id" },
         search: { value: "<text>", description: "Title substring match" },
         limit: { value: "<n>", description: "Truncate results" },
+        format: { value: "text|json", description: "Output format (default: text)" },
       },
       (args) => this.cliList(args),
     );
@@ -338,6 +339,30 @@ export default class BetterTaskPlugin extends Plugin {
     if (args.search) filters.search = args.search;
     if (args.limit) filters.limit = parseInt(args.limit, 10);
     const all = await this.api.list(filters);
+    if (args.format === "json") {
+      return JSON.stringify(
+        all.map((t) => ({
+          id: t.id,
+          path: t.path,
+          line: t.line + 1,
+          status: t.status,
+          title: t.title,
+          tags: t.tags,
+          scheduled: t.scheduled,
+          deadline: t.deadline,
+          created: t.created,
+          completed: t.completed,
+          cancelled: t.cancelled,
+          estimate_minutes: t.estimate,
+          actual_minutes: t.actual,
+          parent_id: t.parentLine !== null ? `${t.path}:L${t.parentLine + 1}` : null,
+          children_ids: t.childrenLines.map((l) => `${t.path}:L${l + 1}`),
+          hash: t.hash,
+        })),
+        null,
+        2,
+      );
+    }
     const desc = describeFilters(filters);
     const header = `${all.length} tasks · ${desc} · ${todayISO()}`;
     return formatList(all, header);
