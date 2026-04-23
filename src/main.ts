@@ -52,7 +52,7 @@ export default class BetterTaskPlugin extends Plugin {
       id: "reload-tasks",
       name: tr("cmd.reloadTasks"),
       callback: async () => {
-        void this.refreshOpenViews();
+        this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
         new Notice(tr("notice.reloaded"));
       },
     });
@@ -384,7 +384,7 @@ export default class BetterTaskPlugin extends Plugin {
     const clear = date === "null" || date === "--" || date === "";
     const r = await this.api.schedule(ref, clear ? null : date);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "schedule cleared" : `scheduled ${date}`);
   }
 
@@ -394,7 +394,7 @@ export default class BetterTaskPlugin extends Plugin {
     const clear = date === "null" || date === "--" || date === "";
     const r = await this.api.deadline(ref, clear ? null : date);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "deadline cleared" : `deadline ${date}`);
   }
 
@@ -407,7 +407,7 @@ export default class BetterTaskPlugin extends Plugin {
     if (minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
     const r = await this.api.actual(ref, minutes, add ? "add" : "set");
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, `actual ${add ? "+=" : "="} ${minutes}m`);
   }
 
@@ -419,7 +419,7 @@ export default class BetterTaskPlugin extends Plugin {
     if (!clear && minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
     const r = await this.api.estimate(ref, minutes);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "estimate cleared" : `estimate ${minutes}m`);
   }
 
@@ -428,7 +428,7 @@ export default class BetterTaskPlugin extends Plugin {
     const at = args.at ?? null;
     const r = await this.api.done(ref, at);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already done", `unchanged (already done ✅ ${t.completed ?? ""})`);
     return formatOkWrite(t, null, null, r.before, r.after, false, "done");
   }
@@ -437,7 +437,7 @@ export default class BetterTaskPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.undone(ref);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already todo", "unchanged (already todo)");
     return formatOkWrite(t, null, null, r.before, r.after, false, "undone");
   }
@@ -446,7 +446,7 @@ export default class BetterTaskPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.drop(ref);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already dropped", "unchanged (already dropped)");
     return formatOkWrite(t, null, null, r.before, r.after, false, "dropped");
   }
@@ -472,7 +472,7 @@ export default class BetterTaskPlugin extends Plugin {
       stampCreated,
       inboxFallback: this.settings.inboxPath,
     });
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     return formatAdd(r);
   }
 
@@ -482,7 +482,7 @@ export default class BetterTaskPlugin extends Plugin {
     const remove = !!args.remove;
     const r = remove ? await this.api.tag(ref, tag, true) : await this.api.tag(ref, tag);
     const t = await this.api.show(ref);
-    void this.refreshOpenViews();
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "no-op", "unchanged");
     return formatOkWrite(t, null, null, r.before, r.after, false, remove ? "tag removed" : "tag added");
   }
