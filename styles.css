@@ -115,7 +115,7 @@
   padding: 6px;
   display: flex;
   flex-direction: column;
-  min-height: 240px;
+  min-height: 140px;
 }
 .better-task-view .bt-week-col.today {
   background: var(--background-modifier-active-hover);
