@@ -64,6 +64,7 @@ const EN = {
   "completed.empty": "No completed tasks yet.",
 
   // Empty vault onboarding
+  "loading": "Loading tasks…",
   "onboarding.title": "No tasks yet",
   "onboarding.body":
     "Create your first task: hit Cmd/Ctrl+T here, click + Add, or add a checkbox line in any note: `- [ ] My task #2q ⏳ tomorrow [estimate:: 30m]`.",
@@ -175,6 +176,7 @@ const ZH: Partial<typeof EN> = {
   "completed.accuracy": "准确率 {ratio}  ({actual}m / {est}m)",
   "completed.empty": "还没有已完成的任务。",
 
+  "loading": "加载任务中…",
   "onboarding.title": "还没有任务",
   "onboarding.body":
     "创建第一条任务：在此按 Cmd/Ctrl+T，或点击 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #2象限 ⏳ 明天 [estimate:: 30m]`。",

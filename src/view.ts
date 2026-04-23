@@ -107,6 +107,9 @@ export class BetterTaskView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.contentEl.addClass("better-task-view");
+    // Immediate placeholder so the tab doesn't flash blank on slow-parse vaults.
+    this.contentEl.empty();
+    this.contentEl.createDiv({ cls: "bt-loading", text: tr("loading") });
     await this.reloadTasks();
     this.render();
 

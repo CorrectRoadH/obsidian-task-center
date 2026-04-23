@@ -646,7 +646,8 @@
   font-size: 10px;
 }
 
-.better-task-view .bt-empty {
+.better-task-view .bt-empty,
+.better-task-view .bt-loading {
   padding: 24px;
   text-align: center;
   color: var(--text-muted);
