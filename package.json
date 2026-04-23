@@ -7,7 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc -noEmit",
-    "test": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs"
+    "test": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs"
   },
   "keywords": ["obsidian", "plugin", "tasks", "kanban", "energy-management"],
   "author": "ctrdh",
