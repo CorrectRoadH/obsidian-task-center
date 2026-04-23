@@ -147,21 +147,25 @@ export class BetterTaskView extends ItemView {
     this.renderToolbar(header);
 
     const body = el.createDiv({ cls: "bt-body" });
-    switch (this.state.tab) {
-      case "week":
-        this.renderWeek(body);
-        this.renderUnscheduledPool(body);
-        break;
-      case "month":
-        this.renderMonth(body);
-        this.renderUnscheduledPool(body);
-        break;
-      case "completed":
-        this.renderCompleted(body);
-        break;
-      case "unscheduled":
-        this.renderUnscheduledBig(body);
-        break;
+    if (this.tasks.length === 0) {
+      this.renderOnboarding(body);
+    } else {
+      switch (this.state.tab) {
+        case "week":
+          this.renderWeek(body);
+          this.renderUnscheduledPool(body);
+          break;
+        case "month":
+          this.renderMonth(body);
+          this.renderUnscheduledPool(body);
+          break;
+        case "completed":
+          this.renderCompleted(body);
+          break;
+        case "unscheduled":
+          this.renderUnscheduledBig(body);
+          break;
+      }
     }
 
     this.renderFooter(el);
@@ -176,6 +180,14 @@ export class BetterTaskView extends ItemView {
         });
       }
     }
+  }
+
+  private renderOnboarding(parent: HTMLElement) {
+    const wrap = parent.createDiv({ cls: "bt-onboarding" });
+    wrap.createEl("h2", { text: tr("onboarding.title") });
+    wrap.createEl("p", { text: tr("onboarding.body") });
+    const btn = wrap.createEl("button", { text: tr("onboarding.cta"), cls: "bt-onboarding-cta" });
+    btn.addEventListener("click", () => this.openQuickAdd());
   }
 
   // ---------- Header ----------

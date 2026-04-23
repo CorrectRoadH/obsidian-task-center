@@ -559,6 +559,35 @@
   color: var(--text-muted);
 }
 
+.better-task-view .bt-onboarding {
+  max-width: 540px;
+  margin: 48px auto;
+  padding: 32px;
+  text-align: center;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+.better-task-view .bt-onboarding h2 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+.better-task-view .bt-onboarding p {
+  margin: 0 0 20px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.better-task-view .bt-onboarding-cta {
+  padding: 6px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Footer */
 .better-task-view .bt-footer {
   flex: 0 0 auto;
