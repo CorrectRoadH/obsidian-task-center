@@ -72,8 +72,8 @@ export async function resolveTaskRef(
 // Inject or replace an emoji+date field (⏳ / 📅 / ✅ / 🛫 / ❌ / ➕).
 // Removes all occurrences (defensively — duplicates shouldn't exist but can
 // creep in from manual edits) then appends a fresh one before any trailing
-// Dataview inline field.
-function setEmojiDate(line: string, emoji: string, date: string | null): string {
+// Dataview inline field. Exported for unit tests.
+export function setEmojiDate(line: string, emoji: string, date: string | null): string {
   const escaped = emoji.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
   const re = new RegExp(`\\s*${escaped}\\s*\\d{4}-\\d{2}-\\d{2}`, "g");
   const stripped = line.replace(re, "");
@@ -86,8 +86,8 @@ function setEmojiDate(line: string, emoji: string, date: string | null): string 
   return stripped.slice(0, trailingIdx).trimEnd() + injection + stripped.slice(trailingIdx);
 }
 
-// Inject or replace an inline Dataview field
-function setInlineField(line: string, name: string, value: string | null): string {
+// Inject or replace an inline Dataview field. Exported for unit tests.
+export function setInlineField(line: string, name: string, value: string | null): string {
   const escaped = name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
   const re = new RegExp(`\\s*\\[${escaped}::\\s*[^\\]]*\\]`, "i");
   const stripped = line.replace(re, "");
@@ -95,12 +95,12 @@ function setInlineField(line: string, name: string, value: string | null): strin
   return stripped.trimEnd() + ` [${name}:: ${value}]`;
 }
 
-function setCheckbox(line: string, char: string): string {
-  // Accept optional callout `> ` prefix(es) in the indent.
+// Swap the checkbox character — accepts callout `> ` prefix(es). Exported for unit tests.
+export function setCheckbox(line: string, char: string): string {
   return line.replace(/^(\s*(?:>\s*)*[-+*]\s+\[).(\])/, `$1${char}$2`);
 }
 
-function addTagIfMissing(line: string, tag: string): string {
+export function addTagIfMissing(line: string, tag: string): string {
   const bare = tag.startsWith("#") ? tag.slice(1) : tag;
   const re = new RegExp(`#${bare}(?:\\b|$)`);
   if (re.test(line)) return line;
