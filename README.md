@@ -47,14 +47,20 @@ Obsidian Tasks is the authoritative data-layer — keep it installed. Better Tas
 
 ## GUI
 
-Open the board (ribbon icon, command palette "Open Task Board", or `obsidian command id=obsidian-better-task:open`). Four tabs at the top (`⌃1–4`):
+Open the board — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Board", or `obsidian command id=obsidian-better-task:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
 
 - **本周 / Week** — 7 columns Mon–Sun, today highlighted. Drag cards between columns to change `⏳`.
 - **本月 / Month** — calendar grid. Each cell is a drop zone.
 - **已完成 / Completed** — timeline grouped by week, with per-week accuracy `sum(actual)/sum(estimate)`.
 - **未排期 / Unscheduled** — grouped by quadrant, masonry layout.
 
-Below the week/month view, a masonry pool of unscheduled tasks + a sticky trash bin. Drag cards into the trash to mark `[-] ❌ today`; dropping a parent cascades to its subtasks.
+Below the week/month view, a masonry pool of unscheduled tasks + a sticky trash bin. Drag cards into the trash to mark `[-] ❌ today`; dropping a parent cascades to its subtasks (already-done subtasks are left alone).
+
+The **Completed** tab has a 7-day stats header (accuracy ratio + top 4 tag minutes) and collapsible per-week groups — past weeks default collapsed.
+
+**Ancestor propagation**: when a task or section-header bullet is `[x]` / `[-]` / `#dropped`, all descendant tasks are automatically hidden from todo/unscheduled/week/month views. Abandoning a project, or completing a parent, silently retires its children without you having to tick each one.
+
+**Status bar** shows `📋 N today · ⚠ M overdue` in the bottom bar; click to open the board.
 
 ### Card keyboard shortcuts
 
