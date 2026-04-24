@@ -864,27 +864,14 @@ export class BetterTaskView extends ItemView {
     const path = meta.createSpan({ text: compactPath(t.path), cls: "bt-meta-path" });
     path.title = t.path;
 
-    // Children expansion
+    // Children expansion (recursive — renders grandchildren and deeper)
     const childLines = t.childrenLines;
     if (childLines.length > 0) {
       const expander = card.createDiv({ cls: "bt-card-children" });
       const children = childLines
         .map((l) => this.tasks.find((x) => x.path === t.path && x.line === l))
         .filter((x): x is ParsedTask => !!x);
-      for (const c of children) {
-        const subCard = expander.createDiv({ cls: "bt-subcard" });
-        subCard.dataset.taskId = c.id;
-        subCard.draggable = true;
-        subCard.createDiv({ cls: "bt-sub-check", text: statusIcon(c.status) });
-        subCard.createDiv({ cls: "bt-subcard-title", text: c.title });
-        if (c.scheduled && c.scheduled !== t.scheduled) {
-          // Flag when a subtask is scheduled to a different day than its parent
-          subCard.createDiv({ cls: "bt-sub-sched", text: `⏳${c.scheduled}` });
-        }
-        if (c.estimate) subCard.createDiv({ cls: "bt-sub-est", text: formatMinutes(c.estimate) });
-        if (c.status === "done") subCard.addClass("done");
-        this.wireCardEvents(subCard, c);
-      }
+      for (const c of children) this.renderSubcard(expander, c, t);
     }
 
     // Inline "+ subtask" affordance — visible on every card so adding a
@@ -894,6 +881,50 @@ export class BetterTaskView extends ItemView {
 
     this.wireCardEvents(card, t);
     this.attachContextHover(card, t);
+  }
+
+  // Renders a subcard + its own children recursively. The nested
+  // `.bt-card-children` block is a sibling of the subcard so each level
+  // inherits the 22px margin-left from CSS, producing a staircase indent.
+  private renderSubcard(container: HTMLElement, c: ParsedTask, parent: ParsedTask) {
+    const subCard = container.createDiv({ cls: "bt-subcard" });
+    subCard.dataset.taskId = c.id;
+    subCard.draggable = true;
+    if (this.state.selectedTaskId === c.id) subCard.addClass("selected");
+
+    const check = subCard.createDiv({ cls: "bt-sub-check", text: statusIcon(c.status) });
+    check.title = "Toggle done";
+    check.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await this.runWithRemoveAnim(c.id, async () => {
+        if (c.status === "done") await this.api.undone(c.id);
+        else await this.api.done(c.id);
+      });
+    });
+
+    const title = subCard.createDiv({ cls: "bt-subcard-title", text: c.title });
+    title.title = c.title;
+    title.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.enterTitleEdit(title, c);
+    });
+
+    if (c.scheduled && c.scheduled !== parent.scheduled) {
+      // Flag when a subtask is scheduled to a different day than its parent
+      subCard.createDiv({ cls: "bt-sub-sched", text: `⏳${c.scheduled}` });
+    }
+    if (c.estimate) subCard.createDiv({ cls: "bt-sub-est", text: formatMinutes(c.estimate) });
+    if (c.status === "done") subCard.addClass("done");
+    this.wireCardEvents(subCard, c);
+
+    const grandLines = c.childrenLines;
+    if (grandLines.length > 0) {
+      const sub = container.createDiv({ cls: "bt-card-children" });
+      const grand = grandLines
+        .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
+        .filter((x): x is ParsedTask => !!x);
+      for (const g of grand) this.renderSubcard(sub, g, c);
+    }
   }
 
   // ---------- Context hover popover ----------
