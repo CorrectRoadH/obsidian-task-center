@@ -385,7 +385,13 @@ function buildTaskLine(opts: AddTaskOpts, indent: string): string {
       parts.push(`#${bare}`);
     }
   }
-  if (opts.stampCreated) parts.push(`➕ ${today()}`);
+  if (opts.stampCreated) {
+    const stamp = today();
+    // Skip the ➕ stamp when the parent already carries the same date — the
+    // parent's stamp implies the child was created the same day, so repeating
+    // it on every subtask is just noise.
+    if (opts.parent?.created !== stamp) parts.push(`➕ ${stamp}`);
+  }
   if (opts.deadline) parts.push(`📅 ${opts.deadline}`);
   if (opts.scheduled) parts.push(`⏳ ${opts.scheduled}`);
   if (opts.estimate) parts.push(`[estimate:: ${formatMinutes(opts.estimate)}]`);
