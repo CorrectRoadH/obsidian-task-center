@@ -122,8 +122,9 @@
 /* Week grid */
 .task-center-view .bt-week {
   display: grid;
-  grid-template-columns: repeat(7, minmax(140px, 1fr));
+  grid-template-columns: repeat(7, minmax(200px, 1fr));
   gap: 6px;
+  overflow-x: auto;
 }
 .task-center-view .bt-week-col {
   background: var(--background-secondary);
