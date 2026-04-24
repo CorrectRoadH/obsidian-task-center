@@ -31,7 +31,7 @@ export interface ParsedTask {
   inheritsTerminal: boolean;
 }
 
-export interface BetterTaskSettings {
+export interface TaskCenterSettings {
   inboxPath: string;
   dailyFolder: string;
   defaultView: "week" | "month" | "completed" | "unscheduled";
@@ -43,7 +43,7 @@ export interface BetterTaskSettings {
   lastTab: "week" | "month" | "completed" | "unscheduled" | null;
 }
 
-export const DEFAULT_SETTINGS: BetterTaskSettings = {
+export const DEFAULT_SETTINGS: TaskCenterSettings = {
   inboxPath: "Tasks/Inbox.md",
   dailyFolder: "Daily",
   defaultView: "week",
@@ -53,4 +53,4 @@ export const DEFAULT_SETTINGS: BetterTaskSettings = {
   lastTab: null,
 };
 
-export const VIEW_TYPE_BETTER_TASK = "better-task-board";
+export const VIEW_TYPE_TASK_CENTER = "task-center-board";

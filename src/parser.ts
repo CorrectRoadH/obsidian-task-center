@@ -249,7 +249,7 @@ export async function parseVaultTasks(app: App): Promise<ParsedTask[]> {
       const fileTasks = await parseFileTasks(app, f);
       all.push(...fileTasks);
     } catch (e) {
-      console.warn(`[better-task] parse failed for ${f.path}:`, e);
+      console.warn(`[task-center] parse failed for ${f.path}:`, e);
     }
   }
   return all;

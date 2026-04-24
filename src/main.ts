@@ -1,9 +1,9 @@
 import { Plugin, WorkspaceLeaf, Notice, TFile, CliData } from "obsidian";
-import { BetterTaskSettings, DEFAULT_SETTINGS, VIEW_TYPE_BETTER_TASK } from "./types";
-import { BetterTaskSettingTab } from "./settings";
-import { BetterTaskView } from "./view";
+import { TaskCenterSettings, DEFAULT_SETTINGS, VIEW_TYPE_TASK_CENTER } from "./types";
+import { TaskCenterSettingTab } from "./settings";
+import { TaskCenterView } from "./view";
 import {
-  BetterTaskApi,
+  TaskCenterApi,
   formatList,
   formatShow,
   formatStats,
@@ -21,18 +21,18 @@ import { TaskWriterError } from "./writer";
 // as the literal string "true".
 type CliArgs = CliData;
 
-export default class BetterTaskPlugin extends Plugin {
-  settings!: BetterTaskSettings;
-  api!: BetterTaskApi;
+export default class TaskCenterPlugin extends Plugin {
+  settings!: TaskCenterSettings;
+  api!: TaskCenterApi;
   private statusBar: HTMLElement | null = null;
   private statusBarTimer: number | null = null;
 
   async onload() {
     await this.loadSettings();
-    this.api = new BetterTaskApi(this.app);
+    this.api = new TaskCenterApi(this.app);
 
     // View
-    this.registerView(VIEW_TYPE_BETTER_TASK, (leaf) => new BetterTaskView(leaf, this));
+    this.registerView(VIEW_TYPE_TASK_CENTER, (leaf) => new TaskCenterView(leaf, this));
     this.addRibbonIcon("kanban-square", tr("ribbon.open"), () => this.activateView());
 
     // Commands (Obsidian command palette). Default hotkey Cmd/Ctrl+Shift+T is
@@ -52,16 +52,16 @@ export default class BetterTaskPlugin extends Plugin {
       id: "reload-tasks",
       name: tr("cmd.reloadTasks"),
       callback: async () => {
-        this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+        this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
         new Notice(tr("notice.reloaded"));
       },
     });
 
     // Settings tab
-    this.addSettingTab(new BetterTaskSettingTab(this.app, this));
+    this.addSettingTab(new TaskCenterSettingTab(this.app, this));
 
     // CLI — native Obsidian CLI handlers registered via the 1.12.2+ API.
-    // All verbs are colon-grouped under `better-task:…`, matching the Obsidian
+    // All verbs are colon-grouped under `task-center:…`, matching the Obsidian
     // convention (compare `daily:read`, `base:query`).
     if (typeof (this as Plugin).registerCliHandler === "function") {
       try {
@@ -69,21 +69,21 @@ export default class BetterTaskPlugin extends Plugin {
       } catch (e) {
         // A collision with another plugin registering the same verb is a soft
         // failure — the GUI remains fully usable without the shell CLI.
-        console.error("[better-task] CLI registration failed:", e);
+        console.error("[task-center] CLI registration failed:", e);
         new Notice(
-          "Better Task: CLI verbs failed to register (likely a namespace collision). GUI still works.",
+          "Task Center: CLI verbs failed to register (likely a namespace collision). GUI still works.",
           6000,
         );
       }
     } else {
       console.warn(
-        "[better-task] app.cli.registerHandler not available — upgrade Obsidian to ≥ 1.12.2 for the CLI.",
+        "[task-center] app.cli.registerHandler not available — upgrade Obsidian to ≥ 1.12.2 for the CLI.",
       );
     }
 
     // Status bar — shows the active todo count, refreshed on vault changes.
     this.statusBar = this.addStatusBarItem();
-    this.statusBar.addClass("better-task-status");
+    this.statusBar.addClass("task-center-status");
     this.statusBar.addEventListener("click", () => this.activateView());
     this.app.workspace.onLayoutReady(() => this.refreshStatusBar());
     const onVaultChange = (f: unknown) => {
@@ -145,21 +145,21 @@ export default class BetterTaskPlugin extends Plugin {
 
   async activateView() {
     const { workspace } = this.app;
-    const existing = workspace.getLeavesOfType(VIEW_TYPE_BETTER_TASK);
+    const existing = workspace.getLeavesOfType(VIEW_TYPE_TASK_CENTER);
     let leaf: WorkspaceLeaf;
     if (existing.length > 0) {
       leaf = existing[0];
     } else {
       leaf = workspace.getLeaf("tab");
-      await leaf.setViewState({ type: VIEW_TYPE_BETTER_TASK, active: true });
+      await leaf.setViewState({ type: VIEW_TYPE_TASK_CENTER, active: true });
     }
     workspace.revealLeaf(leaf);
   }
 
   async refreshOpenViews() {
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_BETTER_TASK)) {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TASK_CENTER)) {
       const view = leaf.view;
-      if (view instanceof BetterTaskView) {
+      if (view instanceof TaskCenterView) {
         await view.reloadTasks();
         view.render();
       }
@@ -170,7 +170,7 @@ export default class BetterTaskPlugin extends Plugin {
 
   private registerAllCliHandlers() {
     this.registerCliHandler(
-      "better-task:list",
+      "task-center:list",
       "List tasks with filters",
       {
         scheduled: {
@@ -195,7 +195,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:show",
+      "task-center:show",
       "Show one task in full detail",
       {
         ref: { value: "<path:line|hash>", description: "Task id", required: true },
@@ -204,7 +204,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:stats",
+      "task-center:stats",
       "Estimate accuracy + tag distribution (rolling window)",
       {
         days: { value: "<n>", description: "Rolling window in days (default 7)" },
@@ -217,7 +217,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:schedule",
+      "task-center:schedule",
       "Set or clear ⏳ scheduled date on a task",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -227,7 +227,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:deadline",
+      "task-center:deadline",
       "Set or clear 📅 deadline on a task",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -237,7 +237,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:actual",
+      "task-center:actual",
       "Set or add actual minutes ([actual:: Nm]) on a task",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -247,7 +247,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:estimate",
+      "task-center:estimate",
       "Set or clear [estimate:: Nm] on a task",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -257,7 +257,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:done",
+      "task-center:done",
       "Mark a task done (✅ today unless at= given)",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -267,7 +267,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:undone",
+      "task-center:undone",
       "Unmark a task (remove ✅ and reset checkbox)",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -276,7 +276,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:abandon",
+      "task-center:abandon",
       "Mark a task abandoned ([-] + ❌ today; children cascade)",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -287,8 +287,8 @@ export default class BetterTaskPlugin extends Plugin {
     // Deprecated alias kept for backward compatibility — `abandon` is the
     // preferred verb (matches README's `[-] ❌` = "Abandoned" terminology).
     this.registerCliHandler(
-      "better-task:drop",
-      "Alias for better-task:abandon (deprecated)",
+      "task-center:drop",
+      "Alias for task-center:abandon (deprecated)",
       {
         ref: { value: "<id>", description: "Task id", required: true },
       },
@@ -296,7 +296,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:add",
+      "task-center:add",
       "Create a new task line",
       {
         text: { value: "<text>", description: "Task title", required: true },
@@ -315,7 +315,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:tag",
+      "task-center:tag",
       "Add or remove a tag on a task",
       {
         ref: { value: "<id>", description: "Task id", required: true },
@@ -326,7 +326,7 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:nest",
+      "task-center:nest",
       "Move a task (and its subtree) to become a subtask of another (works cross-file)",
       {
         ref: { value: "<id>", description: "Task to move", required: true },
@@ -338,11 +338,11 @@ export default class BetterTaskPlugin extends Plugin {
 
   // ---------- CLI verb implementations ----------
   //
-  // Each handler converts native Obsidian CLI args → BetterTaskApi call →
+  // Each handler converts native Obsidian CLI args → TaskCenterApi call →
   // returns human-readable text (greppable, first column always an id).
 
   private async cliList(args: CliArgs): Promise<string> {
-    const filters: Parameters<BetterTaskApi["list"]>[0] = {};
+    const filters: Parameters<TaskCenterApi["list"]>[0] = {};
     if (args.scheduled) filters.scheduled = args.scheduled;
     if (args.done) filters.done = args.done;
     if (args.overdue) filters.overdue = true;
@@ -405,7 +405,7 @@ export default class BetterTaskPlugin extends Plugin {
     const clear = date === "null" || date === "--" || date === "";
     const r = await this.api.schedule(ref, clear ? null : date);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "schedule cleared" : `scheduled ${date}`);
   }
 
@@ -415,7 +415,7 @@ export default class BetterTaskPlugin extends Plugin {
     const clear = date === "null" || date === "--" || date === "";
     const r = await this.api.deadline(ref, clear ? null : date);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "deadline cleared" : `deadline ${date}`);
   }
 
@@ -428,7 +428,7 @@ export default class BetterTaskPlugin extends Plugin {
     if (minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
     const r = await this.api.actual(ref, minutes, add ? "add" : "set");
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, `actual ${add ? "+=" : "="} ${minutes}m`);
   }
 
@@ -440,7 +440,7 @@ export default class BetterTaskPlugin extends Plugin {
     if (!clear && minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
     const r = await this.api.estimate(ref, minutes);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "estimate cleared" : `estimate ${minutes}m`);
   }
 
@@ -449,7 +449,7 @@ export default class BetterTaskPlugin extends Plugin {
     const at = args.at ?? null;
     const r = await this.api.done(ref, at);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already done", `unchanged (already done ✅ ${t.completed ?? ""})`);
     return formatOkWrite(t, null, null, r.before, r.after, false, "done");
   }
@@ -458,7 +458,7 @@ export default class BetterTaskPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.undone(ref);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already todo", "unchanged (already todo)");
     return formatOkWrite(t, null, null, r.before, r.after, false, "undone");
   }
@@ -467,7 +467,7 @@ export default class BetterTaskPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.drop(ref);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     if (r.unchanged) {
       return formatOkWrite(t, null, null, r.before, r.after, true, `already ${label}`, `unchanged (already ${label})`);
     }
@@ -495,7 +495,7 @@ export default class BetterTaskPlugin extends Plugin {
       stampCreated,
       inboxFallback: this.settings.inboxPath,
     });
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatAdd(r);
   }
 
@@ -505,7 +505,7 @@ export default class BetterTaskPlugin extends Plugin {
     const remove = !!args.remove;
     const r = remove ? await this.api.tag(ref, tag, true) : await this.api.tag(ref, tag);
     const t = await this.api.show(ref);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "no-op", "unchanged");
     return formatOkWrite(t, null, null, r.before, r.after, false, remove ? "tag removed" : "tag added");
   }
@@ -514,7 +514,7 @@ export default class BetterTaskPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const under = requireArg(args.under, "under");
     const r = await this.api.nest(ref, under);
-    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     // After nest, the original ref may not resolve (line moved); show the parent instead.
     const parent = await this.api.show(under);
     const label = r.unchanged
@@ -540,7 +540,7 @@ function splitList(s: string): string[] {
     .filter(Boolean);
 }
 
-function describeFilters(f: Parameters<BetterTaskApi["list"]>[0]): string {
+function describeFilters(f: Parameters<TaskCenterApi["list"]>[0]): string {
   const parts: string[] = [];
   if (f.scheduled) parts.push(`scheduled ${f.scheduled}`);
   if (f.done) parts.push(`done ${f.done}`);

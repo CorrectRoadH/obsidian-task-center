@@ -1,4 +1,4 @@
-# Obsidian Better Task
+# Obsidian Task Center
 
 Energy-aware task board + CLI on top of the [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) syntax. One plugin, two entry points:
 
@@ -9,9 +9,9 @@ Data is plain markdown. No custom file format, no lock-in — Obsidian Tasks plu
 
 ## Why not just Obsidian Tasks?
 
-Obsidian Tasks is the authoritative data-layer — keep it installed. Better Task adds on top:
+Obsidian Tasks is the authoritative data-layer — keep it installed. Task Center adds on top:
 
-| Feature | Obsidian Tasks | Better Task |
+| Feature | Obsidian Tasks | Task Center |
 |---|---|---|
 | Inline `- [ ]` syntax | ✅ authoritative | ✅ sources |
 | `✅ / ❌ / ➕` date stamps | ✅ | ✅ reads + writes |
@@ -47,7 +47,7 @@ Obsidian Tasks is the authoritative data-layer — keep it installed. Better Tas
 
 ## GUI
 
-Open the board — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Board", or `obsidian command id=obsidian-better-task:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
+Open the board — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Board", or `obsidian command id=obsidian-task-center:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
 
 - **本周 / Week** — 7 columns Mon–Sun, today highlighted. Drag cards between columns to change `⏳`.
 - **本月 / Month** — calendar grid. Each cell is a drop zone.
@@ -94,31 +94,31 @@ Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to re
 Every verb registers to Obsidian's native CLI via `registerCliHandler` (no shell wrapper, no `eval` hacks). Requires Obsidian 1.12.2+.
 
 ```
-obsidian better-task:list scheduled=today
-obsidian better-task:list scheduled=unscheduled tag='#2象限'
-obsidian better-task:show ref=Tasks/Inbox.md:L42
-obsidian better-task:stats days=7 group=象限
+obsidian task-center:list scheduled=today
+obsidian task-center:list scheduled=unscheduled tag='#2象限'
+obsidian task-center:show ref=Tasks/Inbox.md:L42
+obsidian task-center:stats days=7 group=象限
 
-obsidian better-task:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26
-obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
-obsidian better-task:done ref=Tasks/Inbox.md:L42 at=2026-04-23
-obsidian better-task:abandon ref=Tasks/Inbox.md:L42   # alias: better-task:drop
-obsidian better-task:nest ref=Tasks/Inbox.md:L42 under=Tasks/Inbox.md:L10
-obsidian better-task:actual ref=Tasks/Inbox.md:L42 minutes=+30m
-obsidian better-task:estimate ref=Tasks/Inbox.md:L42 minutes=90m
-obsidian better-task:tag ref=Tasks/Inbox.md:L42 tag='#基建'
-obsidian better-task:deadline ref=Tasks/Inbox.md:L42 date=2026-05-15
-obsidian better-task:undone ref=Tasks/Inbox.md:L42
+obsidian task-center:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26
+obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
+obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23
+obsidian task-center:abandon ref=Tasks/Inbox.md:L42   # alias: task-center:drop
+obsidian task-center:nest ref=Tasks/Inbox.md:L42 under=Tasks/Inbox.md:L10
+obsidian task-center:actual ref=Tasks/Inbox.md:L42 minutes=+30m
+obsidian task-center:estimate ref=Tasks/Inbox.md:L42 minutes=90m
+obsidian task-center:tag ref=Tasks/Inbox.md:L42 tag='#基建'
+obsidian task-center:deadline ref=Tasks/Inbox.md:L42 date=2026-05-15
+obsidian task-center:undone ref=Tasks/Inbox.md:L42
 ```
 
-Full list with `obsidian help better-task`.
+Full list with `obsidian help task-center`.
 
 ### Output shape
 
 Human-readable, greppable, first column always an id:
 
 ```
-$ obsidian better-task:list scheduled=today
+$ obsidian task-center:list scheduled=today
 3 tasks · scheduled today · 2026-04-24
 
 Tasks/Inbox.md:L42  [ ]  #2  添加 bq 权限
@@ -130,7 +130,7 @@ Tasks/Inbox.md:L42  [ ]  #2  添加 bq 权限
 Write verbs return `ok / before / after`:
 
 ```
-$ obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
+$ obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
 ok  Tasks/Inbox.md:L42  添加 bq 权限
     before  - [ ] 添加 bq 权限 #2象限 ⏳ 2026-04-24 [estimate:: 90m]
     after   - [ ] 添加 bq 权限 #2象限 ⏳ 2026-04-25 [estimate:: 90m]
@@ -169,30 +169,30 @@ Recommended AI workflow:
 
 ```bash
 # Grab today's candidate pool
-obsidian better-task:list scheduled=unscheduled
-obsidian better-task:list scheduled=tomorrow
+obsidian task-center:list scheduled=unscheduled
+obsidian task-center:list scheduled=tomorrow
 
 # Estimate calibration
-obsidian better-task:stats days=7
+obsidian task-center:stats days=7
 
 # Schedule picks
-obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-24
-obsidian better-task:add text="新冒出来的事" tag='#3象限' scheduled=2026-04-24
+obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-24
+obsidian task-center:add text="新冒出来的事" tag='#3象限' scheduled=2026-04-24
 ```
 
 ## Development
 
 ```bash
 git clone <this repo>
-cd obsidian-better-task
+cd obsidian-task-center
 npm install
 npm run dev          # esbuild watch mode
 
 # Symlink into your dev vault (recommended):
-ln -s $(pwd) /path/to/vault/.obsidian/plugins/obsidian-better-task
+ln -s $(pwd) /path/to/vault/.obsidian/plugins/obsidian-task-center
 
 # Reload on change (or install pjeby/hot-reload for auto-reload):
-obsidian plugin:reload id=obsidian-better-task
+obsidian plugin:reload id=obsidian-task-center
 ```
 
 ## Settings

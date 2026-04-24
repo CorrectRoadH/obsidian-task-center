@@ -1,17 +1,17 @@
 import { App, Modal, TextComponent } from "obsidian";
-import { BetterTaskApi } from "./cli";
+import { TaskCenterApi } from "./cli";
 import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO } from "./dates";
-import type { BetterTaskSettings } from "./types";
+import type { TaskCenterSettings } from "./types";
 
 export class QuickAddModal extends Modal {
   private input = "";
-  private api: BetterTaskApi;
+  private api: TaskCenterApi;
   private onDone?: () => void;
-  private settings?: BetterTaskSettings;
+  private settings?: TaskCenterSettings;
 
-  constructor(app: App, api: BetterTaskApi, onDone?: () => void, settings?: BetterTaskSettings) {
+  constructor(app: App, api: TaskCenterApi, onDone?: () => void, settings?: TaskCenterSettings) {
     super(app);
     this.api = api;
     this.onDone = onDone;
@@ -21,11 +21,11 @@ export class QuickAddModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("better-task-quick-add");
+    contentEl.addClass("task-center-quick-add");
     contentEl.createEl("h3", { text: tr("qa.title") });
 
     const text = new TextComponent(contentEl);
-    text.inputEl.addClass("better-task-quick-add-input");
+    text.inputEl.addClass("task-center-quick-add-input");
     text.setPlaceholder(tr("qa.placeholder"));
     text.inputEl.style.width = "100%";
     text.onChange((v) => (this.input = v));
@@ -40,7 +40,7 @@ export class QuickAddModal extends Modal {
 
     contentEl.createEl("p", {
       text: tr("qa.hint"),
-      cls: "better-task-quick-add-hint",
+      cls: "task-center-quick-add-hint",
     });
 
     window.setTimeout(() => text.inputEl.focus(), 10);
@@ -60,7 +60,7 @@ export class QuickAddModal extends Modal {
       if (this.onDone) this.onDone();
     } catch (e) {
       const note = contentErr(e);
-      const err = this.contentEl.createDiv({ cls: "better-task-err" });
+      const err = this.contentEl.createDiv({ cls: "task-center-err" });
       err.setText("error: " + note);
     }
   }

@@ -28,7 +28,7 @@ export class DatePromptModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("better-task-date-prompt");
+    contentEl.addClass("task-center-date-prompt");
     contentEl.createEl("h3", { text: this.title });
 
     const input = new TextComponent(contentEl);
@@ -38,7 +38,7 @@ export class DatePromptModal extends Modal {
 
     contentEl.createEl("p", {
       text: "YYYY-MM-DD · today · tomorrow · 明天 · 周六 · (blank to clear)",
-      cls: "better-task-date-hint",
+      cls: "task-center-date-hint",
     });
 
     input.inputEl.addEventListener("keydown", (e) => {

@@ -39,7 +39,7 @@ export interface StatsOpts {
   to?: string;
 }
 
-export class BetterTaskApi {
+export class TaskCenterApi {
   constructor(private readonly app: App) {}
 
   async allTasks(): Promise<ParsedTask[]> {

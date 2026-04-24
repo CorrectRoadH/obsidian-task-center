@@ -9,7 +9,7 @@ function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-describe("Better Task — inline + 子任务", function () {
+describe("Task Center — inline + 子任务", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
   });
@@ -25,7 +25,7 @@ describe("Better Task — inline + 子任务", function () {
 
   async function switchToWeekTab() {
     await browser.execute(() => {
-      const tabs = document.querySelectorAll(".better-task-view .bt-tab");
+      const tabs = document.querySelectorAll(".task-center-view .bt-tab");
       for (const t of Array.from(tabs)) {
         if (t.textContent?.includes("本周")) {
           (t as HTMLElement).click();
@@ -81,14 +81,14 @@ describe("Better Task — inline + 子任务", function () {
       `- [ ] Parent task ⏳ ${today}\n    - [ ] First child\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
 
-    await $(".better-task-view").waitForExist({ timeout: 5000 });
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
     await browser.pause(500);
     await switchToWeekTab();
 
-    const parentSel = `.better-task-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
+    const parentSel = `.task-center-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
@@ -116,7 +116,7 @@ describe("Better Task — inline + 子任务", function () {
     await browser.waitUntil(
       async () => {
         const texts = await browser.execute(() => {
-          const els = document.querySelectorAll(".better-task-view .bt-subcard-title");
+          const els = document.querySelectorAll(".task-center-view .bt-subcard-title");
           return Array.from(els).map((e) => e.textContent);
         });
         return (texts as string[]).some((t) => t?.includes("Newly added subtask"));
@@ -136,10 +136,10 @@ describe("Better Task — inline + 子任务", function () {
       `- [ ] 用债务周期分析投资 ⏳ 2026-04-12\n    - [ ] 把cetus还有债务还清\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
 
-    await $(".better-task-view").waitForExist({ timeout: 5000 });
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
     await browser.pause(500);
     await switchToWeekTab();
 
@@ -147,7 +147,7 @@ describe("Better Task — inline + 子任务", function () {
     // (Today is 2026-04-24, exactly 2 weeks back.)
     for (let i = 0; i < 2; i++) {
       await browser.execute(() => {
-        const btns = document.querySelectorAll(".better-task-view .bt-nav button");
+        const btns = document.querySelectorAll(".task-center-view .bt-nav button");
         for (const b of Array.from(btns)) {
           if (b.textContent === "◀") {
             (b as HTMLElement).click();
@@ -158,7 +158,7 @@ describe("Better Task — inline + 子任务", function () {
       await browser.pause(150);
     }
 
-    const parentSel = `.better-task-view .bt-card[data-task-id="${dailyPath}:L1"]`;
+    const parentSel = `.task-center-view .bt-card[data-task-id="${dailyPath}:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
@@ -188,16 +188,16 @@ describe("Better Task — inline + 子任务", function () {
       `- [ ] Enter-commit parent ⏳ ${today}\n    - [ ] placeholder\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
 
-    await $(".better-task-view").waitForExist({ timeout: 5000 });
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
     await browser.pause(500);
     await switchToWeekTab();
 
     // Reset the week anchor to today (previous test may have navigated back).
     await browser.execute(() => {
-      const btns = document.querySelectorAll(".better-task-view .bt-nav button");
+      const btns = document.querySelectorAll(".task-center-view .bt-nav button");
       for (const b of Array.from(btns)) {
         if (b.textContent === "今天") {
           (b as HTMLElement).click();
@@ -207,7 +207,7 @@ describe("Better Task — inline + 子任务", function () {
     });
     await browser.pause(200);
 
-    const parentSel = `.better-task-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
+    const parentSel = `.task-center-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
@@ -234,14 +234,14 @@ describe("Better Task — inline + 子任务", function () {
       `- [ ] Daily parent\n    - [ ] Existing child\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
 
-    await $(".better-task-view").waitForExist({ timeout: 5000 });
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
     await browser.pause(500);
     await switchToWeekTab();
 
-    const parentSel = `.better-task-view .bt-card[data-task-id="${dailyPath}:L1"]`;
+    const parentSel = `.task-center-view .bt-card[data-task-id="${dailyPath}:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);

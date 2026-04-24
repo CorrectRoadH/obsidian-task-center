@@ -62,7 +62,7 @@ export async function resolveTaskRef(
     }
     throw new TaskWriterError(
       "task_not_found",
-      `${parsed.path}:L${parsed.line + 1} is not a task line. Use \`better-task list\` to find valid refs.`,
+      `${parsed.path}:L${parsed.line + 1} is not a task line. Use \`task-center list\` to find valid refs.`,
     );
   }
   return null;

@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- CLI: add `better-task:abandon` as the preferred verb for `[-] ❌`. `better-task:drop` is kept as a deprecated alias (same behavior, output text unchanged for backward compat).
+- CLI: add `task-center:abandon` as the preferred verb for `[-] ❌`. `task-center:drop` is kept as a deprecated alias (same behavior, output text unchanged for backward compat).
 - GUI: every card has an inline `+ 子任务` / `+ subtask` affordance — click to add a child without keyboard shortcuts; subtask inherits the parent's `⏳`.
 - GUI: card-removal actions (drag to trash / different day, mark done, abandon, date prompt, ←/→ shift, Space, Delete) now fade + collapse via Web Animations API so neighbours slide up smoothly. No-op moves skip the animation.
-- GUI + CLI: drag a card onto another card to nest it as a subtask. Works **cross-file** (insert into target file, then delete from source). New CLI verb `better-task:nest ref=X under=Y`. Cycles and self-drops are rejected. No undo for nest — use git or Obsidian file history.
+- GUI + CLI: drag a card onto another card to nest it as a subtask. Works **cross-file** (insert into target file, then delete from source). New CLI verb `task-center:nest ref=X under=Y`. Cycles and self-drops are rejected. No undo for nest — use git or Obsidian file history.
 
 ## 0.1.0 — 2026-04-23
 
@@ -31,7 +31,7 @@ Initial release. Energy-aware task board + CLI on top of Obsidian Tasks syntax.
 
 ### CLI (Obsidian native `registerCliHandler`, requires 1.12.2+)
 
-12 colon-grouped verbs under `better-task:…`:
+12 colon-grouped verbs under `task-center:…`:
 
 - Read: `list` (filters: `scheduled/done/overdue/has-deadline/status/tag/parent/search/limit/format`), `show`, `stats` (days/group/from/to/format).
 - Write (idempotent, returns `before/after` diff): `schedule`, `deadline`, `actual` (supports `+Nm` additive), `estimate`, `done` (with optional `at=`), `undone`, `drop` (cascades), `tag` (add / `remove`), `add` (with `to/tag/scheduled/deadline/estimate/parent/stamp-created`).
@@ -50,7 +50,7 @@ Initial release. Energy-aware task board + CLI on top of Obsidian Tasks syntax.
 - Zero runtime dependencies beyond Obsidian itself.
 - `README.md`, `SKILL.md` (AI-agent contract), `versions.json`.
 - `npm run dev` (esbuild watch), `npm run build` (production), `npm run typecheck`.
-- Recommended install during development: `ln -s $(pwd) <vault>/.obsidian/plugins/obsidian-better-task`, then `obsidian plugin:reload id=obsidian-better-task`.
+- Recommended install during development: `ln -s $(pwd) <vault>/.obsidian/plugins/obsidian-task-center`, then `obsidian plugin:reload id=obsidian-task-center`.
 
 ### Known limitations
 

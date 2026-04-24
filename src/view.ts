@@ -9,9 +9,9 @@ import {
   MarkdownRenderer,
   Component,
 } from "obsidian";
-import { ParsedTask, VIEW_TYPE_BETTER_TASK } from "./types";
+import { ParsedTask, VIEW_TYPE_TASK_CENTER } from "./types";
 import { parseVaultTasks, formatMinutes } from "./parser";
-import { BetterTaskApi, computeStats } from "./cli";
+import { TaskCenterApi, computeStats } from "./cli";
 import {
   todayISO,
   fromISO,
@@ -28,7 +28,7 @@ import { QuickAddModal } from "./quickadd";
 import { DatePromptModal } from "./dateprompt";
 import { t as tr, getLocale } from "./i18n";
 import { animateOut } from "./anim";
-import type BetterTaskPlugin from "./main";
+import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
 
@@ -68,9 +68,9 @@ function weekdayLabel(dow: number): string {
   return getLocale() === "zh" ? `周${label}` : label;
 }
 
-export class BetterTaskView extends ItemView {
-  plugin: BetterTaskPlugin;
-  api: BetterTaskApi;
+export class TaskCenterView extends ItemView {
+  plugin: TaskCenterPlugin;
+  api: TaskCenterApi;
   tasks: ParsedTask[] = [];
   state: ViewState;
   private refreshTimer: number | null = null;
@@ -90,7 +90,7 @@ export class BetterTaskView extends ItemView {
   private undoStack: UndoEntry[] = [];
   private static UNDO_MAX = 20;
 
-  constructor(leaf: WorkspaceLeaf, plugin: BetterTaskPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.api = plugin.api;
@@ -106,7 +106,7 @@ export class BetterTaskView extends ItemView {
   }
 
   getViewType(): string {
-    return VIEW_TYPE_BETTER_TASK;
+    return VIEW_TYPE_TASK_CENTER;
   }
   getDisplayText(): string {
     return "Task Board";
@@ -116,7 +116,7 @@ export class BetterTaskView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    this.contentEl.addClass("better-task-view");
+    this.contentEl.addClass("task-center-view");
     // Immediate placeholder so the tab doesn't flash blank on slow-parse vaults.
     this.contentEl.empty();
     this.contentEl.createDiv({ cls: "bt-loading", text: tr("loading") });
@@ -249,7 +249,7 @@ export class BetterTaskView extends ItemView {
     const savedScrollTop = oldBody ? (oldBody as HTMLElement).scrollTop : 0;
 
     el.empty();
-    el.addClass("better-task-view");
+    el.addClass("task-center-view");
 
     const header = el.createDiv({ cls: "bt-header" });
     this.renderTabBar(header);
@@ -419,7 +419,7 @@ export class BetterTaskView extends ItemView {
     gear.addClass("bt-gear");
     gear.addEventListener("click", () => {
       (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
-      (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.openTabById("obsidian-better-task");
+      (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.openTabById("obsidian-task-center");
     });
   }
 
@@ -1439,7 +1439,7 @@ export class BetterTaskView extends ItemView {
 
   private pushUndo(entry: UndoEntry) {
     this.undoStack.push(entry);
-    if (this.undoStack.length > BetterTaskView.UNDO_MAX) {
+    if (this.undoStack.length > TaskCenterView.UNDO_MAX) {
       this.undoStack.shift();
     }
   }

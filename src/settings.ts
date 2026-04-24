@@ -1,11 +1,11 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { t as tr } from "./i18n";
-import type BetterTaskPlugin from "./main";
+import type TaskCenterPlugin from "./main";
 
-export class BetterTaskSettingTab extends PluginSettingTab {
+export class TaskCenterSettingTab extends PluginSettingTab {
   constructor(
     app: App,
-    private readonly plugin: BetterTaskPlugin,
+    private readonly plugin: TaskCenterPlugin,
   ) {
     super(app, plugin);
   }
@@ -89,12 +89,12 @@ export class BetterTaskSettingTab extends PluginSettingTab {
     const pre = cliHelp.createEl("pre");
     pre.setText(
       [
-        "obsidian better-task:list scheduled=today",
-        "obsidian better-task:list scheduled=unscheduled tag='#2象限'",
-        "obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25",
-        "obsidian better-task:done ref=Tasks/Inbox.md:L42 at=2026-04-23",
-        'obsidian better-task:add text="去营业厅问携号转网" tag="#3象限" scheduled=2026-04-26',
-        "obsidian better-task:stats days=7 group=象限",
+        "obsidian task-center:list scheduled=today",
+        "obsidian task-center:list scheduled=unscheduled tag='#2象限'",
+        "obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25",
+        "obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23",
+        'obsidian task-center:add text="去营业厅问携号转网" tag="#3象限" scheduled=2026-04-26',
+        "obsidian task-center:stats days=7 group=象限",
       ].join("\n"),
     );
     cliHelp.createEl("p", { text: tr("settings.cliAiNote") });

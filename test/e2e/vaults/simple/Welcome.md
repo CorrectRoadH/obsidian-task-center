@@ -1,3 +1,3 @@
 # Welcome
 
-This is a fixture vault for Better Task e2e tests.
+This is a fixture vault for Task Center e2e tests.

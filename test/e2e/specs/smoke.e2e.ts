@@ -9,14 +9,14 @@ function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-describe("Better Task — smoke", function () {
+describe("Task Center — smoke", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
   });
 
   it("opens the board view via command", async function () {
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await expect($(".better-task-view")).toExist();
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await expect($(".task-center-view")).toExist();
   });
 
   it("renders a task card scheduled today", async function () {
@@ -44,17 +44,17 @@ describe("Better Task — smoke", function () {
       `- [ ] E2E smoke task ⏳ ${today}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-better-task:open");
-    await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
 
     // Card is rendered whether on Week or Month tab; data-task-id is stable.
-    const card = $(`.better-task-view [data-task-id="Tasks/Inbox.md:L1"]`);
+    const card = $(`.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`);
     await card.waitForExist({ timeout: 5000 });
     await expect(card).toExist();
   });
 
   it("opens the quick-add modal via command", async function () {
-    await browser.executeObsidianCommand("obsidian-better-task:quick-add");
-    await expect($(".better-task-quick-add")).toExist();
+    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await expect($(".task-center-quick-add")).toExist();
   });
 });

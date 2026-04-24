@@ -1,11 +1,11 @@
 ---
-name: obsidian-better-task
-description: Read and write tasks in an Obsidian vault through the Better Task plugin's CLI. Use when the user wants to list, schedule, complete, abandon, or add tasks — or when they want estimate-accuracy / tag-distribution stats. Obsidian must be running with the `obsidian-better-task` plugin enabled; all verbs are namespaced `obsidian better-task:<verb>`.
+name: obsidian-task-center
+description: Read and write tasks in an Obsidian vault through the Task Center plugin's CLI. Use when the user wants to list, schedule, complete, abandon, or add tasks — or when they want estimate-accuracy / tag-distribution stats. Obsidian must be running with the `obsidian-task-center` plugin enabled; all verbs are namespaced `obsidian task-center:<verb>`.
 ---
 
-# Obsidian Better Task — CLI skill
+# Obsidian Task Center — CLI skill
 
-This skill is the AI interface to the [obsidian-better-task](https://github.com/CorrectRoadH/obsidian-better-task) plugin. The plugin registers its verbs to Obsidian's native CLI (1.12.2+), so calls go `obsidian better-task:<verb> key=value …`.
+This skill is the AI interface to the [obsidian-task-center](https://github.com/CorrectRoadH/obsidian-task-center) plugin. The plugin registers its verbs to Obsidian's native CLI (1.12.2+), so calls go `obsidian task-center:<verb> key=value …`.
 
 Data stays inline markdown. Syntax:
 
@@ -26,14 +26,14 @@ Data stays inline markdown. Syntax:
 
 ## When to use this skill
 
-- "list today's tasks" / "what do I have scheduled" → `better-task:list`
-- "show task details" / "pull the raw line" → `better-task:show`
-- "schedule X" / "move X to tomorrow" → `better-task:schedule`
-- "mark X done" / "I finished X" → `better-task:done`
-- "drop X" / "abandon X" / "remove X" → `better-task:drop`
-- "log time on X" / "I spent 45m on X" → `better-task:actual`
-- "add a task" / "remind me to …" → `better-task:add`
-- "how accurate were my estimates" / "weekly review" → `better-task:stats`
+- "list today's tasks" / "what do I have scheduled" → `task-center:list`
+- "show task details" / "pull the raw line" → `task-center:show`
+- "schedule X" / "move X to tomorrow" → `task-center:schedule`
+- "mark X done" / "I finished X" → `task-center:done`
+- "drop X" / "abandon X" / "remove X" → `task-center:drop`
+- "log time on X" / "I spent 45m on X" → `task-center:actual`
+- "add a task" / "remind me to …" → `task-center:add`
+- "how accurate were my estimates" / "weekly review" → `task-center:stats`
 
 **Do not** use `Read`/`Write` directly on task files to mutate tasks — use the CLI so `vault.process` locking + parser conventions are respected. Reading files is fine when you want broader context (the task body, surrounding notes).
 
@@ -42,23 +42,23 @@ Data stays inline markdown. Syntax:
 Verify the plugin is loaded:
 
 ```bash
-obsidian plugins:enabled | grep obsidian-better-task
+obsidian plugins:enabled | grep obsidian-task-center
 ```
 
 If missing, ask the user to enable it. If Obsidian isn't running, the CLI will auto-launch (first call incurs latency).
 
 ## Verbs
 
-### `better-task:list [filters]`
+### `task-center:list [filters]`
 
 Read-only. Returns tasks matching all filters. Every row starts with `<path>:L<line>` as the id — safe to pipe.
 
 ```
-obsidian better-task:list scheduled=today
-obsidian better-task:list scheduled=unscheduled tag='#2象限'
-obsidian better-task:list done=2026-04-01..2026-04-30
-obsidian better-task:list overdue
-obsidian better-task:list status=todo search=携号
+obsidian task-center:list scheduled=today
+obsidian task-center:list scheduled=unscheduled tag='#2象限'
+obsidian task-center:list done=2026-04-01..2026-04-30
+obsidian task-center:list overdue
+obsidian task-center:list status=todo search=携号
 ```
 
 `scheduled=` / `done=` vocabulary:
@@ -71,11 +71,11 @@ obsidian better-task:list status=todo search=携号
 
 Other flags: `overdue`, `has-deadline`, `status=todo|done|dropped`, `tag=<comma-sep>` (supports `#*象限`), `parent=<id>`, `search=<text>`, `limit=N`, `format=text|json` (JSON gives a structured array with every field — prefer it when you plan to parse).
 
-### `better-task:show ref=<id>`
+### `task-center:show ref=<id>`
 
 Full single-task detail — scheduled/deadline/estimate/actual/created/completed/cancelled/parent/children/raw.
 
-### `better-task:stats [days=N] [group=<prefix>]`
+### `task-center:stats [days=N] [group=<prefix>]`
 
 Rolling-window estimate accuracy + tag minutes breakdown. Default `days=7`. `group=象限` aggregates matching tags into a section (useful for Covey quadrants). Output includes:
 
@@ -91,28 +91,28 @@ Use this to **correct planning-fallacy** when suggesting estimates. If the 7-day
 All write verbs return `ok <id>` with a `before / after` diff, or `unchanged` if already in the target state.
 
 ```
-obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
-obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=null       # clear ⏳
+obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
+obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=null       # clear ⏳
 
-obsidian better-task:deadline ref=… date=2026-05-15
-obsidian better-task:deadline ref=… date=null
+obsidian task-center:deadline ref=… date=2026-05-15
+obsidian task-center:deadline ref=… date=null
 
-obsidian better-task:estimate ref=… minutes=90m         # set [estimate::]
-obsidian better-task:estimate ref=… minutes=null        # clear
-obsidian better-task:actual   ref=… minutes=45m         # set [actual::]
-obsidian better-task:actual   ref=… minutes=+15m        # additive
+obsidian task-center:estimate ref=… minutes=90m         # set [estimate::]
+obsidian task-center:estimate ref=… minutes=null        # clear
+obsidian task-center:actual   ref=… minutes=45m         # set [actual::]
+obsidian task-center:actual   ref=… minutes=+15m        # additive
 
-obsidian better-task:done   ref=… [at=YYYY-MM-DD]       # [x] + ✅
-obsidian better-task:undone ref=…                        # reverse a done
-obsidian better-task:drop   ref=…                        # [-] + ❌, cascades to children
+obsidian task-center:done   ref=… [at=YYYY-MM-DD]       # [x] + ✅
+obsidian task-center:undone ref=…                        # reverse a done
+obsidian task-center:drop   ref=…                        # [-] + ❌, cascades to children
 
-obsidian better-task:tag    ref=… tag='#基建'            # add
-obsidian better-task:tag    ref=… tag='#基建' remove     # remove
+obsidian task-center:tag    ref=… tag='#基建'            # add
+obsidian task-center:tag    ref=… tag='#基建' remove     # remove
 
-obsidian better-task:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26 [to=<path>] [deadline=…] [estimate=30m] [parent=<id>]
+obsidian task-center:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26 [to=<path>] [deadline=…] [estimate=30m] [parent=<id>]
 ```
 
-`better-task:add` target priority: explicit `to=` → parent's file (if `parent=` given) → today's daily note → settings inbox path. Default stamps `➕ today` unless `stamp-created=false`.
+`task-center:add` target priority: explicit `to=` → parent's file (if `parent=` given) → today's daily note → settings inbox path. Default stamps `➕ today` unless `stamp-created=false`.
 
 `drop` always cascades — dropping a parent also marks every descendant `[-] ❌`. To drop just one line, pass a leaf task.
 
@@ -128,7 +128,7 @@ error  <code>
 Codes: `task_not_found`, `file_modified`, `ambiguous_slug`, `invalid_date`, `invalid_indent`.
 
 Recover by:
-- `task_not_found` → re-run `better-task:list` to get fresh ids
+- `task_not_found` → re-run `task-center:list` to get fresh ids
 - `ambiguous_slug` → the error message lists candidate ids; pick one
 - `invalid_date` → convert to `YYYY-MM-DD`
 
@@ -136,27 +136,27 @@ Recover by:
 
 ### End-of-day wrap-up
 
-1. `obsidian better-task:list done=today` → collect what got done.
+1. `obsidian task-center:list done=today` → collect what got done.
 2. `toggl entry list --since today` → cross-reference actual time per task.
-3. For each completed task: `obsidian better-task:actual ref=… minutes=Nm` to record real time.
-4. `obsidian better-task:stats days=7 group=象限` → read today's calibration.
-5. `obsidian better-task:list scheduled=unscheduled` + `obsidian better-task:list scheduled=tomorrow` → candidate pool.
+3. For each completed task: `obsidian task-center:actual ref=… minutes=Nm` to record real time.
+4. `obsidian task-center:stats days=7 group=象限` → read today's calibration.
+5. `obsidian task-center:list scheduled=unscheduled` + `obsidian task-center:list scheduled=tomorrow` → candidate pool.
 6. Pick tomorrow's set (≤1 big, ≤2 small based on user's self-declared capacity), deadline-first, quadrant-2-first.
-7. `obsidian better-task:schedule ref=… date=<tomorrow>` per chosen task; use `add` for anything new.
+7. `obsidian task-center:schedule ref=… date=<tomorrow>` per chosen task; use `add` for anything new.
 
 ### Quick capture
 
 User says "don't forget to X". Default to today's daily note:
 
 ```
-obsidian better-task:add text="X"
+obsidian task-center:add text="X"
 ```
 
 Only set `scheduled=` / `deadline=` / `tag=` if the user specified them.
 
 ### Backfill completions
 
-User says "I finished Y yesterday": `obsidian better-task:done ref=<id> at=<yesterday>`.
+User says "I finished Y yesterday": `obsidian task-center:done ref=<id> at=<yesterday>`.
 
 ## Output contract
 
@@ -168,6 +168,6 @@ User says "I finished Y yesterday": `obsidian better-task:done ref=<id> at=<yest
 ## Do not
 
 - Do not edit task files directly with `Read` + `Write`; use the CLI so parser + locking invariants hold.
-- Do not try to install a wrapper shell script called `obsidian-better-task`; the plugin uses Obsidian's native CLI.
-- Do not call `obsidian task` / `obsidian tasks` (those are built-in, read-only) when you mean `better-task:…`.
+- Do not try to install a wrapper shell script called `obsidian-task-center`; the plugin uses Obsidian's native CLI.
+- Do not call `obsidian task` / `obsidian tasks` (those are built-in, read-only) when you mean `task-center:…`.
 - Do not stamp `✅` / `❌` / `➕` manually with `Edit` — let the plugin do it via `done` / `drop` / `add`.

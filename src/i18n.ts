@@ -82,7 +82,7 @@ const EN = {
   "notice.scheduled": "→ ⏳ {date}",
   "notice.clearedSchedule": "removed schedule",
   "notice.error": "error: {msg}",
-  "notice.reloaded": "Better Task: reloaded",
+  "notice.reloaded": "Task Center: reloaded",
   "notice.fileNotFound": "file not found: {path}",
   "notice.invalidDate": "invalid date",
   "notice.nested": "nested under {title} {where}",
@@ -122,10 +122,10 @@ const EN = {
   "ribbon.open": "Open Task Board",
 
   // Settings
-  "settings.header": "Better Task",
+  "settings.header": "Task Center",
   "settings.inbox.name": "Default inbox path",
   "settings.inbox.desc":
-    "Where `better-task:add` puts tasks when to= is omitted and no daily note exists.",
+    "Where `task-center:add` puts tasks when to= is omitted and no daily note exists.",
   "settings.dailyFolder.name": "Daily folder",
   "settings.dailyFolder.desc":
     "Folder where daily notes live — default add target and sub-task move targets.",
@@ -199,7 +199,7 @@ const ZH: Partial<typeof EN> = {
   "notice.scheduled": "→ ⏳ {date}",
   "notice.clearedSchedule": "已清除排期",
   "notice.error": "错误：{msg}",
-  "notice.reloaded": "Better Task: 已刷新",
+  "notice.reloaded": "Task Center: 已刷新",
   "notice.fileNotFound": "文件不存在：{path}",
   "notice.invalidDate": "日期格式不对",
   "notice.nested": "已嵌入到「{title}」{where}",
@@ -231,10 +231,10 @@ const ZH: Partial<typeof EN> = {
 
   "ribbon.open": "打开任务看板",
 
-  "settings.header": "Better Task",
+  "settings.header": "Task Center",
   "settings.inbox.name": "默认收件箱路径",
   "settings.inbox.desc":
-    "`better-task:add` 在没有指定 to= 且没有当日 daily note 时，把任务写到这里。",
+    "`task-center:add` 在没有指定 to= 且没有当日 daily note 时，把任务写到这里。",
   "settings.dailyFolder.name": "Daily 文件夹",
   "settings.dailyFolder.desc":
     "每日笔记所在文件夹 — 默认 add 目标、子任务搬家目标。",

@@ -3,7 +3,7 @@ import process from "node:process";
 import builtins from "builtin-modules";
 
 const banner = `/*
-Obsidian Better Task — energy-aware task board + CLI
+Obsidian Task Center — energy-aware task board + CLI
 Built with esbuild.
 */`;
 
