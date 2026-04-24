@@ -567,6 +567,125 @@ export function reindentBlock(
 }
 
 /**
+ * A reversible mutation. The forward operation replaced `before` with `after`
+ * at (path, line). To undo, replace `after` with `before` — matching drift
+ * is detected via the `after` lines. Empty `before`/`after` arrays model
+ * pure insertions / pure deletions.
+ */
+export interface UndoOp {
+  path: string;
+  line: number;
+  before: string[];
+  after: string[];
+}
+
+/**
+ * Pure planner for the same-file nest case. Returns the post-nest file lines
+ * plus the forward ops that produced them — callers feed the ops into
+ * `applyUndoOps` (in reverse) to undo the change.
+ */
+export function planSameFileNest(
+  lines: string[],
+  childLine: number,
+  childIndentLen: number,
+  parent: { line: number; indentLen: number },
+): { newLines: string[]; undoOps: Array<Omit<UndoOp, "path">> } {
+  const parentIndent = (lines[parent.line] ?? "").match(/^(\s*(?:>\s*)*)/)?.[0] ?? "";
+  const newIndent = parentIndent + "    ";
+  const block = extractTaskBlock(lines, childLine, childIndentLen);
+  if (parent.line >= childLine && parent.line < childLine + block.length) {
+    throw new TaskWriterError("invalid_nest", "cannot nest a task under its own descendant");
+  }
+  const reindented = reindentBlock(block, childIndentLen, newIndent);
+  const without = lines.slice(0, childLine).concat(lines.slice(childLine + block.length));
+  const adjustedParentLine =
+    childLine < parent.line ? parent.line - block.length : parent.line;
+  const insertIndex = findChildrenEnd(without, adjustedParentLine, parent.indentLen);
+  const newLines = without
+    .slice(0, insertIndex)
+    .concat(reindented)
+    .concat(without.slice(insertIndex));
+  return {
+    newLines,
+    undoOps: [
+      { line: childLine, before: block, after: [] },
+      { line: insertIndex, before: [], after: reindented },
+    ],
+  };
+}
+
+/**
+ * Pure planner for the cross-file nest case. Computes both files' new content
+ * and the ordered forward ops tagged by which file they touch.
+ */
+export function planCrossFileNest(
+  childLines: string[],
+  childLine: number,
+  childIndentLen: number,
+  parentLines: string[],
+  parent: { line: number; indentLen: number },
+): {
+  newChildLines: string[];
+  newParentLines: string[];
+  undoOps: Array<{ which: "child" | "parent" } & Omit<UndoOp, "path">>;
+} {
+  const parentIndent = (parentLines[parent.line] ?? "").match(/^(\s*(?:>\s*)*)/)?.[0] ?? "";
+  const newIndent = parentIndent + "    ";
+  const block = extractTaskBlock(childLines, childLine, childIndentLen);
+  const reindented = reindentBlock(block, childIndentLen, newIndent);
+  const insertIndex = findChildrenEnd(parentLines, parent.line, parent.indentLen);
+  const newParentLines = parentLines
+    .slice(0, insertIndex)
+    .concat(reindented)
+    .concat(parentLines.slice(insertIndex));
+  const newChildLines = childLines
+    .slice(0, childLine)
+    .concat(childLines.slice(childLine + block.length));
+  return {
+    newChildLines,
+    newParentLines,
+    undoOps: [
+      { which: "parent", line: insertIndex, before: [], after: reindented },
+      { which: "child", line: childLine, before: block, after: [] },
+    ],
+  };
+}
+
+/**
+ * Apply a list of forward ops *in reverse* to undo them. `files` maps path →
+ * current lines; returns a new map with the ops reversed. Throws if the
+ * current content at any op's line no longer matches `after` (drift guard).
+ */
+export function applyUndoOps(
+  files: Record<string, string[]>,
+  ops: UndoOp[],
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const p of Object.keys(files)) out[p] = [...files[p]];
+  for (let i = ops.length - 1; i >= 0; i--) {
+    const op = ops[i];
+    const lines = out[op.path];
+    if (!lines) {
+      throw new TaskWriterError("task_not_found", `undo: file missing ${op.path}`);
+    }
+    for (let j = 0; j < op.after.length; j++) {
+      if (lines[op.line + j] !== op.after[j]) {
+        throw new TaskWriterError(
+          "undo_diverged",
+          `content diverged at ${op.path}:L${op.line + j + 1}; mismatch during undo`,
+        );
+      }
+    }
+    out[op.path] = [
+      ...lines.slice(0, op.line),
+      ...op.before,
+      ...lines.slice(op.line + op.after.length),
+    ];
+  }
+  return out;
+}
+
+/**
  * Move `child` (and its entire subtree) to become a direct subtask of `parent`.
  *
  * Same-file: single atomic vault.process — cut, re-indent, insert at parent's
@@ -584,16 +703,27 @@ export async function nestUnder(
   app: App,
   child: ParsedTask,
   parent: ParsedTask,
-): Promise<{ before: string; after: string; unchanged: boolean; crossFile: boolean }> {
+): Promise<{
+  before: string;
+  after: string;
+  unchanged: boolean;
+  crossFile: boolean;
+  undoOps: UndoOp[];
+}> {
   if (child.id === parent.id) {
     throw new TaskWriterError("invalid_nest", "cannot nest a task under itself");
   }
   if (child.path === parent.path && child.parentLine === parent.line) {
-    return { before: child.rawLine, after: child.rawLine, unchanged: true, crossFile: false };
+    return {
+      before: child.rawLine,
+      after: child.rawLine,
+      unchanged: true,
+      crossFile: false,
+      undoOps: [],
+    };
   }
 
   const childIndentLen = child.indent.length;
-  const newIndent = parent.indent + "    ";
 
   if (child.path === parent.path) {
     const file = app.vault.getAbstractFileByPath(child.path);
@@ -602,27 +732,21 @@ export async function nestUnder(
     }
     let before = "";
     let after = "";
+    let capturedOps: UndoOp[] = [];
     await app.vault.process(file, (data) => {
       const lines = data.split("\n");
+      const plan = planSameFileNest(lines, child.line, childIndentLen, {
+        line: parent.line,
+        indentLen: parent.indent.length,
+      });
       const block = extractTaskBlock(lines, child.line, childIndentLen);
-      // Cycle check — parent must not live inside child's subtree
-      if (parent.line >= child.line && parent.line < child.line + block.length) {
-        throw new TaskWriterError("invalid_nest", "cannot nest a task under its own descendant");
-      }
-      const reindented = reindentBlock(block, childIndentLen, newIndent);
-      const without = lines.slice(0, child.line).concat(lines.slice(child.line + block.length));
-      const adjustedParentLine =
-        child.line < parent.line ? parent.line - block.length : parent.line;
-      const insertIndex = findChildrenEnd(without, adjustedParentLine, parent.indent.length);
-      const out = without
-        .slice(0, insertIndex)
-        .concat(reindented)
-        .concat(without.slice(insertIndex));
+      const reindented = plan.undoOps[1].after;
       before = block.join("\n");
       after = reindented.join("\n");
-      return out.join("\n");
+      capturedOps = plan.undoOps.map((op) => ({ ...op, path: child.path }));
+      return plan.newLines.join("\n");
     });
-    return { before, after, unchanged: false, crossFile: false };
+    return { before, after, unchanged: false, crossFile: false, undoOps: capturedOps };
   }
 
   // Cross-file: read source snapshot, insert into target, then delete from source.
@@ -636,17 +760,19 @@ export async function nestUnder(
   }
 
   const childData = await app.vault.cachedRead(childFile);
-  const childLines = childData.split("\n");
-  if (childLines[child.line] !== child.rawLine) {
+  const childLinesSnapshot = childData.split("\n");
+  if (childLinesSnapshot[child.line] !== child.rawLine) {
     throw new TaskWriterError(
       "task_not_found",
       `${child.path}:L${child.line + 1} content drifted; reload tasks and retry`,
     );
   }
-  const block = extractTaskBlock(childLines, child.line, childIndentLen);
+  const block = extractTaskBlock(childLinesSnapshot, child.line, childIndentLen);
+  const newIndent = parent.indent + "    ";
   const reindented = reindentBlock(block, childIndentLen, newIndent);
 
   // Step 1: append to parent file (verifies parent line still matches).
+  let parentInsertIndex = -1;
   await app.vault.process(parentFile, (data) => {
     const lines = data.split("\n");
     if (lines[parent.line] !== parent.rawLine) {
@@ -656,6 +782,7 @@ export async function nestUnder(
       );
     }
     const insertIndex = findChildrenEnd(lines, parent.line, parent.indent.length);
+    parentInsertIndex = insertIndex;
     return lines
       .slice(0, insertIndex)
       .concat(reindented)
@@ -695,6 +822,10 @@ export async function nestUnder(
     after: reindented.join("\n"),
     unchanged: false,
     crossFile: true,
+    undoOps: [
+      { path: parent.path, line: parentInsertIndex, before: [], after: reindented },
+      { path: child.path, line: child.line, before: block, after: [] },
+    ],
   };
 }
 

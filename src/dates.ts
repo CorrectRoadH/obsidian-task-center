@@ -65,6 +65,20 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((db - da) / (1000 * 60 * 60 * 24));
 }
 
+export function isoWeekNumber(iso: string): number {
+  const d = fromISO(iso);
+  d.setHours(0, 0, 0, 0);
+  // Shift to Thursday of the current ISO week — that Thursday's year is the ISO week-year.
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return (
+    1 +
+    Math.round(
+      ((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7,
+    )
+  );
+}
+
 export function resolveWhen(
   when: string,
   today: string = todayISO(),

@@ -37,6 +37,9 @@ const {
   extractTaskBlock,
   findChildrenEnd,
   reindentBlock,
+  planSameFileNest,
+  planCrossFileNest,
+  applyUndoOps,
 } = await import("../test/.compiled/writer.bundle.js");
 
 test("setEmojiDate — inject into bare line", () => {
@@ -362,4 +365,160 @@ test("reindentBlock — strips callout prefix when target is plain", () => {
     "    - [ ] in callout",
     "        - [ ] sub",
   ]);
+});
+
+// ---------- applyUndoOps ----------
+
+test("applyUndoOps — single-line replace (schedule undo)", () => {
+  const lines = ["- [ ] task ⏳ 2026-04-25"];
+  const ops = [
+    {
+      path: "a.md",
+      line: 0,
+      before: ["- [ ] task"],
+      after: ["- [ ] task ⏳ 2026-04-25"],
+    },
+  ];
+  const files = { "a.md": lines };
+  const out = applyUndoOps(files, ops);
+  assert.deepEqual(out["a.md"], ["- [ ] task"]);
+});
+
+test("applyUndoOps — reverse deletion (before=block, after=[])", () => {
+  const files = { "a.md": ["- [ ] sibling"] };
+  const ops = [{ path: "a.md", line: 0, before: ["- [ ] removed"], after: [] }];
+  const out = applyUndoOps(files, ops);
+  assert.deepEqual(out["a.md"], ["- [ ] removed", "- [ ] sibling"]);
+});
+
+test("applyUndoOps — reverse insertion (before=[], after=block)", () => {
+  const files = { "a.md": ["- [ ] kept", "- [ ] inserted"] };
+  const ops = [{ path: "a.md", line: 1, before: [], after: ["- [ ] inserted"] }];
+  const out = applyUndoOps(files, ops);
+  assert.deepEqual(out["a.md"], ["- [ ] kept"]);
+});
+
+test("applyUndoOps — multi-op applied in reverse order (delete-then-insert move)", () => {
+  // Forward op modeled as: delete "A" at line 0, insert "A" at line 2 of the "without" array.
+  // Final state ends up as [B, C, A]; undoing should restore [A, B, C].
+  const files = { "a.md": ["- [ ] B", "- [ ] C", "- [ ] A"] };
+  const ops = [
+    { path: "a.md", line: 0, before: ["- [ ] A"], after: [] },
+    { path: "a.md", line: 2, before: [], after: ["- [ ] A"] },
+  ];
+  const out = applyUndoOps(files, ops);
+  assert.deepEqual(out["a.md"], ["- [ ] A", "- [ ] B", "- [ ] C"]);
+});
+
+test("applyUndoOps — mismatch on 'after' throws (drift guard)", () => {
+  const files = { "a.md": ["- [ ] modified by user"] };
+  const ops = [
+    {
+      path: "a.md",
+      line: 0,
+      before: ["- [ ] original"],
+      after: ["- [ ] expected"],
+    },
+  ];
+  assert.throws(() => applyUndoOps(files, ops), /diverged|drift|mismatch/i);
+});
+
+// ---------- planSameFileNest ----------
+
+test("planSameFileNest — nest sibling under preceding task", () => {
+  const lines = ["- [ ] Parent", "- [ ] Child"];
+  const plan = planSameFileNest(lines, /*childLine*/ 1, /*childIndentLen*/ 0, /*parent*/ { line: 0, indentLen: 0 });
+  assert.deepEqual(plan.newLines, ["- [ ] Parent", "    - [ ] Child"]);
+  // Undo restores.
+  const files = { "f.md": plan.newLines };
+  const restored = applyUndoOps(files, plan.undoOps.map((o) => ({ ...o, path: "f.md" })));
+  assert.deepEqual(restored["f.md"], lines);
+});
+
+test("planSameFileNest — nest preceding task under later one", () => {
+  const lines = ["- [ ] Child", "- [ ] Parent"];
+  const plan = planSameFileNest(lines, 0, 0, { line: 1, indentLen: 0 });
+  assert.deepEqual(plan.newLines, ["- [ ] Parent", "    - [ ] Child"]);
+  const files = { "f.md": plan.newLines };
+  const restored = applyUndoOps(files, plan.undoOps.map((o) => ({ ...o, path: "f.md" })));
+  assert.deepEqual(restored["f.md"], lines);
+});
+
+test("planSameFileNest — preserves grandchildren when moving", () => {
+  const lines = [
+    "- [ ] A",
+    "- [ ] B",
+    "    - [ ] B.1",
+    "        - [ ] B.1.1",
+  ];
+  const plan = planSameFileNest(lines, 1, 0, { line: 0, indentLen: 0 });
+  assert.deepEqual(plan.newLines, [
+    "- [ ] A",
+    "    - [ ] B",
+    "        - [ ] B.1",
+    "            - [ ] B.1.1",
+  ]);
+  const files = { "f.md": plan.newLines };
+  const restored = applyUndoOps(files, plan.undoOps.map((o) => ({ ...o, path: "f.md" })));
+  assert.deepEqual(restored["f.md"], lines);
+});
+
+// ---------- planCrossFileNest ----------
+
+test("planCrossFileNest — undo restores both files", () => {
+  const childFileLines = [
+    "- [ ] moved task",
+    "    - [ ] subtask",
+    "- [ ] sibling",
+  ];
+  const parentFileLines = ["- [ ] target parent"];
+  const plan = planCrossFileNest(
+    childFileLines,
+    /*childLine*/ 0,
+    /*childIndentLen*/ 0,
+    parentFileLines,
+    /*parent*/ { line: 0, indentLen: 0 },
+  );
+  assert.deepEqual(plan.newChildLines, ["- [ ] sibling"]);
+  assert.deepEqual(plan.newParentLines, [
+    "- [ ] target parent",
+    "    - [ ] moved task",
+    "        - [ ] subtask",
+  ]);
+  // Apply undo across both files.
+  const files = {
+    "child.md": plan.newChildLines,
+    "parent.md": plan.newParentLines,
+  };
+  const withPaths = plan.undoOps.map((o) => ({
+    ...o,
+    path: o.which === "child" ? "child.md" : "parent.md",
+  }));
+  const restored = applyUndoOps(files, withPaths);
+  assert.deepEqual(restored["child.md"], childFileLines);
+  assert.deepEqual(restored["parent.md"], parentFileLines);
+});
+
+test("planCrossFileNest — destination insertion appears right after parent's last descendant", () => {
+  const childFileLines = ["- [ ] moved", "- [ ] stays"];
+  const parentFileLines = [
+    "- [ ] parent",
+    "    - [ ] existing-child",
+    "- [ ] next-sibling",
+  ];
+  const plan = planCrossFileNest(
+    childFileLines,
+    0,
+    0,
+    parentFileLines,
+    { line: 0, indentLen: 0 },
+  );
+  // Inserted block should sit *after* existing-child (last descendant), before next-sibling.
+  assert.deepEqual(plan.newParentLines, [
+    "- [ ] parent",
+    "    - [ ] existing-child",
+    "    - [ ] moved",
+    "- [ ] next-sibling",
+  ]);
+  assert.deepEqual(plan.newChildLines, ["- [ ] stays"]);
 });

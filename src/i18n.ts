@@ -31,6 +31,7 @@ const EN = {
 
   // Toolbar
   "toolbar.today": "Today",
+  "toolbar.weekNo": "W{n}",
   "toolbar.add": "+ Add",
   "toolbar.filter": "🔍 filter…",
 
@@ -155,6 +156,7 @@ const ZH: Partial<typeof EN> = {
   "tab.unscheduled": "未排期",
 
   "toolbar.today": "今天",
+  "toolbar.weekNo": "第{n}周",
   "toolbar.add": "+ 新建",
   "toolbar.filter": "🔍 过滤…",
 

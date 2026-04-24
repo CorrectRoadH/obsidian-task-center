@@ -21,6 +21,7 @@ import {
   startOfMonth,
   endOfMonth,
   daysBetween,
+  isoWeekNumber,
   pad,
 } from "./dates";
 import { QuickAddModal } from "./quickadd";
@@ -40,12 +41,16 @@ interface ViewState {
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
 }
 
-interface UndoEntry {
+interface UndoOp {
   path: string;
   line: number;
-  before: string;
-  after: string;
+  before: string[];
+  after: string[];
+}
+
+interface UndoEntry {
   label: string; // short human description for the toast
+  ops: UndoOp[]; // forward ops; undo applies them in reverse
 }
 
 const WEEKDAY_KEYS = [
@@ -360,7 +365,11 @@ export class BetterTaskView extends ItemView {
     if (this.state.tab === "week" || this.state.tab === "month") {
       const nav = bar.createDiv({ cls: "bt-nav" });
       const prev = nav.createEl("button", { text: "◀" });
-      const today = nav.createEl("button", { text: tr("toolbar.today") });
+      const todayLabel =
+        this.state.tab === "week"
+          ? tr("toolbar.weekNo", { n: isoWeekNumber(this.state.anchorISO) })
+          : tr("toolbar.today");
+      const today = nav.createEl("button", { text: todayLabel });
       const next = nav.createEl("button", { text: "▶" });
       const label = nav.createSpan({ cls: "bt-nav-label" });
       label.setText(this.navLabel());
@@ -1195,6 +1204,12 @@ export class BetterTaskView extends ItemView {
         await this.runWithRemoveAnim(droppedId, async () => {
           const r = await this.api.nest(droppedId, t.id);
           if (!r.unchanged) {
+            if (r.undoOps && r.undoOps.length > 0) {
+              this.pushUndo({
+                label: `nest under "${t.title.slice(0, 20)}"`,
+                ops: r.undoOps,
+              });
+            }
             new Notice(
               tr("notice.nested", {
                 title: t.title,
@@ -1251,11 +1266,8 @@ export class BetterTaskView extends ItemView {
         const r = await this.api.schedule(id, targetDate);
         if (!r.unchanged && task) {
           this.pushUndo({
-            path: task.path,
-            line: task.line,
-            before: r.before,
-            after: r.after,
             label: targetDate ? `⏳ ${targetDate}` : "⏳ cleared",
+            ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
           });
           new Notice(
             targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
@@ -1388,11 +1400,8 @@ export class BetterTaskView extends ItemView {
         const r = await this.api.schedule(sel.id, newDate);
         if (!r.unchanged) {
           this.pushUndo({
-            path: sel.path,
-            line: sel.line,
-            before: r.before,
-            after: r.after,
             label: `⏳ ${newDate}`,
+            ops: [{ path: sel.path, line: sel.line, before: [r.before], after: [r.after] }],
           });
         }
       });
@@ -1441,23 +1450,33 @@ export class BetterTaskView extends ItemView {
       new Notice("nothing to undo");
       return;
     }
-    const file = this.app.vault.getAbstractFileByPath(entry.path);
-    if (!(file instanceof TFile)) {
-      new Notice(`file not found: ${entry.path}`);
-      return;
-    }
     try {
-      await this.app.vault.process(file, (data) => {
-        const lines = data.split("\n");
-        if (lines[entry.line] !== entry.after) {
-          // Line content has changed since we made our mutation — refuse to
-          // overwrite the user's intervening edit. Put the entry back so a
-          // future undo attempt won't lose further context.
-          throw new Error("line diverged — skipping undo");
+      // Apply ops in reverse. Each op is: "at path:line, `after` is present;
+      // replace with `before`". Multi-file moves record one op per touched
+      // file, so reversing restores both sides of a cross-file nest.
+      for (let i = entry.ops.length - 1; i >= 0; i--) {
+        const op = entry.ops[i];
+        const file = this.app.vault.getAbstractFileByPath(op.path);
+        if (!(file instanceof TFile)) {
+          throw new Error(`file not found: ${op.path}`);
         }
-        lines[entry.line] = entry.before;
-        return lines.join("\n");
-      });
+        await this.app.vault.process(file, (data) => {
+          const lines = data.split("\n");
+          for (let j = 0; j < op.after.length; j++) {
+            if (lines[op.line + j] !== op.after[j]) {
+              throw new Error(
+                `content diverged at ${op.path}:L${op.line + j + 1} — skipping undo`,
+              );
+            }
+          }
+          const out = [
+            ...lines.slice(0, op.line),
+            ...op.before,
+            ...lines.slice(op.line + op.after.length),
+          ];
+          return out.join("\n");
+        });
+      }
       new Notice(`undo: ${entry.label}`);
       this.scheduleRefresh();
     } catch (e) {
@@ -1575,11 +1594,8 @@ export class BetterTaskView extends ItemView {
           const r = await this.api.schedule(task.id, resolved);
           if (!r.unchanged) {
             this.pushUndo({
-              path: task.path,
-              line: task.line,
-              before: r.before,
-              after: r.after,
               label: resolved ? `⏳ ${resolved}` : "⏳ cleared",
+              ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
             });
           }
         };
@@ -1615,11 +1631,8 @@ export class BetterTaskView extends ItemView {
           const r = await this.api.rename(task.id, newVal);
           if (!r.unchanged) {
             this.pushUndo({
-              path: task.path,
-              line: task.line,
-              before: r.before,
-              after: r.after,
               label: `rename "${oldText.slice(0, 20)}" → "${newVal.slice(0, 20)}"`,
+              ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
             });
           }
         } catch (e) {
