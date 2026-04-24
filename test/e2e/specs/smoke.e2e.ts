@@ -1,5 +1,4 @@
 import { browser, expect, $ } from "@wdio/globals";
-import { describe, it, beforeEach } from "mocha";
 import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
@@ -27,6 +26,20 @@ describe("Better Task — smoke", function () {
         const f = app.vault.getAbstractFileByPath("Tasks/Inbox.md");
         // @ts-expect-error — runtime type is TFile, serialization drops the class
         await app.vault.modify(f, body);
+        // Wait for metadata cache to index; parseVaultTasks skips files that
+        // the cache reports as having no list items yet.
+        await new Promise<void>((resolve) => {
+          const ref = app.metadataCache.on("changed", (file) => {
+            if (file.path === "Tasks/Inbox.md") {
+              app.metadataCache.offref(ref);
+              resolve();
+            }
+          });
+          setTimeout(() => {
+            app.metadataCache.offref(ref);
+            resolve();
+          }, 2000);
+        });
       },
       `- [ ] E2E smoke task ⏳ ${today}\n`,
     );
@@ -34,7 +47,8 @@ describe("Better Task — smoke", function () {
     await browser.executeObsidianCommand("obsidian-better-task:open");
     await browser.executeObsidianCommand("obsidian-better-task:reload-tasks");
 
-    const card = $(".better-task-view .bt-week-col.today .bt-card*=E2E smoke task");
+    // Card is rendered whether on Week or Month tab; data-task-id is stable.
+    const card = $(`.better-task-view [data-task-id="Tasks/Inbox.md:L1"]`);
     await card.waitForExist({ timeout: 5000 });
     await expect(card).toExist();
   });
