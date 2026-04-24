@@ -15,6 +15,7 @@ import {
   removeTag,
   addToActual,
   renameTask,
+  nestUnder,
   TaskWriterError,
 } from "./writer";
 import { todayISO, resolveWhen, isValidISO } from "./dates";
@@ -176,6 +177,15 @@ export class BetterTaskApi {
     const task = await resolveTaskRef(this.app, id, all);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return remove ? await removeTag(this.app, task, tag) : await addTag(this.app, task, tag);
+  }
+
+  async nest(childId: string, parentId: string) {
+    const all = await this.allTasks();
+    const child = await resolveTaskRef(this.app, childId, all);
+    if (!child) throw new TaskWriterError("task_not_found", `child: ${childId}`);
+    const parent = await resolveTaskRef(this.app, parentId, all);
+    if (!parent) throw new TaskWriterError("task_not_found", `parent: ${parentId}`);
+    return await nestUnder(this.app, child, parent);
   }
 }
 

@@ -276,12 +276,23 @@ export default class BetterTaskPlugin extends Plugin {
     );
 
     this.registerCliHandler(
-      "better-task:drop",
-      "Mark a task dropped ([-] + ❌ today; children cascade)",
+      "better-task:abandon",
+      "Mark a task abandoned ([-] + ❌ today; children cascade)",
       {
         ref: { value: "<id>", description: "Task id", required: true },
       },
-      (args) => this.cliDrop(args),
+      (args) => this.cliAbandon(args, "abandoned"),
+    );
+
+    // Deprecated alias kept for backward compatibility — `abandon` is the
+    // preferred verb (matches README's `[-] ❌` = "Abandoned" terminology).
+    this.registerCliHandler(
+      "better-task:drop",
+      "Alias for better-task:abandon (deprecated)",
+      {
+        ref: { value: "<id>", description: "Task id", required: true },
+      },
+      (args) => this.cliAbandon(args, "dropped"),
     );
 
     this.registerCliHandler(
@@ -312,6 +323,16 @@ export default class BetterTaskPlugin extends Plugin {
         remove: { description: "Remove instead of add" },
       },
       (args) => this.cliTag(args),
+    );
+
+    this.registerCliHandler(
+      "better-task:nest",
+      "Move a task (and its subtree) to become a subtask of another (works cross-file)",
+      {
+        ref: { value: "<id>", description: "Task to move", required: true },
+        under: { value: "<id>", description: "New parent task id", required: true },
+      },
+      (args) => this.cliNest(args),
     );
   }
 
@@ -442,13 +463,15 @@ export default class BetterTaskPlugin extends Plugin {
     return formatOkWrite(t, null, null, r.before, r.after, false, "undone");
   }
 
-  private async cliDrop(args: CliArgs): Promise<string> {
+  private async cliAbandon(args: CliArgs, label: "abandoned" | "dropped"): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.drop(ref);
     const t = await this.api.show(ref);
     this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
-    if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already dropped", "unchanged (already dropped)");
-    return formatOkWrite(t, null, null, r.before, r.after, false, "dropped");
+    if (r.unchanged) {
+      return formatOkWrite(t, null, null, r.before, r.after, true, `already ${label}`, `unchanged (already ${label})`);
+    }
+    return formatOkWrite(t, null, null, r.before, r.after, false, label);
   }
 
   private async cliAdd(args: CliArgs): Promise<string> {
@@ -485,6 +508,21 @@ export default class BetterTaskPlugin extends Plugin {
     this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "no-op", "unchanged");
     return formatOkWrite(t, null, null, r.before, r.after, false, remove ? "tag removed" : "tag added");
+  }
+
+  private async cliNest(args: CliArgs): Promise<string> {
+    const ref = requireArg(args.ref, "ref");
+    const under = requireArg(args.under, "under");
+    const r = await this.api.nest(ref, under);
+    this.refreshOpenViews().catch((e) => console.warn("[better-task] refresh:", e));
+    // After nest, the original ref may not resolve (line moved); show the parent instead.
+    const parent = await this.api.show(under);
+    const label = r.unchanged
+      ? "already nested"
+      : r.crossFile
+        ? `nested under ${parent.id} (cross-file)`
+        : `nested under ${parent.id}`;
+    return formatOkWrite(parent, null, null, r.before, r.after, r.unchanged, label, r.unchanged ? "unchanged" : undefined);
   }
 }
 

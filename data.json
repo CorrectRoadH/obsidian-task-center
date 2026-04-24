@@ -1,0 +1,9 @@
+{
+  "inboxPath": "Tasks/Inbox.md",
+  "dailyFolder": "Daily",
+  "defaultView": "week",
+  "openOnStartup": false,
+  "weekStartsOn": 1,
+  "stampCreated": true,
+  "lastTab": "week"
+}

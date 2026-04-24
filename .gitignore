@@ -5,3 +5,6 @@ main.js.map
 *.log
 .claude/ralph-loop.local.md
 test/.compiled/
+.obsidian-cache/
+test/e2e/vaults/*/.obsidian/workspace*
+test/e2e/vaults/*/.obsidian/cache

@@ -84,6 +84,8 @@ const EN = {
   "notice.reloaded": "Better Task: reloaded",
   "notice.fileNotFound": "file not found: {path}",
   "notice.invalidDate": "invalid date",
+  "notice.nested": "nested under {title} {where}",
+  "notice.crossFile": "(cross-file)",
 
   // Context menu
   "ctx.openSource": "Open source",
@@ -94,6 +96,10 @@ const EN = {
   "ctx.clearSchedule": "Clear schedule",
   "ctx.quadrant": "Quadrant {n}",
   "ctx.drop": "Drop",
+
+  // Inline subtask add (visible on every card)
+  "card.addSubtask": "+ subtask",
+  "card.subtaskPlaceholder": "subtask title",
 
   // Quick add modal
   "qa.title": "Add task",
@@ -194,6 +200,8 @@ const ZH: Partial<typeof EN> = {
   "notice.reloaded": "Better Task: 已刷新",
   "notice.fileNotFound": "文件不存在：{path}",
   "notice.invalidDate": "日期格式不对",
+  "notice.nested": "已嵌入到「{title}」{where}",
+  "notice.crossFile": "（跨文件）",
 
   "ctx.openSource": "跳转到源文件",
   "ctx.markDone": "标记完成",
@@ -203,6 +211,9 @@ const ZH: Partial<typeof EN> = {
   "ctx.clearSchedule": "清除排期",
   "ctx.quadrant": "第{n}象限",
   "ctx.drop": "放弃",
+
+  "card.addSubtask": "+ 子任务",
+  "card.subtaskPlaceholder": "子任务标题",
 
   "qa.title": "新建任务",
   "qa.placeholder":

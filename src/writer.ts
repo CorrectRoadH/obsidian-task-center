@@ -452,22 +452,11 @@ export async function addTask(
   await app.vault.process(file, (data) => {
     const lines = data.split("\n");
     if (opts.parent) {
-      // Insert right after parent's children block
+      // Insert right after the parent's last descendant — `findChildrenEnd`
+      // stops before any trailing blank lines so the new item stays inside
+      // the parent's list (a blank gap would detach it into a sibling).
       const parent = opts.parent;
-      // Find last descendant line by scanning forward while indent depth >= parent indent + 1
-      const parentIndentLen = parent.indent.length;
-      let i = parent.line + 1;
-      while (i < lines.length) {
-        const l = lines[i];
-        if (l.trim() === "") {
-          i++;
-          continue;
-        }
-        const m = l.match(/^(\s*)/);
-        const lineIndent = m ? m[1].length : 0;
-        if (lineIndent <= parentIndentLen) break;
-        i++;
-      }
+      const i = findChildrenEnd(lines, parent.line, parent.indent.length);
       insertedLine = i;
       lines.splice(i, 0, newLine);
     } else {
@@ -489,6 +478,218 @@ export async function addTask(
   });
 
   return { path: targetPath, line: insertedLine, created: newLine };
+}
+
+// ---------- Nest (move a task to become a subtask of another) ----------
+
+/**
+ * Length of the leading indent prefix, counting whitespace AND any callout
+ * markers (`>` chains). Used to compare nesting depth between lines.
+ */
+export function indentLen(line: string): number {
+  const m = line.match(/^(\s*(?:>\s*)*)/);
+  return m ? m[0].length : 0;
+}
+
+/**
+ * Slice out a task's full subtree: starting at `startLine`, every following
+ * line whose indent depth is greater than `parentIndentLen`. Blank lines
+ * interspersed *between* descendants are kept; trailing blanks are trimmed
+ * (they belong to the file structure, not the subtree).
+ */
+export function extractTaskBlock(
+  lines: string[],
+  startLine: number,
+  parentIndentLen: number,
+): string[] {
+  let cursor = startLine + 1;
+  let lastDescendantEnd = startLine + 1;
+  while (cursor < lines.length) {
+    const l = lines[cursor];
+    if (l.trim() === "") {
+      cursor++;
+      continue;
+    }
+    if (indentLen(l) <= parentIndentLen) break;
+    cursor++;
+    lastDescendantEnd = cursor;
+  }
+  return lines.slice(startLine, lastDescendantEnd);
+}
+
+/**
+ * Index in `lines` immediately after `parentLine`'s last descendant — i.e.
+ * the right place to splice in a new child so it stays inside the parent's
+ * list. Trailing blank lines AFTER the descendants are *not* skipped past:
+ * inserting after a blank makes Obsidian's markdown parser detach the new
+ * item from the list, turning it into a sibling instead of a child.
+ *
+ * Blank lines BETWEEN descendants are kept (we only stop on a non-blank
+ * line whose indent reaches the parent's level).
+ */
+export function findChildrenEnd(
+  lines: string[],
+  parentLine: number,
+  parentIndentLen: number,
+): number {
+  let i = parentLine + 1;
+  let lastDescendantEnd = parentLine + 1;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.trim() === "") {
+      i++;
+      continue;
+    }
+    if (indentLen(l) <= parentIndentLen) break;
+    i++;
+    lastDescendantEnd = i;
+  }
+  return lastDescendantEnd;
+}
+
+/**
+ * Re-indent every line in `block`: drop the first `oldIndentLen` chars (the
+ * old common prefix) and prepend `newIndent`. Descendants keep their relative
+ * extra indent because we only touch the prefix portion shared with the root.
+ */
+export function reindentBlock(
+  block: string[],
+  oldIndentLen: number,
+  newIndent: string,
+): string[] {
+  return block.map((l) => newIndent + l.slice(oldIndentLen));
+}
+
+/**
+ * Move `child` (and its entire subtree) to become a direct subtask of `parent`.
+ *
+ * Same-file: single atomic vault.process — cut, re-indent, insert at parent's
+ * children-end, accounting for the line-number shift if child was above parent.
+ *
+ * Cross-file: insert into parent file FIRST, then delete from child file.
+ * If the second step fails (file diverged mid-flight), the parent ends up with
+ * a duplicate — the lesser evil compared to losing the source. The error
+ * message names both files so the user can manually resolve.
+ *
+ * Cycles (parent ∈ child's subtree) and self-nest are rejected. Already a
+ * direct child → unchanged.
+ */
+export async function nestUnder(
+  app: App,
+  child: ParsedTask,
+  parent: ParsedTask,
+): Promise<{ before: string; after: string; unchanged: boolean; crossFile: boolean }> {
+  if (child.id === parent.id) {
+    throw new TaskWriterError("invalid_nest", "cannot nest a task under itself");
+  }
+  if (child.path === parent.path && child.parentLine === parent.line) {
+    return { before: child.rawLine, after: child.rawLine, unchanged: true, crossFile: false };
+  }
+
+  const childIndentLen = child.indent.length;
+  const newIndent = parent.indent + "    ";
+
+  if (child.path === parent.path) {
+    const file = app.vault.getAbstractFileByPath(child.path);
+    if (!(file instanceof TFile)) {
+      throw new TaskWriterError("task_not_found", `file: ${child.path}`);
+    }
+    let before = "";
+    let after = "";
+    await app.vault.process(file, (data) => {
+      const lines = data.split("\n");
+      const block = extractTaskBlock(lines, child.line, childIndentLen);
+      // Cycle check — parent must not live inside child's subtree
+      if (parent.line >= child.line && parent.line < child.line + block.length) {
+        throw new TaskWriterError("invalid_nest", "cannot nest a task under its own descendant");
+      }
+      const reindented = reindentBlock(block, childIndentLen, newIndent);
+      const without = lines.slice(0, child.line).concat(lines.slice(child.line + block.length));
+      const adjustedParentLine =
+        child.line < parent.line ? parent.line - block.length : parent.line;
+      const insertIndex = findChildrenEnd(without, adjustedParentLine, parent.indent.length);
+      const out = without
+        .slice(0, insertIndex)
+        .concat(reindented)
+        .concat(without.slice(insertIndex));
+      before = block.join("\n");
+      after = reindented.join("\n");
+      return out.join("\n");
+    });
+    return { before, after, unchanged: false, crossFile: false };
+  }
+
+  // Cross-file: read source snapshot, insert into target, then delete from source.
+  const childFile = app.vault.getAbstractFileByPath(child.path);
+  const parentFile = app.vault.getAbstractFileByPath(parent.path);
+  if (!(childFile instanceof TFile)) {
+    throw new TaskWriterError("task_not_found", `child file: ${child.path}`);
+  }
+  if (!(parentFile instanceof TFile)) {
+    throw new TaskWriterError("task_not_found", `parent file: ${parent.path}`);
+  }
+
+  const childData = await app.vault.cachedRead(childFile);
+  const childLines = childData.split("\n");
+  if (childLines[child.line] !== child.rawLine) {
+    throw new TaskWriterError(
+      "task_not_found",
+      `${child.path}:L${child.line + 1} content drifted; reload tasks and retry`,
+    );
+  }
+  const block = extractTaskBlock(childLines, child.line, childIndentLen);
+  const reindented = reindentBlock(block, childIndentLen, newIndent);
+
+  // Step 1: append to parent file (verifies parent line still matches).
+  await app.vault.process(parentFile, (data) => {
+    const lines = data.split("\n");
+    if (lines[parent.line] !== parent.rawLine) {
+      throw new TaskWriterError(
+        "task_not_found",
+        `${parent.path}:L${parent.line + 1} content drifted; reload tasks and retry`,
+      );
+    }
+    const insertIndex = findChildrenEnd(lines, parent.line, parent.indent.length);
+    return lines
+      .slice(0, insertIndex)
+      .concat(reindented)
+      .concat(lines.slice(insertIndex))
+      .join("\n");
+  });
+
+  // Step 2: delete from child file. If the lines diverged since the snapshot,
+  // bail out with a message naming both files — the parent now has a duplicate
+  // the user must reconcile manually.
+  try {
+    await app.vault.process(childFile, (data) => {
+      const lines = data.split("\n");
+      for (let i = 0; i < block.length; i++) {
+        if (lines[child.line + i] !== block[i]) {
+          throw new TaskWriterError(
+            "nest_partial",
+            `nested into ${parent.path} but ${child.path}:L${child.line + i + 1} drifted; remove the duplicate manually`,
+          );
+        }
+      }
+      return lines
+        .slice(0, child.line)
+        .concat(lines.slice(child.line + block.length))
+        .join("\n");
+    });
+  } catch (e) {
+    if (e instanceof TaskWriterError) throw e;
+    throw new TaskWriterError(
+      "nest_partial",
+      `nested into ${parent.path} but failed to remove from ${child.path}: ${(e as Error).message}`,
+    );
+  }
+
+  return {
+    before: block.join("\n"),
+    after: reindented.join("\n"),
+    unchanged: false,
+    crossFile: true,
+  };
 }
 
 export async function moveSubtaskToDate(

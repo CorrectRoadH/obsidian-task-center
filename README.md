@@ -102,7 +102,8 @@ obsidian better-task:stats days=7 group=象限
 obsidian better-task:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26
 obsidian better-task:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
 obsidian better-task:done ref=Tasks/Inbox.md:L42 at=2026-04-23
-obsidian better-task:drop ref=Tasks/Inbox.md:L42
+obsidian better-task:abandon ref=Tasks/Inbox.md:L42   # alias: better-task:drop
+obsidian better-task:nest ref=Tasks/Inbox.md:L42 under=Tasks/Inbox.md:L10
 obsidian better-task:actual ref=Tasks/Inbox.md:L42 minutes=+30m
 obsidian better-task:estimate ref=Tasks/Inbox.md:L42 minutes=90m
 obsidian better-task:tag ref=Tasks/Inbox.md:L42 tag='#基建'

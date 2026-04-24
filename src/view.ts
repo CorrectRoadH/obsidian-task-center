@@ -6,6 +6,8 @@ import {
   TFile,
   EventRef,
   MarkdownView,
+  MarkdownRenderer,
+  Component,
 } from "obsidian";
 import { ParsedTask, VIEW_TYPE_BETTER_TASK } from "./types";
 import { parseVaultTasks, formatMinutes } from "./parser";
@@ -24,6 +26,7 @@ import {
 import { QuickAddModal } from "./quickadd";
 import { DatePromptModal } from "./dateprompt";
 import { t as tr, getLocale } from "./i18n";
+import { animateOut } from "./anim";
 import type BetterTaskPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -68,6 +71,15 @@ export class BetterTaskView extends ItemView {
   private refreshTimer: number | null = null;
   private modifyRef: EventRef | null = null;
   private metadataRef: EventRef | null = null;
+  // Context hover: at most one popover alive at a time. The open timer defers
+  // work until the cursor has genuinely settled, so quickly skimming the board
+  // doesn't thrash the vault read/markdown render pipeline.
+  private ctxHoverTimer: number | null = null;
+  private ctxPopover: {
+    el: HTMLElement;
+    component: Component;
+    anchor: HTMLElement;
+  } | null = null;
   // Undo stack — only records writes initiated from this view (drag / keyboard).
   // CLI writes are not captured. Max 20 entries.
   private undoStack: UndoEntry[] = [];
@@ -130,6 +142,7 @@ export class BetterTaskView extends ItemView {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
     }
+    this.closeContextPopover();
   }
 
   private scheduleRefresh() {
@@ -139,6 +152,77 @@ export class BetterTaskView extends ItemView {
       await this.reloadTasks();
       this.render();
     }, 400);
+  }
+
+  private findCardEl(taskId: string): HTMLElement | null {
+    return this.contentEl.querySelector(
+      `[data-task-id="${CSS.escape(taskId)}"]`,
+    ) as HTMLElement | null;
+  }
+
+  /**
+   * Animate the source card out while running the data mutation in parallel,
+   * then refresh immediately (bypassing the debounce so there's no awkward
+   * 400ms gap between the fade-out and the layout settling).
+   *
+   * If the action no-ops (e.g. drop on the same day), the card briefly fades
+   * and then reappears in the next render — accepted as a minor cost in
+   * exchange for keeping every removal-style action smooth.
+   *
+   * For actions that add/remove lines (nest, add) the metadata cache lags
+   * the file write — its cached `listItems` line numbers point at the wrong
+   * content until the cache reparses. Pass `awaitCachePaths` so we wait for
+   * `metadataCache.on('changed')` on each affected file before the render.
+   */
+  private async runWithRemoveAnim(
+    taskId: string,
+    action: () => Promise<unknown>,
+    opts: { awaitCachePaths?: string[] } = {},
+  ): Promise<void> {
+    const card = this.findCardEl(taskId);
+    // Register the cache listener BEFORE kicking off the action so we can't
+    // miss a 'changed' event that fires while our awaits are queued.
+    const cacheReady = opts.awaitCachePaths && opts.awaitCachePaths.length > 0
+      ? this.waitForCacheUpdate(opts.awaitCachePaths)
+      : Promise.resolve();
+    await Promise.all([
+      card ? animateOut(card) : Promise.resolve(),
+      action(),
+    ]);
+    await cacheReady;
+    if (this.refreshTimer !== null) {
+      window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    await this.reloadTasks();
+    this.render();
+  }
+
+  /**
+   * Resolve once `metadataCache` has fired `'changed'` for every file in
+   * `paths` (or after `timeoutMs` as a safety net). Used after structural
+   * mutations so the next render sees up-to-date list-item line numbers.
+   */
+  private waitForCacheUpdate(paths: string[], timeoutMs = 1500): Promise<void> {
+    const remaining = new Set(paths);
+    if (remaining.size === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let timer: number | null = null;
+      const ref = this.app.metadataCache.on("changed", (file: TFile) => {
+        if (!remaining.has(file.path)) return;
+        remaining.delete(file.path);
+        if (remaining.size === 0) {
+          if (timer !== null) window.clearTimeout(timer);
+          this.app.metadataCache.offref(ref);
+          resolve();
+        }
+      });
+      this.registerEvent(ref);
+      timer = window.setTimeout(() => {
+        this.app.metadataCache.offref(ref);
+        resolve();
+      }, timeoutMs);
+    });
   }
 
   async reloadTasks() {
@@ -402,7 +486,17 @@ export class BetterTaskView extends ItemView {
     return visible.filter((t) => {
       if (t.parentLine === null) return true;
       const parentId = `${t.path}:L${t.parentLine + 1}`;
-      return !ids.has(parentId);
+      // Already in this list? Parent will render the child inline.
+      if (ids.has(parentId)) return false;
+      // Parent lives in another day column (has its own scheduled) — the
+      // child renders inline under it there. Without this check, a subtask
+      // with no scheduled but a scheduled parent would leak into the
+      // Unscheduled pool as a standalone card.
+      const parent = this.tasks.find(
+        (x) => x.path === t.path && x.line === t.parentLine,
+      );
+      if (parent && parent.scheduled) return false;
+      return true;
     });
   }
 
@@ -655,12 +749,14 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       trash.removeClass("drop-hover");
       try {
-        await this.api.drop(id);
-        new Notice(tr("trash.dropped"));
+        await this.runWithRemoveAnim(id, async () => {
+          await this.api.drop(id);
+          new Notice(tr("trash.dropped"));
+        });
       } catch (err) {
         new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+        this.scheduleRefresh();
       }
-      this.scheduleRefresh();
     });
   }
 
@@ -743,9 +839,10 @@ export class BetterTaskView extends ItemView {
     check.title = "Toggle done (Space)";
     check.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (t.status === "done") await this.api.undone(t.id);
-      else await this.api.done(t.id);
-      this.scheduleRefresh();
+      await this.runWithRemoveAnim(t.id, async () => {
+        if (t.status === "done") await this.api.undone(t.id);
+        else await this.api.done(t.id);
+      });
     });
 
     const title = titleRow.createDiv({ cls: "bt-card-title", text: t.title });
@@ -790,7 +887,229 @@ export class BetterTaskView extends ItemView {
       }
     }
 
+    // Inline "+ subtask" affordance — visible on every card so adding a
+    // subtask is one click, no shortcuts required. Subtask inherits the
+    // parent's ⏳ so it lands in the same column / day automatically.
+    if (t.status === "todo") this.renderAddSubtaskRow(card, t);
+
     this.wireCardEvents(card, t);
+    this.attachContextHover(card, t);
+  }
+
+  // ---------- Context hover popover ----------
+  //
+  // Rendered on mouseenter (after ~350ms settle delay) to show the task's
+  // surrounding lines from its source file. Gives enough context to remember
+  // where a task came from without leaving the board. Suppressed during
+  // drags so the popover doesn't fight the drop-target highlighting.
+
+  private attachContextHover(card: HTMLElement, t: ParsedTask) {
+    card.addEventListener("mouseenter", () => {
+      if (this.contentEl.hasClass("dragging-active")) return;
+      if (this.ctxHoverTimer !== null) window.clearTimeout(this.ctxHoverTimer);
+      this.ctxHoverTimer = window.setTimeout(() => {
+        this.ctxHoverTimer = null;
+        if (this.contentEl.hasClass("dragging-active")) return;
+        if (!document.body.contains(card)) return;
+        void this.openContextPopover(card, t);
+      }, 350);
+    });
+    card.addEventListener("mouseleave", () => {
+      if (this.ctxHoverTimer !== null) {
+        window.clearTimeout(this.ctxHoverTimer);
+        this.ctxHoverTimer = null;
+      }
+      if (this.ctxPopover && this.ctxPopover.anchor === card) {
+        this.closeContextPopover();
+      }
+    });
+    // If the user starts dragging this card, kill any pending/open popover.
+    card.addEventListener("dragstart", () => {
+      if (this.ctxHoverTimer !== null) {
+        window.clearTimeout(this.ctxHoverTimer);
+        this.ctxHoverTimer = null;
+      }
+      this.closeContextPopover();
+    });
+  }
+
+  private async openContextPopover(card: HTMLElement, t: ParsedTask) {
+    const file = this.app.vault.getAbstractFileByPath(t.path);
+    if (!(file instanceof TFile)) return;
+    const data = await this.app.vault.cachedRead(file);
+    const lines = data.split("\n");
+    if (t.line < 0 || t.line >= lines.length) return;
+
+    // Walk the entire subtree by indent so multi-level nested subtasks render
+    // whole. Stop as soon as we hit a line that isn't indented deeper than
+    // the task itself — that's a sibling or outdent, which would pull in
+    // unrelated content. Line ± naive window was wrong for any depth > 1.
+    const taskIndent = t.indent.length;
+    let subtreeEnd = t.line;
+    for (let i = t.line + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.trim() === "") break;
+      const m = line.match(/^\s*/);
+      const indent = m ? m[0].length : 0;
+      if (indent <= taskIndent) break;
+      subtreeEnd = i;
+    }
+
+    const LEAD = 2; // lines of context above the task itself
+    const start = Math.max(0, t.line - LEAD);
+    const end = subtreeEnd;
+    const snippet = lines.slice(start, end + 1).join("\n");
+
+    // If the parent task lives outside the window, surface it as a separate
+    // "↑ 父任务" chip. Inside the window it's already visible in the snippet.
+    const parentLine =
+      t.parentLine !== null && (t.parentLine < start || t.parentLine > end)
+        ? lines[t.parentLine] ?? null
+        : null;
+
+    // Tear down any existing popover before opening a new one.
+    this.closeContextPopover();
+
+    const pop = document.body.createDiv({ cls: "bt-ctx-popover" });
+    const component = new Component();
+    this.addChild(component);
+
+    if (parentLine !== null) {
+      const chip = pop.createDiv({ cls: "bt-ctx-parent" });
+      chip.createSpan({ cls: "bt-ctx-parent-arrow", text: "↑" });
+      const chipBody = chip.createDiv({ cls: "bt-ctx-parent-body" });
+      void MarkdownRenderer.render(
+        this.app,
+        parentLine.trim(),
+        chipBody,
+        t.path,
+        component,
+      );
+    }
+
+    const body = pop.createDiv({ cls: "bt-ctx-body" });
+    void MarkdownRenderer.render(this.app, snippet, body, t.path, component);
+
+    this.ctxPopover = { el: pop, component, anchor: card };
+    this.positionContextPopover(pop, card);
+  }
+
+  private positionContextPopover(pop: HTMLElement, anchor: HTMLElement) {
+    const rect = anchor.getBoundingClientRect();
+    const margin = 8;
+    // Measure after insert; popover is already in the DOM.
+    const popRect = pop.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let top = rect.bottom + margin;
+    if (top + popRect.height > vh - margin) {
+      // Flip above if there's no room below.
+      top = Math.max(margin, rect.top - popRect.height - margin);
+    }
+    let left = rect.left;
+    if (left + popRect.width > vw - margin) {
+      left = Math.max(margin, vw - popRect.width - margin);
+    }
+
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
+  }
+
+  private closeContextPopover() {
+    const p = this.ctxPopover;
+    if (!p) return;
+    this.ctxPopover = null;
+    p.el.remove();
+    this.removeChild(p.component);
+  }
+
+  private renderAddSubtaskRow(card: HTMLElement, parent: ParsedTask) {
+    const row = card.createDiv({ cls: "bt-subtask-add" });
+    // Don't let this row trigger card-level drag or selection
+    row.draggable = false;
+    row.addEventListener("dragstart", (e) => e.preventDefault());
+    row.addEventListener("click", (e) => e.stopPropagation());
+    row.addEventListener("dblclick", (e) => e.stopPropagation());
+    this.renderSubtaskAddIdle(row, parent);
+  }
+
+  private renderSubtaskAddIdle(row: HTMLElement, parent: ParsedTask) {
+    row.empty();
+    row.removeClass("editing");
+    const trigger = row.createDiv({ cls: "bt-subtask-add-trigger" });
+    trigger.setText(tr("card.addSubtask"));
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.renderSubtaskAddEditing(row, parent);
+    });
+  }
+
+  private renderSubtaskAddEditing(row: HTMLElement, parent: ParsedTask) {
+    row.empty();
+    row.addClass("editing");
+    const input = row.createEl("input", { type: "text", cls: "bt-subtask-add-input" });
+    input.placeholder = tr("card.subtaskPlaceholder");
+    const commit = row.createDiv({ cls: "bt-subtask-add-commit", text: "✓" });
+    const cancel = row.createDiv({ cls: "bt-subtask-add-cancel", text: "✕" });
+
+    let done = false;
+    const finish = async (save: boolean) => {
+      if (done) return;
+      done = true;
+      const text = input.value.trim();
+      if (save && text) {
+        try {
+          await this.api.add({
+            text,
+            parent: parent.id,
+            // Intentionally do NOT inherit parent's scheduled. An unset
+            // scheduled means "follows the parent" — the child renders inline
+            // under the parent card regardless of day. Inheriting created
+            // stale dates the moment the parent got rescheduled.
+            inboxFallback: this.plugin.settings.inboxPath,
+            stampCreated: this.plugin.settings.stampCreated,
+          });
+        } catch (err) {
+          new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+        }
+        this.scheduleRefresh();
+      } else {
+        // Nothing to save — restore the trigger in place without a re-render
+        this.renderSubtaskAddIdle(row, parent);
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      // Stop view-wide hotkeys (1-4, Space, D, E, Delete, arrows) firing while typing
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("dragstart", (e) => e.preventDefault());
+
+    // mousedown preventDefault keeps focus in input → click event still fires
+    // on the button; without this, blur would trigger commit before the click
+    // is processed and the cancel ✕ would never get to actually cancel.
+    commit.addEventListener("mousedown", (e) => e.preventDefault());
+    cancel.addEventListener("mousedown", (e) => e.preventDefault());
+    commit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      finish(true);
+    });
+    cancel.addEventListener("click", (e) => {
+      e.stopPropagation();
+      finish(false);
+    });
+
+    input.focus();
   }
 
   private wireCardEvents(el: HTMLElement, t: ParsedTask) {
@@ -807,6 +1126,56 @@ export class BetterTaskView extends ItemView {
     el.addEventListener("dragend", () => {
       el.removeClass("dragging");
       this.contentEl.removeClass("dragging-active");
+    });
+
+    // Drop target: dropping another card onto this one nests it as a subtask
+    // (works cross-file). stopPropagation prevents the underlying day column
+    // from also receiving the drop and just rescheduling.
+    el.addEventListener("dragover", (e) => {
+      const dt = e.dataTransfer;
+      if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
+      if (el.classList.contains("dragging")) return; // self
+      e.preventDefault();
+      e.stopPropagation();
+      dt.dropEffect = "move";
+      el.addClass("nest-target");
+    });
+    el.addEventListener("dragleave", (e) => {
+      // dragleave fires for child elements as the cursor moves between them;
+      // only clear the class when the cursor truly leaves this card.
+      const related = e.relatedTarget as Node | null;
+      if (related && el.contains(related)) return;
+      el.removeClass("nest-target");
+    });
+    el.addEventListener("drop", async (e) => {
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      const droppedId = dt.getData("text/task-id");
+      if (!droppedId || droppedId === t.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.removeClass("nest-target");
+      // Nest writes to one or two files (cross-file). Wait for metadataCache to
+      // reparse them before rendering so the new parent shows the new child.
+      const droppedTask = this.tasks.find((x) => x.id === droppedId);
+      const awaitCachePaths = [t.path];
+      if (droppedTask && droppedTask.path !== t.path) awaitCachePaths.push(droppedTask.path);
+      try {
+        await this.runWithRemoveAnim(droppedId, async () => {
+          const r = await this.api.nest(droppedId, t.id);
+          if (!r.unchanged) {
+            new Notice(
+              tr("notice.nested", {
+                title: t.title,
+                where: r.crossFile ? tr("notice.crossFile") : "",
+              }),
+            );
+          }
+        }, { awaitCachePaths });
+      } catch (err) {
+        new Notice(tr("notice.error", { msg: (err as Error).message }), 6000);
+        this.scheduleRefresh();
+      }
     });
 
     // Click → select
@@ -845,8 +1214,9 @@ export class BetterTaskView extends ItemView {
       if (!id) return;
       e.preventDefault();
       el.removeClass("drop-hover");
-      try {
-        const task = this.tasks.find((t) => t.id === id);
+      const task = this.tasks.find((t) => t.id === id);
+      const willMove = !task || (task.scheduled ?? null) !== targetDate;
+      const work = async () => {
         const r = await this.api.schedule(id, targetDate);
         if (!r.unchanged && task) {
           this.pushUndo({
@@ -860,10 +1230,18 @@ export class BetterTaskView extends ItemView {
             targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
           );
         }
+      };
+      try {
+        if (willMove) {
+          await this.runWithRemoveAnim(id, work);
+        } else {
+          await work();
+          this.scheduleRefresh();
+        }
       } catch (err) {
         new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+        this.scheduleRefresh();
       }
-      this.scheduleRefresh();
     });
   }
 
@@ -975,17 +1353,18 @@ export class BetterTaskView extends ItemView {
       e.preventDefault();
       const delta = e.key === "ArrowRight" ? 1 : -1;
       const newDate = addDays(sel.scheduled, delta);
-      const r = await this.api.schedule(sel.id, newDate);
-      if (!r.unchanged) {
-        this.pushUndo({
-          path: sel.path,
-          line: sel.line,
-          before: r.before,
-          after: r.after,
-          label: `⏳ ${newDate}`,
-        });
-      }
-      this.scheduleRefresh();
+      await this.runWithRemoveAnim(sel.id, async () => {
+        const r = await this.api.schedule(sel.id, newDate);
+        if (!r.unchanged) {
+          this.pushUndo({
+            path: sel.path,
+            line: sel.line,
+            before: r.before,
+            after: r.after,
+            label: `⏳ ${newDate}`,
+          });
+        }
+      });
       return;
     }
     if (e.key === "d" || e.key === "D") {
@@ -995,9 +1374,10 @@ export class BetterTaskView extends ItemView {
     }
     if (e.key === " ") {
       e.preventDefault();
-      if (sel.status === "done") await this.api.undone(sel.id);
-      else await this.api.done(sel.id);
-      this.scheduleRefresh();
+      await this.runWithRemoveAnim(sel.id, async () => {
+        if (sel.status === "done") await this.api.undone(sel.id);
+        else await this.api.done(sel.id);
+      });
       return;
     }
     if (e.key === "e" || e.key === "E") {
@@ -1007,8 +1387,7 @@ export class BetterTaskView extends ItemView {
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      await this.api.drop(sel.id);
-      this.scheduleRefresh();
+      await this.runWithRemoveAnim(sel.id, () => this.api.drop(sel.id));
       return;
     }
     if (e.key === "Enter") {
@@ -1085,27 +1464,39 @@ export class BetterTaskView extends ItemView {
     );
     m.addItem((i) =>
       i.setTitle(task.status === "done" ? tr("ctx.markTodo") : tr("ctx.markDone")).onClick(async () => {
-        if (task.status === "done") await this.api.undone(task.id);
-        else await this.api.done(task.id);
-        this.scheduleRefresh();
+        await this.runWithRemoveAnim(task.id, async () => {
+          if (task.status === "done") await this.api.undone(task.id);
+          else await this.api.done(task.id);
+        });
       }),
     );
     m.addItem((i) =>
       i.setTitle(tr("ctx.scheduleToday")).onClick(async () => {
-        await this.api.schedule(task.id, todayISO());
-        this.scheduleRefresh();
+        const target = todayISO();
+        if ((task.scheduled ?? null) !== target) {
+          await this.runWithRemoveAnim(task.id, () => this.api.schedule(task.id, target));
+        } else {
+          this.scheduleRefresh();
+        }
       }),
     );
     m.addItem((i) =>
       i.setTitle(tr("ctx.scheduleTomorrow")).onClick(async () => {
-        await this.api.schedule(task.id, addDays(todayISO(), 1));
-        this.scheduleRefresh();
+        const target = addDays(todayISO(), 1);
+        if ((task.scheduled ?? null) !== target) {
+          await this.runWithRemoveAnim(task.id, () => this.api.schedule(task.id, target));
+        } else {
+          this.scheduleRefresh();
+        }
       }),
     );
     m.addItem((i) =>
       i.setTitle(tr("ctx.clearSchedule")).onClick(async () => {
-        await this.api.schedule(task.id, null);
-        this.scheduleRefresh();
+        if (task.scheduled) {
+          await this.runWithRemoveAnim(task.id, () => this.api.schedule(task.id, null));
+        } else {
+          this.scheduleRefresh();
+        }
       }),
     );
     m.addSeparator();
@@ -1119,8 +1510,7 @@ export class BetterTaskView extends ItemView {
     m.addSeparator();
     m.addItem((i) =>
       i.setTitle(tr("ctx.drop")).onClick(async () => {
-        await this.api.drop(task.id);
-        this.scheduleRefresh();
+        await this.runWithRemoveAnim(task.id, () => this.api.drop(task.id));
       }),
     );
     m.showAtMouseEvent(e);
@@ -1149,17 +1539,25 @@ export class BetterTaskView extends ItemView {
       task.scheduled ?? todayISO(),
       async (resolved) => {
         if (resolved === undefined) return;
-        const r = await this.api.schedule(task.id, resolved);
-        if (!r.unchanged) {
-          this.pushUndo({
-            path: task.path,
-            line: task.line,
-            before: r.before,
-            after: r.after,
-            label: resolved ? `⏳ ${resolved}` : "⏳ cleared",
-          });
+        const willMove = (task.scheduled ?? null) !== (resolved ?? null);
+        const work = async () => {
+          const r = await this.api.schedule(task.id, resolved);
+          if (!r.unchanged) {
+            this.pushUndo({
+              path: task.path,
+              line: task.line,
+              before: r.before,
+              after: r.after,
+              label: resolved ? `⏳ ${resolved}` : "⏳ cleared",
+            });
+          }
+        };
+        if (willMove) {
+          await this.runWithRemoveAnim(task.id, work);
+        } else {
+          await work();
+          this.scheduleRefresh();
         }
-        this.scheduleRefresh();
       },
     ).open();
   }

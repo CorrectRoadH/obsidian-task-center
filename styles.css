@@ -373,10 +373,90 @@
 .better-task-view .bt-sub-sched { color: var(--color-blue); font-size: 10px; }
 .better-task-view .bt-subcard.done { opacity: 0.5; text-decoration: line-through; }
 
+/* Inline "+ subtask" affordance — sits below the children block, indented to
+   align with subcards. Faint by default so it doesn't add visual noise across
+   a dense masonry, but lights up on card hover/select for easy discovery. */
+.better-task-view .bt-subtask-add {
+  margin-top: 4px;
+  margin-left: 22px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  min-height: 18px;
+}
+.better-task-view .bt-subtask-add-trigger {
+  color: var(--text-muted);
+  opacity: 0.35;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  user-select: none;
+}
+.better-task-view .bt-card:hover .bt-subtask-add-trigger,
+.better-task-view .bt-card.selected .bt-subtask-add-trigger {
+  opacity: 1;
+}
+.better-task-view .bt-subtask-add-trigger:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.better-task-view .bt-subtask-add.editing {
+  background: var(--background-secondary);
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+.better-task-view .bt-subtask-add-input {
+  flex: 1;
+  font-size: 11px;
+  padding: 2px 4px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 3px;
+  color: var(--text-normal);
+  outline: none;
+  min-width: 0;
+}
+.better-task-view .bt-subtask-add-input:focus {
+  border-color: var(--interactive-accent);
+}
+.better-task-view .bt-subtask-add-commit,
+.better-task-view .bt-subtask-add-cancel {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  user-select: none;
+  flex-shrink: 0;
+}
+.better-task-view .bt-subtask-add-commit { color: var(--color-green, #43a047); }
+.better-task-view .bt-subtask-add-cancel { color: var(--text-muted); }
+.better-task-view .bt-subtask-add-commit:hover,
+.better-task-view .bt-subtask-add-cancel:hover {
+  background: var(--background-modifier-hover);
+}
+
 /* Drop zones */
 .better-task-view .drop-hover {
   outline: 2px dashed var(--interactive-accent);
   background: var(--background-modifier-hover);
+}
+
+/* Card-as-drop-target: dragging another card onto this one will nest it as
+   a subtask. Solid accent border + soft tint distinguishes from the dashed
+   "drop here to schedule" affordance on day columns. */
+.better-task-view .bt-card.nest-target,
+.better-task-view .bt-subcard.nest-target,
+.better-task-view .bt-mini-card.nest-target {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  background: var(--background-modifier-hover);
+  transition: outline 0.08s ease, background 0.08s ease;
 }
 
 /* Pool wrapper: unscheduled + trash side by side */
@@ -730,4 +810,48 @@
   padding: 6px 10px;
   background: rgba(255, 0, 0, 0.08);
   border-radius: 4px;
+}
+
+/* Hover context popover — shows source-file surroundings for a task card. */
+.bt-ctx-popover {
+  position: fixed;
+  z-index: 100;
+  max-width: 480px;
+  min-width: 260px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: none; /* don't interfere with hover tracking on the card */
+}
+.bt-ctx-popover .bt-ctx-parent {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 4px 6px;
+  margin-bottom: 8px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  border-left: 2px solid var(--interactive-accent);
+  font-size: 12px;
+  opacity: 0.85;
+}
+.bt-ctx-popover .bt-ctx-parent-arrow {
+  flex-shrink: 0;
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+.bt-ctx-popover .bt-ctx-parent-body > * {
+  margin: 0;
+}
+.bt-ctx-popover .bt-ctx-body > *:first-child {
+  margin-top: 0;
+}
+.bt-ctx-popover .bt-ctx-body > *:last-child {
+  margin-bottom: 0;
 }

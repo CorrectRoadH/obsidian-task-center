@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["DOM", "ES2022"],
+    "types": ["node", "mocha", "@wdio/globals/types"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": ["wdio.conf.mts", "test/e2e/**/*.ts"]
+}
