@@ -1262,3 +1262,49 @@
   padding: 12px 14px;
   border-radius: 8px;
 }
+
+/* ============================================================================
+ * Quick Add v2 — Spotlight-style command palette (US-167, desktop only).
+ * Chunk 1 = layout shell only: outer chrome (size, position, gradient,
+ * shadow, radius). Inner content (chips, inline parse hint, footer) ships
+ * in chunks b/c/d. Reference: UX.md §6.6.
+ * ============================================================================ */
+.task-center-quick-add-v2.modal {
+  /* Compact 540×auto container; height grows to fit chips + footer in
+   * later chunks. Min-height keeps the shell visible during chunk 1
+   * before the body fills out. */
+  width: 540px;
+  max-width: 90vw;
+  min-height: 240px;
+  border-radius: 14px;
+  /* Linear-gradient body — primary→secondary creates a subtle Spotlight
+   * top-light effect without depending on theme accent. */
+  background: linear-gradient(
+    180deg,
+    var(--background-primary) 0%,
+    var(--background-secondary) 100%
+  );
+  /* Floating spotlight shadow — two-layer for soft falloff. */
+  box-shadow:
+    0 24px 64px -16px rgba(0, 0, 0, 0.5),
+    0 8px 24px -8px rgba(0, 0, 0, 0.4);
+  padding: 0;
+  overflow: hidden;
+}
+.task-center-quick-add-v2.modal .modal-content {
+  padding: 18px 20px;
+}
+/* Drop the default Obsidian X close button — Esc / outside-click handles
+ * dismissal. Keeping the button creates visual clutter against the
+ * Spotlight aesthetic. */
+.task-center-quick-add-v2.modal .modal-close-button {
+  display: none;
+}
+/* Anchor at viewport-top 30% rather than vertical center — matches
+ * Spotlight / Cmd+K convention and leaves room below for chips when
+ * typing. Obsidian centers modals via flex on .modal-container; the
+ * :has() selector lifts only our v2 instance to flex-start. */
+.modal-container:has(.task-center-quick-add-v2) {
+  align-items: flex-start;
+  padding-top: 30vh;
+}

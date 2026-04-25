@@ -35,8 +35,18 @@ export class QuickAddModal extends Modal {
       // Drag handle for affordance — same as BottomSheet primitive.
       const handle = contentEl.createDiv({ cls: "bt-sheet-handle" });
       handle.setAttr("aria-hidden", "true");
+    } else {
+      // US-167 v2 (desktop): Spotlight-style compact command palette.
+      // Shell only — no h3, no visible X (hidden via CSS), gradient bg,
+      // 540×~240, anchored at viewport-top 30%, 14px radius. Input/hint
+      // bodies arrive in subsequent chunks (b: inline hint, c: chips,
+      // d: footer + e2e). UX.md §6.6.
+      modalEl.addClass("task-center-quick-add-v2");
     }
-    contentEl.createEl("h3", { text: tr("qa.title") });
+    if (Platform.isMobile) {
+      // Title kept on mobile (separate redesign track per task split).
+      contentEl.createEl("h3", { text: tr("qa.title") });
+    }
 
     const text = new TextComponent(contentEl);
     text.inputEl.addClass("task-center-quick-add-input");
