@@ -394,12 +394,18 @@ export class TaskCenterView extends ItemView {
     if (this.state.tab === "week" || this.state.tab === "month") {
       const nav = bar.createDiv({ cls: "bt-nav" });
       const prev = nav.createEl("button", { text: "◀" });
+      // Stable e2e selector — the visible label changes (in week tab the
+      // "today" button shows the week number; in month tab it shows
+      // localized "Today"). Tests select via `[data-action="nav-*"]`.
+      prev.dataset.action = "nav-prev";
       const todayLabel =
         this.state.tab === "week"
           ? tr("toolbar.weekNo", { n: isoWeekNumber(this.state.anchorISO) })
           : tr("toolbar.today");
       const today = nav.createEl("button", { text: todayLabel });
+      today.dataset.action = "nav-today";
       const next = nav.createEl("button", { text: "▶" });
+      next.dataset.action = "nav-next";
       const label = nav.createSpan({ cls: "bt-nav-label" });
       label.setText(this.navLabel());
       prev.addEventListener("click", () => {
