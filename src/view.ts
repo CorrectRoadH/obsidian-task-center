@@ -147,20 +147,22 @@ export class TaskCenterView extends ItemView {
     this.contentEl.tabIndex = 0;
     this.registerDomEvent(this.contentEl, "keydown", (e) => this.handleKey(e));
 
-    // US-510: best-effort portrait lock on mobile when user has the setting
-    // on. screen.orientation.lock requires fullscreen on most browsers and
-    // is blocked entirely on iOS Safari — we silently swallow the rejection
-    // rather than show an error nobody can act on.
-    if (Platform.isMobile && this.plugin.settings.mobileForcePortrait) {
-      const ori = (screen as Screen & {
-        orientation?: { lock?: (o: string) => Promise<void> };
-      }).orientation;
-      if (ori?.lock) {
-        ori.lock("portrait").catch(() => {
-          /* OS denied — expected on iOS Safari and Obsidian Mobile in some modes */
-        });
-      }
-    }
+    // UX-mobile §7 / US-502 mobile layout gating. The board reads viewport
+    // width (< 600px) OR the user setting `mobileForceLayout`, and writes
+    // `data-mobile-layout="true|false"` on contentEl. styles.css attaches
+    // every mobile-only rule under `[data-mobile-layout="true"]`, so the
+    // attribute is the single source of truth for "should I render the
+    // narrow / mobile layout?". Driven by JS rather than @media so the
+    // setting can override the viewport.
+    this.applyMobileLayoutAttr();
+    this.registerDomEvent(window, "resize", () => this.applyMobileLayoutAttr());
+  }
+
+  /** Idempotent — recompute and write the data-mobile-layout attribute. */
+  private applyMobileLayoutAttr(): void {
+    const narrow = window.innerWidth < 600;
+    const force = !!this.plugin.settings.mobileForceLayout;
+    this.contentEl.dataset.mobileLayout = narrow || force ? "true" : "false";
   }
 
   async onClose(): Promise<void> {
@@ -315,6 +317,9 @@ export class TaskCenterView extends ItemView {
 
     el.empty();
     el.addClass("task-center-view");
+    // Settings can change between renders; recomputing the layout attr is
+    // cheap and keeps the data attribute in sync without a separate hook.
+    this.applyMobileLayoutAttr();
 
     const header = el.createDiv({ cls: "bt-header" });
     this.renderTabBar(header);

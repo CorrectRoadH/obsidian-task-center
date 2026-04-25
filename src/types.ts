@@ -44,7 +44,10 @@ export interface TaskCenterSettings {
   // Mobile-specific (US-510). Safe defaults so desktop users see no change.
   mobileLongPressMs: number; // 200..1000, default 500
   mobileSwipeEnabled: boolean; // default true (left=done, right=drop)
-  mobileForcePortrait: boolean; // default false (don't force orientation lock)
+  // UX-mobile §7 / US-502 layout escape hatch: when true, the board uses
+  // the mobile (narrow) layout regardless of viewport width — for users
+  // on iPad / split-screen / large foldables who prefer the column layout.
+  mobileForceLayout: boolean; // default false (auto = follow viewport width)
 }
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
@@ -57,7 +60,7 @@ export const DEFAULT_SETTINGS: TaskCenterSettings = {
   lastTab: null,
   mobileLongPressMs: 500,
   mobileSwipeEnabled: true,
-  mobileForcePortrait: false,
+  mobileForceLayout: false,
 };
 
 export const VIEW_TYPE_TASK_CENTER = "task-center-board";

@@ -889,22 +889,19 @@
 .task-center-view .bt-mobile-status {
   display: none;
 }
-@media (max-width: 599.98px) {
-  .task-center-view .bt-mobile-status {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-status {
     display: block;
     padding: 4px 8px 6px 8px;
     font-size: 12px;
     color: var(--text-muted);
     border-bottom: 1px solid var(--background-modifier-border);
   }
-}
 
 /* Bottom sticky action bar (🗑 + ➕) — mobile only. */
 .task-center-view .bt-mobile-action-bar {
   display: none;
 }
-@media (max-width: 599.98px) {
-  .task-center-view .bt-mobile-action-bar {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-action-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -918,21 +915,21 @@
     box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
     z-index: 10;
   }
-  .task-center-view .bt-mobile-trash {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-trash {
     flex: 0 0 auto;
     padding: 6px 14px;
     border-radius: 8px;
     background: var(--background-secondary);
     cursor: pointer;
   }
-  .task-center-view .bt-mobile-trash.drop-hover {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-trash.drop-hover {
     background: var(--background-modifier-error);
     color: var(--text-on-accent);
   }
-  .task-center-view .bt-mobile-trash-icon {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-trash-icon {
     font-size: 18px;
   }
-  .task-center-view .bt-mobile-add-btn {
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-add-btn {
     flex: 0 0 auto;
     padding: 6px 14px;
     border-radius: 8px;
@@ -943,25 +940,25 @@
   }
 
   /* Desktop pool trash hidden on mobile — the action bar replaces it. */
-  .task-center-view .bt-trash {
+  .task-center-view[data-mobile-layout="true"] .bt-trash {
     display: none;
   }
 
   /* Toolbar `+ Add` is duplicated by the action bar; hide on mobile so the
      thumb-reachable bottom button is the canonical entry. */
-  .task-center-view .bt-toolbar .bt-add-btn {
+  .task-center-view[data-mobile-layout="true"] .bt-toolbar .bt-add-btn {
     display: none;
   }
 
   /* Tab bar: 4 tabs + counts won't fit on a 360px phone — horizontal scroll
      instead of wrapping (UX-mobile §2 / §12, Leo follow-up). Momentum
      scroll for iOS. */
-  .task-center-view .bt-tabbar {
+  .task-center-view[data-mobile-layout="true"] .bt-tabbar {
     overflow-x: auto;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
   }
-  .task-center-view .bt-tab {
+  .task-center-view[data-mobile-layout="true"] .bt-tab {
     flex-shrink: 0;
   }
 
@@ -969,12 +966,12 @@
 
   /* Hide the path footnote on mobile — it's noise at this width and the
      full path lives in long-press source info anyway. */
-  .task-center-view .bt-meta-path {
+  .task-center-view[data-mobile-layout="true"] .bt-meta-path {
     display: none;
   }
 
   /* Meta row: single line, truncate with ellipsis if too many fields. */
-  .task-center-view .bt-card-meta {
+  .task-center-view[data-mobile-layout="true"] .bt-card-meta {
     flex-wrap: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -983,8 +980,8 @@
 
   /* Bigger touch target for the checkbox toggle (≥ 32px hit area while
      keeping the visible icon the same size). */
-  .task-center-view .bt-check,
-  .task-center-view .bt-sub-check {
+  .task-center-view[data-mobile-layout="true"] .bt-check,
+  .task-center-view[data-mobile-layout="true"] .bt-sub-check {
     min-width: 32px;
     min-height: 32px;
     display: inline-flex;
@@ -994,21 +991,21 @@
 
   /* Drag visual: scale up the floating card so the lift is felt on a
      touchscreen where shadow alone is hard to read. */
-  .task-center-view .bt-card.dragging,
-  .task-center-view .bt-subcard.dragging {
+  .task-center-view[data-mobile-layout="true"] .bt-card.dragging,
+  .task-center-view[data-mobile-layout="true"] .bt-subcard.dragging {
     transform: scale(1.04);
     transform-origin: center;
     opacity: 0.9;
   }
 
   /* Subtask add trigger always visible on mobile (no hover state). */
-  .task-center-view .bt-card .bt-subtask-add-trigger {
+  .task-center-view[data-mobile-layout="true"] .bt-card .bt-subtask-add-trigger {
     opacity: 1;
   }
 
   /* `+N` chip on subcards with deeper subtrees (US-505). Tap → bottom
      sheet with full tree. Visual: small pill at the right of the subcard. */
-  .task-center-view .bt-subcard-more {
+  .task-center-view[data-mobile-layout="true"] .bt-subcard-more {
     flex: 0 0 auto;
     margin-left: auto;
     padding: 2px 8px;
@@ -1019,7 +1016,7 @@
     cursor: pointer;
     user-select: none;
   }
-  .task-center-view .bt-subcard-more:active {
+  .task-center-view[data-mobile-layout="true"] .bt-subcard-more:active {
     background: var(--background-modifier-hover);
   }
 
@@ -1027,12 +1024,12 @@
      `--tc-swipe-progress` (0..1) and `--tc-swipe-direction` (left|right)
      on the card; we paint a translucent overlay that grows with progress.
      Left-swipe = done (green), right-swipe = drop (red). */
-  .task-center-view .bt-card[style*="--tc-swipe-direction"] {
+  .task-center-view[data-mobile-layout="true"] .bt-card[style*="--tc-swipe-direction"] {
     position: relative;
     overflow: hidden;
   }
-  .task-center-view .bt-card[style*="left"]::after,
-  .task-center-view .bt-card[style*="right"]::after {
+  .task-center-view[data-mobile-layout="true"] .bt-card[style*="left"]::after,
+  .task-center-view[data-mobile-layout="true"] .bt-card[style*="right"]::after {
     content: "";
     position: absolute;
     top: 0;
@@ -1041,12 +1038,12 @@
     pointer-events: none;
     opacity: 0.45;
   }
-  .task-center-view .bt-card[style*="left"]::after {
+  .task-center-view[data-mobile-layout="true"] .bt-card[style*="left"]::after {
     left: auto;
     right: 0;
     background: var(--color-green);
   }
-  .task-center-view .bt-card[style*="right"]::after {
+  .task-center-view[data-mobile-layout="true"] .bt-card[style*="right"]::after {
     left: 0;
     background: var(--color-red);
   }
@@ -1054,31 +1051,31 @@
   /* ───── Week view: vertical collapsible list (US-503) ───── */
 
   /* Stack the 7 day rows top-to-bottom instead of side-by-side. */
-  .task-center-view .bt-week {
+  .task-center-view[data-mobile-layout="true"] .bt-week {
     grid-template-columns: 1fr;
     gap: 4px;
     overflow-x: visible;
   }
-  .task-center-view .bt-week-col {
+  .task-center-view[data-mobile-layout="true"] .bt-week-col {
     min-height: 0;
   }
   /* Body collapsed by default; today and explicitly-expanded show it. */
-  .task-center-view .bt-week-col:not(.today):not(.expanded) .bt-week-list {
+  .task-center-view[data-mobile-layout="true"] .bt-week-col:not(.today):not(.expanded) .bt-week-list {
     display: none;
   }
   /* Tap target hint on the row head. */
-  .task-center-view .bt-week-col:not(.today) .bt-week-head {
+  .task-center-view[data-mobile-layout="true"] .bt-week-col:not(.today) .bt-week-head {
     cursor: pointer;
     user-select: none;
   }
   /* Caret indicator (▸ collapsed / ▾ expanded). Today is implicitly open. */
-  .task-center-view .bt-week-col:not(.today):not(.expanded) .bt-week-head::after {
+  .task-center-view[data-mobile-layout="true"] .bt-week-col:not(.today):not(.expanded) .bt-week-head::after {
     content: "▸";
     margin-left: 4px;
     color: var(--text-faint);
     font-size: 10px;
   }
-  .task-center-view .bt-week-col.expanded:not(.today) .bt-week-head::after {
+  .task-center-view[data-mobile-layout="true"] .bt-week-col.expanded:not(.today) .bt-week-head::after {
     content: "▾";
     margin-left: 4px;
     color: var(--text-faint);
@@ -1088,23 +1085,23 @@
   /* ───── Month view: dots + numbers (US-504) ───── */
 
   /* Cells stop showing chip lists; tap opens a bottom sheet instead. */
-  .task-center-view .bt-month-cell-list,
-  .task-center-view .bt-mini-card,
-  .task-center-view .bt-mini-more {
+  .task-center-view[data-mobile-layout="true"] .bt-month-cell-list,
+  .task-center-view[data-mobile-layout="true"] .bt-mini-card,
+  .task-center-view[data-mobile-layout="true"] .bt-mini-more {
     display: none;
   }
-  .task-center-view .bt-month-cell {
+  .task-center-view[data-mobile-layout="true"] .bt-month-cell {
     cursor: pointer;
     padding: 2px;
     min-height: 36px;
   }
-  .task-center-view .bt-month-cell-head {
+  .task-center-view[data-mobile-layout="true"] .bt-month-cell-head {
     flex-direction: column;
     align-items: center;
     gap: 2px;
   }
   /* Reduce the count badge to a small dot — presence is what matters. */
-  .task-center-view .bt-month-cell-count {
+  .task-center-view[data-mobile-layout="true"] .bt-month-cell-count {
     width: 6px;
     height: 6px;
     min-width: 6px;
@@ -1113,14 +1110,13 @@
     text-indent: -9999px;
     overflow: hidden;
   }
-}
 
 /* Reduced-motion drop for the mobile drag scale (Rally nit: combined
    media query — easier on older Chromium / non-nesting CSS pipelines
    than `@media` nested inside `@media`). */
-@media (max-width: 599.98px) and (prefers-reduced-motion: reduce) {
-  .task-center-view .bt-card.dragging,
-  .task-center-view .bt-subcard.dragging {
+@media (prefers-reduced-motion: reduce) {
+  .task-center-view[data-mobile-layout="true"] .bt-card.dragging,
+  .task-center-view[data-mobile-layout="true"] .bt-subcard.dragging {
     transform: none;
   }
 }

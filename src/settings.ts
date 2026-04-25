@@ -114,12 +114,15 @@ export class TaskCenterSettingTab extends PluginSettingTab {
         );
 
       new Setting(containerEl)
-        .setName(tr("settings.mobileForcePortrait.name"))
-        .setDesc(tr("settings.mobileForcePortrait.desc"))
+        .setName(tr("settings.mobileForceLayout.name"))
+        .setDesc(tr("settings.mobileForceLayout.desc"))
         .addToggle((tg) =>
-          tg.setValue(this.plugin.settings.mobileForcePortrait).onChange(async (v) => {
-            this.plugin.settings.mobileForcePortrait = v;
+          tg.setValue(this.plugin.settings.mobileForceLayout).onChange(async (v) => {
+            this.plugin.settings.mobileForceLayout = v;
             await this.plugin.saveSettings();
+            // Tell the open board (if any) to re-evaluate its layout class
+            // immediately, no leaf reopen required.
+            this.plugin.refreshOpenViews().catch(() => {/* ignore */});
           }),
         );
     }

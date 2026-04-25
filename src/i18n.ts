@@ -158,9 +158,9 @@ const EN = {
   "settings.mobileSwipe.name": "Swipe gestures",
   "settings.mobileSwipe.desc":
     "Left = mark done, right = drop. Disable if swipes conflict with your scroll habits.",
-  "settings.mobileForcePortrait.name": "Lock to portrait orientation",
-  "settings.mobileForcePortrait.desc":
-    "Hint to the device to keep the board in portrait. Honoured only when the OS allows orientation lock from web apps.",
+  "settings.mobileForceLayout.name": "Force mobile layout",
+  "settings.mobileForceLayout.desc":
+    "Keep the narrow / mobile layout regardless of viewport width. Useful on iPad in landscape, split-screen, or large foldables when you prefer the column layout over the desktop one.",
   "settings.cliHeader": "CLI",
   "settings.cliHelp":
     "Verbs register to the native Obsidian CLI (requires Obsidian 1.12.2+). Call them from your shell:",
@@ -284,9 +284,9 @@ const ZH: Partial<typeof EN> = {
   "settings.mobileSwipe.name": "滑动手势",
   "settings.mobileSwipe.desc":
     "左滑 = 完成，右滑 = 放弃。如果跟你的滚动习惯冲突可以关掉。",
-  "settings.mobileForcePortrait.name": "锁定竖屏",
-  "settings.mobileForcePortrait.desc":
-    "提示系统保持竖屏。是否生效取决于设备是否允许 Web 应用锁定方向。",
+  "settings.mobileForceLayout.name": "强制移动布局",
+  "settings.mobileForceLayout.desc":
+    "无论屏幕宽度都保持窄/移动布局。iPad 横屏、分屏、大屏可折叠设备的用户如果更想要列式布局, 打开这个.",
   "settings.cliHeader": "CLI",
   "settings.cliHelp":
     "所有命令都注册到 Obsidian 原生 CLI（需要 Obsidian ≥ 1.12.2）。在终端这样调用：",
