@@ -999,7 +999,11 @@ export class TaskCenterView extends ItemView {
     if (t.status === "todo") this.renderAddSubtaskRow(card, t);
 
     this.wireCardEvents(card, t);
-    this.contextPopover.attach(card, t);
+    // Hover popover is desktop-only — UX-mobile.md §4: "不显 hover popover".
+    // On touch, browsers fire emulated mouseenter on first tap and stale
+    // mouseleave on next tap elsewhere; the popover would flash and stay.
+    // Long-press menu (M-3) replaces it on mobile.
+    if (!Platform.isMobile) this.contextPopover.attach(card, t);
   }
 
   // Renders a subcard + its own children recursively. The nested

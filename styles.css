@@ -964,4 +964,51 @@
   .task-center-view .bt-tab {
     flex-shrink: 0;
   }
+
+  /* ───── Card compact mode (US-505 / UX-mobile §4) ───── */
+
+  /* Hide the path footnote on mobile — it's noise at this width and the
+     full path lives in long-press source info anyway. */
+  .task-center-view .bt-meta-path {
+    display: none;
+  }
+
+  /* Meta row: single line, truncate with ellipsis if too many fields. */
+  .task-center-view .bt-card-meta {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Bigger touch target for the checkbox toggle (≥ 32px hit area while
+     keeping the visible icon the same size). */
+  .task-center-view .bt-check,
+  .task-center-view .bt-sub-check {
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Drag visual: scale up the floating card so the lift is felt on a
+     touchscreen where shadow alone is hard to read. */
+  .task-center-view .bt-card.dragging,
+  .task-center-view .bt-subcard.dragging {
+    transform: scale(1.04);
+    transform-origin: center;
+    opacity: 0.9;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .task-center-view .bt-card.dragging,
+    .task-center-view .bt-subcard.dragging {
+      transform: none;
+    }
+  }
+
+  /* Subtask add trigger always visible on mobile (no hover state). */
+  .task-center-view .bt-card .bt-subtask-add-trigger {
+    opacity: 1;
+  }
 }
