@@ -1000,12 +1000,6 @@
     transform-origin: center;
     opacity: 0.9;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .task-center-view .bt-card.dragging,
-    .task-center-view .bt-subcard.dragging {
-      transform: none;
-    }
-  }
 
   /* Subtask add trigger always visible on mobile (no hover state). */
   .task-center-view .bt-card .bt-subtask-add-trigger {
@@ -1073,6 +1067,16 @@
     border-radius: 50%;
     text-indent: -9999px;
     overflow: hidden;
+  }
+}
+
+/* Reduced-motion drop for the mobile drag scale (Rally nit: combined
+   media query — easier on older Chromium / non-nesting CSS pipelines
+   than `@media` nested inside `@media`). */
+@media (max-width: 599.98px) and (prefers-reduced-motion: reduce) {
+  .task-center-view .bt-card.dragging,
+  .task-center-view .bt-subcard.dragging {
+    transform: none;
   }
 }
 
