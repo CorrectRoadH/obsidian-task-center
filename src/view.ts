@@ -242,7 +242,11 @@ export class TaskCenterView extends ItemView {
     // files Obsidian has confirmed task-free). Subsequent calls are cache
     // hits — `cache.ensureAll` returns the existing flatten().
     await this.plugin.cache.forFlush();
-    this.tasks = await this.plugin.cache.ensureAll();
+    const all = await this.plugin.cache.ensureAll();
+    // US-107: silently drop blank-title task lines from the board. They're
+    // valid markdown (`- [ ] ⏳ 2026-04-25`) but produce no useful card.
+    // Filtering here also removes them from tab counts and tree traversals.
+    this.tasks = all.filter((t) => t.title.trim() !== "");
   }
 
   /**
@@ -860,12 +864,19 @@ export class TaskCenterView extends ItemView {
     const quad = this.quadrantClass(t.tags);
     if (quad) card.addClass(quad);
 
-    // Deadline signals
+    // Deadline signals — both a CSS hook (`bt-overdue` / `bt-near-deadline`)
+    // and a data attribute. e2e selectors live on the data attrs per
+    // ARCHITECTURE.md §8.6 (CSS class names are not part of the contract).
     if (t.deadline) {
       const today = todayISO();
       const dd = daysBetween(today, t.deadline);
-      if (dd < 0) card.addClass("overdue");
-      else if (dd <= 3) card.addClass("near-deadline");
+      if (dd < 0) {
+        card.addClass("bt-overdue");
+        card.dataset.overdue = "true";
+      } else if (dd <= 3) {
+        card.addClass("bt-near-deadline");
+        card.dataset.nearDeadline = "true";
+      }
     }
 
     // Title row
