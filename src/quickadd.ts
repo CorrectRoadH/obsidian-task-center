@@ -2,7 +2,7 @@ import { App, Modal, Platform, TextComponent } from "obsidian";
 import { TaskCenterApi } from "./cli";
 import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
-import { todayISO, addDays, isValidISO } from "./dates";
+import { todayISO, addDays, isValidISO, fromISO } from "./dates";
 import type { TaskCenterSettings } from "./types";
 
 export class QuickAddModal extends Modal {
@@ -48,12 +48,48 @@ export class QuickAddModal extends Modal {
       contentEl.createEl("h3", { text: tr("qa.title") });
     }
 
-    const text = new TextComponent(contentEl);
+    // Desktop v2 wraps input + inline parse hint in a single flex row so
+    // the hint sits to the right of the input on the same baseline.
+    // Mobile keeps the simple inline TextComponent placement (US-509
+    // bottom-sheet styling does the layout there).
+    const inputHost = !Platform.isMobile
+      ? contentEl.createDiv({ cls: "tc-qa-input-row" })
+      : contentEl;
+
+    const text = new TextComponent(inputHost);
     text.inputEl.addClass("task-center-quick-add-input");
     text.setPlaceholder(tr("qa.placeholder"));
     text.inputEl.style.width = "100%";
     text.onChange((v) => (this.input = v));
 
+    // Inline parse hint (US-167-2, desktop only). Updates each keystroke;
+    // shows the resolved ⏳ / 📅 ISO date in `→ ⏳ MM-DD (Day)` form.
+    // Tags and [estimate::] tokens are intentionally NOT echoed — they
+    // already appear verbatim in the input, repeating them is noise.
+    let inlineHint: HTMLElement | null = null;
+    if (!Platform.isMobile) {
+      inlineHint = inputHost.createSpan({ cls: "tc-qa-inline-hint" });
+    }
+
+    const refreshHint = () => {
+      if (!inlineHint) return;
+      const raw = text.inputEl.value;
+      if (!raw.trim()) {
+        inlineHint.setText("");
+        return;
+      }
+      try {
+        const parsed = parseQuickAdd(raw);
+        const parts: string[] = [];
+        if (parsed.scheduled) parts.push(`⏳ ${formatHintDate(parsed.scheduled)}`);
+        if (parsed.deadline) parts.push(`📅 ${formatHintDate(parsed.deadline)}`);
+        inlineHint.setText(parts.length ? `→ ${parts.join("  ")}` : "");
+      } catch {
+        inlineHint.setText("");
+      }
+    };
+
+    text.inputEl.addEventListener("input", refreshHint);
     text.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -126,6 +162,19 @@ export class QuickAddModal extends Modal {
 function contentErr(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// US-167-2: format an ISO date as `MM-DD (Day)` for the inline parse hint.
+// Year is omitted because the user typed a relative-near phrase
+// (today/tomorrow/周六) — month-day is enough disambiguation, year would
+// be visual noise.
+function formatHintDate(iso: string): string {
+  const d = fromISO(iso);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${mm}-${dd} (${WEEKDAY_SHORT[d.getDay()]})`;
 }
 
 const ZH_DAYS: Record<string, number> = {

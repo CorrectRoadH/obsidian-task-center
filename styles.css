@@ -1292,7 +1292,58 @@
   overflow: hidden;
 }
 .task-center-quick-add-v2.modal .modal-content {
-  padding: 18px 20px;
+  /* Spec UX.md §6.6: 20px vertical / 24px horizontal padding around the
+   * input region. Input itself has no padding — the row container owns
+   * the breathing room. */
+  padding: 20px 24px;
+}
+/* Input + inline-parse-hint row (US-167-2). Single flex baseline so the
+ * hint sits to the right of the input and shrinks gracefully. */
+.task-center-quick-add-v2 .tc-qa-input-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+/* Transparent input — no border, no background, no focus ring. The
+ * blinking cursor is the only focus affordance, matching Spotlight /
+ * Linear Cmd+K. */
+.task-center-quick-add-v2 .task-center-quick-add-input {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-normal);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+.task-center-quick-add-v2 .task-center-quick-add-input:focus {
+  box-shadow: none;
+  border: none;
+  outline: none;
+}
+.task-center-quick-add-v2 .task-center-quick-add-input::placeholder {
+  color: var(--text-faint);
+}
+/* Inline parse hint — `→ ⏳ 04-26 (Sat)` style. Monospace so dates
+ * align nicely; text-muted to stay subordinate to the input itself. */
+.task-center-quick-add-v2 .tc-qa-inline-hint {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Hide the v1 prose hint paragraph in v2 — chunk 3 replaces it with
+ * clickable quick chips, but until then keep the DOM in place (still
+ * rendered for mobile / a11y) and just suppress visually on desktop. */
+.task-center-quick-add-v2 .task-center-quick-add-hint {
+  display: none;
 }
 /* Drop the default Obsidian X close button — Esc / outside-click handles
  * dismissal. Keeping the button creates visual clutter against the
