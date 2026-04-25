@@ -160,7 +160,7 @@
 - `US-503` 周视图在移动端默认垂直 list（7 行折叠面板）；当前日默认展开，其余折叠；row header 显 `星期 MM-DD · N tasks · XhYm`。
 - `US-504` 月视图在移动端简化为"日历 + 数字 + 任务数圆点"，点格弹该日 list bottom sheet；不在格内画卡片。
 - `US-505` 移动端卡片紧凑模式——meta 行合并、子任务默认显 1 层（>1 显 `+N`，点开弹 bottom sheet 显全树）、拖动加 `scale 1.04`。
-- `US-506` 长按卡片 ≥ 500ms 弹"右键菜单 + 源信息"合并 sheet；按住但移动 ≥ 4px = 改走拖拽，不并发触发。
+- `US-506` 长按卡片 ≥ 500ms（且未移动）弹"右键菜单 + 源信息"合并 sheet。按压周期内若移动 ≥ 4px（最早 250ms 后生效）→ 改走拖拽（详 US-507），long-press menu 取消；两者由同一手势 controller 仲裁，**互斥不并发**。
 - `US-507` 移动端拖拽 long-press 250ms 进入 drag mode；跨 tab dwell 800ms（vs 桌面 600ms，手指比鼠标抖）；自动滚动边缘 60px（vs 桌面 40px）；状态栏小部件不存在，`📋 N today · ⚠ M overdue` 嵌进 board header。
 - `US-508` 左滑卡 = 标完成、右滑卡 = 放弃；阈值 30% 卡宽，触发后 1 秒 toast 内 undo 可撤销。
 - `US-509` Quick Add 在移动端是 bottom sheet，软键盘弹出时自动避让，sheet 上移到键盘上方 + 8px。
