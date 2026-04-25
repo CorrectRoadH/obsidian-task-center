@@ -80,3 +80,109 @@ export function attachLongPress(
     cancel();
   };
 }
+
+export interface SwipeOptions {
+  /** Fraction of element width that must be crossed to commit. Default 0.30. */
+  thresholdRatio?: number;
+  /** Fired when the user swipes left past the threshold. */
+  onSwipeLeft?: () => void;
+  /** Fired when the user swipes right past the threshold. */
+  onSwipeRight?: () => void;
+  /**
+   * Optional progress callback (0..1) per pointermove tick. Default writes
+   * `--tc-swipe-progress` and `--tc-swipe-direction` (left|right) on the
+   * element so styles.css can render visual feedback without JS knowing
+   * about colors.
+   */
+  onProgress?: (
+    el: HTMLElement,
+    direction: "left" | "right" | null,
+    progress: number,
+  ) => void;
+}
+
+/**
+ * Attach a horizontal-swipe-to-action detector. Vertical movement cancels
+ * the gesture (so vertical scroll keeps working). Swipe and long-press
+ * coexist on the same element: long-press cancels itself once the user
+ * starts moving, so the gestures are mutually exclusive without explicit
+ * coordination.
+ */
+export function attachSwipe(
+  el: HTMLElement,
+  opts: SwipeOptions,
+): () => void {
+  const ratio = opts.thresholdRatio ?? 0.3;
+  let active = false;
+  let startX = 0;
+  let startY = 0;
+  let elWidth = 0;
+
+  const writeProgress = (
+    direction: "left" | "right" | null,
+    progress: number,
+  ) => {
+    if (opts.onProgress) {
+      opts.onProgress(el, direction, progress);
+      return;
+    }
+    if (direction === null) {
+      el.style.removeProperty("--tc-swipe-progress");
+      el.style.removeProperty("--tc-swipe-direction");
+    } else {
+      el.style.setProperty("--tc-swipe-progress", String(progress));
+      el.style.setProperty("--tc-swipe-direction", direction);
+    }
+  };
+
+  const reset = () => {
+    if (!active) return;
+    active = false;
+    writeProgress(null, 0);
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", reset);
+  };
+
+  const onMove = (e: PointerEvent) => {
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    // If the user is mostly moving vertically, this isn't a swipe — cancel
+    // and let the page scroll / outer scroller take over.
+    if (Math.abs(dy) > Math.abs(dx)) {
+      reset();
+      return;
+    }
+    const direction: "left" | "right" = dx < 0 ? "left" : "right";
+    const progress = Math.min(Math.abs(dx) / (elWidth * ratio), 1);
+    writeProgress(direction, progress);
+  };
+
+  const onUp = (e: PointerEvent) => {
+    const dx = e.clientX - startX;
+    const direction: "left" | "right" = dx < 0 ? "left" : "right";
+    const progress = elWidth > 0 ? Math.abs(dx) / (elWidth * ratio) : 0;
+    reset();
+    if (progress < 1) return;
+    if (direction === "left" && opts.onSwipeLeft) opts.onSwipeLeft();
+    else if (direction === "right" && opts.onSwipeRight) opts.onSwipeRight();
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX;
+    startY = e.clientY;
+    elWidth = el.getBoundingClientRect().width;
+    active = true;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", reset);
+  };
+
+  el.addEventListener("pointerdown", onDown);
+  return () => {
+    el.removeEventListener("pointerdown", onDown);
+    reset();
+  };
+}
+

@@ -1006,6 +1006,34 @@
     opacity: 1;
   }
 
+  /* Swipe progress feedback (US-508): the swipe controller writes
+     `--tc-swipe-progress` (0..1) and `--tc-swipe-direction` (left|right)
+     on the card; we paint a translucent overlay that grows with progress.
+     Left-swipe = done (green), right-swipe = drop (red). */
+  .task-center-view .bt-card[style*="--tc-swipe-direction"] {
+    position: relative;
+    overflow: hidden;
+  }
+  .task-center-view .bt-card[style*="left"]::after,
+  .task-center-view .bt-card[style*="right"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--tc-swipe-progress, 0) * 100%);
+    pointer-events: none;
+    opacity: 0.45;
+  }
+  .task-center-view .bt-card[style*="left"]::after {
+    left: auto;
+    right: 0;
+    background: var(--color-green);
+  }
+  .task-center-view .bt-card[style*="right"]::after {
+    left: 0;
+    background: var(--color-red);
+  }
+
   /* ───── Week view: vertical collapsible list (US-503) ───── */
 
   /* Stack the 7 day rows top-to-bottom instead of side-by-side. */

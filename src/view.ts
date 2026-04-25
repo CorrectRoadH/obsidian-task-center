@@ -30,7 +30,7 @@ import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
 import { ContextPopoverController } from "./view/popover";
 import { BottomSheet } from "./view/bottom-sheet";
-import { attachLongPress } from "./view/touch";
+import { attachLongPress, attachSwipe } from "./view/touch";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -1148,7 +1148,45 @@ export class TaskCenterView extends ItemView {
         moveThresholdPx: 4,
         onTrigger: () => this.openCardActionSheet(t),
       });
+      // US-508: left-swipe = done, right-swipe = drop. Long-press cancels
+      // itself once the user moves, so swipe and long-press are mutually
+      // exclusive without extra coordination. Threshold = 30% card width.
+      attachSwipe(card, {
+        thresholdRatio: 0.3,
+        onSwipeLeft: () => this.swipeAction(t, "done"),
+        onSwipeRight: () => this.swipeAction(t, "drop"),
+      });
     }
+  }
+
+  /**
+   * US-508: commit a swipe action. Pushes the resulting byte-level diff to
+   * the undo stack so the user can recover via the long-press menu (M-3
+   * step 3 will surface an explicit undo button there). Notice toast is
+   * 1s — short enough not to block, long enough to register what happened.
+   */
+  private async swipeAction(t: ParsedTask, kind: "done" | "drop"): Promise<void> {
+    try {
+      const r =
+        kind === "done" ? await this.api.done(t.id) : await this.api.drop(t.id);
+      if (!r.unchanged) {
+        this.undoStack.push({
+          label: kind === "done" ? "swipe done" : "swipe drop",
+          ops: [
+            {
+              path: t.path,
+              line: t.line,
+              before: [r.before],
+              after: [r.after],
+            },
+          ],
+        });
+      }
+      new Notice(kind === "done" ? "✓ Done" : "🗑 Dropped", 1000);
+    } catch (err) {
+      new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+    }
+    this.scheduleRefresh();
   }
 
   // Renders a subcard + its own children recursively. The nested
