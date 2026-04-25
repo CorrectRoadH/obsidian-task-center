@@ -80,6 +80,11 @@ export class MobileDragController<TabKey extends string> {
   private active = false;
   private taskId: string | null = null;
   private lastHit: DragHitState = blankHit();
+  // Cached clone dimensions: clone size doesn't change during a drag, so
+  // reading getBoundingClientRect() on every pointermove just to get the
+  // same width triggers needless layout. Cache once in begin().
+  private cloneW = 0;
+  private cloneH = 0;
 
   constructor(private readonly opts: MobileDragOptions<TabKey>) {
     this.dwell = new TabDwellTracker<TabKey>({
@@ -107,15 +112,17 @@ export class MobileDragController<TabKey extends string> {
     // Floating clone — visually echo the source card. CSS handles the look
     // (opacity, shadow); JS only owns position + size.
     const rect = card.getBoundingClientRect();
+    this.cloneW = rect.width;
+    this.cloneH = rect.height;
     const clone = card.cloneNode(true) as HTMLElement;
     clone.classList.add("bt-mobile-drag-clone");
     clone.style.position = "fixed";
     clone.style.left = "0px";
     clone.style.top = "0px";
-    clone.style.width = `${rect.width}px`;
+    clone.style.width = `${this.cloneW}px`;
     clone.style.pointerEvents = "none";
     clone.style.zIndex = "9999";
-    clone.style.transform = `translate(${x - rect.width / 2}px, ${y - rect.height / 2}px)`;
+    clone.style.transform = `translate(${x - this.cloneW / 2}px, ${y - this.cloneH / 2}px)`;
     document.body.appendChild(clone);
     this.clone = clone;
 
@@ -144,8 +151,9 @@ export class MobileDragController<TabKey extends string> {
   private handleMove(x: number, y: number): void {
     if (!this.clone) return;
     this.lastPointerY = y;
-    const rect = this.clone.getBoundingClientRect();
-    this.clone.style.transform = `translate(${x - rect.width / 2}px, ${y - rect.height / 2}px)`;
+    // Use cached clone dims — getBoundingClientRect() in this hot path
+    // forces a layout. Clone size is fixed for the duration of a drag.
+    this.clone.style.transform = `translate(${x - this.cloneW / 2}px, ${y - this.cloneH / 2}px)`;
 
     const hit = this.classifyHit(x, y);
     this.paintHover(hit);

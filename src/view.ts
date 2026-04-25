@@ -1166,7 +1166,7 @@ export class TaskCenterView extends ItemView {
         onLongPress: () => this.openCardActionSheet(t),
         onSwipeLeft: () => this.swipeAction(t, "done"),
         onSwipeRight: () => this.swipeAction(t, "drop"),
-        onDragArmed: () => this.mobileDragSession(card, t),
+        onDragArmed: (e) => this.mobileDragSession(card, t, e.clientX, e.clientY),
       });
     }
   }
@@ -1179,7 +1179,7 @@ export class TaskCenterView extends ItemView {
    * api.schedule / api.drop / api.nest pipeline (so undo + animation +
    * notice toasts all reuse the desktop code paths).
    */
-  private mobileDragSession(card: HTMLElement, t: ParsedTask) {
+  private mobileDragSession(card: HTMLElement, t: ParsedTask, x: number, y: number) {
     if (!this.mobileDrag) {
       this.mobileDrag = new MobileDragController<TabKey>({
         scrollEl: this.contentEl,
@@ -1196,7 +1196,7 @@ export class TaskCenterView extends ItemView {
         onNestDrop: (droppedId, parentId) => this.handleMobileNestDrop(droppedId, parentId),
       });
     }
-    return this.mobileDrag.begin(card, t.id, /* x= */ 0, /* y= */ 0);
+    return this.mobileDrag.begin(card, t.id, x, y);
   }
 
   private async handleMobileScheduleDrop(taskId: string, dateISO: string): Promise<void> {
