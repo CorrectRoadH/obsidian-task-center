@@ -1006,6 +1006,23 @@
     opacity: 1;
   }
 
+  /* `+N` chip on subcards with deeper subtrees (US-505). Tap → bottom
+     sheet with full tree. Visual: small pill at the right of the subcard. */
+  .task-center-view .bt-subcard-more {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--background-modifier-border);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-center-view .bt-subcard-more:active {
+    background: var(--background-modifier-hover);
+  }
+
   /* Swipe progress feedback (US-508): the swipe controller writes
      `--tc-swipe-progress` (0..1) and `--tc-swipe-direction` (left|right)
      on the card; we paint a translucent overlay that grows with progress.

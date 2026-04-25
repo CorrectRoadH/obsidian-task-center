@@ -1225,12 +1225,100 @@ export class TaskCenterView extends ItemView {
 
     const grandLines = c.childrenLines;
     if (grandLines.length > 0) {
-      const sub = container.createDiv({ cls: "bt-card-children" });
-      const grand = grandLines
-        .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
-        .filter((x): x is ParsedTask => !!x);
-      for (const g of grand) this.renderSubcard(sub, g, c);
+      if (Platform.isMobile) {
+        // US-505: mobile collapses to 1 level. Each subcard with deeper
+        // children gets a `+N` chip; tapping it opens a bottom-sheet
+        // preview of the full subtree (recursive semantic preserved per
+        // US-142 — just visually deferred).
+        const total = this.countDescendants(c);
+        const more = subCard.createDiv({ cls: "bt-subcard-more" });
+        more.setText(`+${total}`);
+        more.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openSubtreeSheet(c);
+        });
+      } else {
+        const sub = container.createDiv({ cls: "bt-card-children" });
+        const grand = grandLines
+          .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
+          .filter((x): x is ParsedTask => !!x);
+        for (const g of grand) this.renderSubcard(sub, g, c);
+      }
     }
+  }
+
+  /** Count all descendants (children + grandchildren + …) of a task. */
+  private countDescendants(c: ParsedTask): number {
+    let count = 0;
+    const queue: number[] = [...c.childrenLines];
+    const seen = new Set<number>();
+    while (queue.length > 0) {
+      const line = queue.shift()!;
+      if (seen.has(line)) continue;
+      seen.add(line);
+      const child = this.tasks.find((t) => t.path === c.path && t.line === line);
+      if (child) {
+        count++;
+        queue.push(...child.childrenLines);
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Mobile-only: open a bottom-sheet preview of a subtree. Each descendant
+   * renders as one row, indented by depth. Used by the `+N` chip on
+   * subcards (US-505 second sentence — visual collapse to 1 level, full
+   * tree available on demand).
+   */
+  private openSubtreeSheet(root: ParsedTask): void {
+    // Walk the subtree depth-first, recording each task with its depth
+    // relative to the root. Same-file children only (ARCHITECTURE §1.4).
+    const rows: Array<{ task: ParsedTask; depth: number }> = [];
+    const walk = (parent: ParsedTask, depth: number) => {
+      for (const line of parent.childrenLines) {
+        const child = this.tasks.find(
+          (t) => t.path === parent.path && t.line === line,
+        );
+        if (!child) continue;
+        rows.push({ task: child, depth });
+        walk(child, depth + 1);
+      }
+    };
+    walk(root, 0);
+
+    const sheet = new BottomSheet(this.app, {
+      title: root.title,
+      populate: (el) => {
+        if (rows.length === 0) {
+          el.createDiv({ cls: "bt-sheet-empty", text: tr("sheet.empty") });
+          return;
+        }
+        for (const { task, depth } of rows) {
+          const row = el.createDiv({ cls: "bt-sheet-task" });
+          row.dataset.taskId = task.id;
+          // Indent visually by depth — uses padding-left so the row stays
+          // a normal flex container for the title + meta.
+          row.style.paddingLeft = `${8 + depth * 16}px`;
+          row.createSpan({
+            cls: "bt-sheet-task-title",
+            text: `${statusIcon(task.status)} ${task.title}`,
+          });
+          if (task.scheduled) {
+            row.createSpan({
+              cls: "bt-sheet-task-meta",
+              text: `⏳ ${task.scheduled}`,
+            });
+          }
+          row.addEventListener("click", () => {
+            sheet.close();
+            this.state.selectedTaskId = task.id;
+            this.render();
+          });
+        }
+      },
+    });
+    sheet.open();
   }
 
   // Context hover popover lives in `./view/popover` (ContextPopoverController).
