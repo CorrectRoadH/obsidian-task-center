@@ -6,5 +6,5 @@
   "description": "Task board + CLI for energy-based task management. Full kanban GUI + shell CLI on top of Obsidian Tasks syntax.",
   "author": "ctrdh",
   "authorUrl": "",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }
