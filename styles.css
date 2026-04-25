@@ -952,4 +952,16 @@
   .task-center-view .bt-toolbar .bt-add-btn {
     display: none;
   }
+
+  /* Tab bar: 4 tabs + counts won't fit on a 360px phone — horizontal scroll
+     instead of wrapping (UX-mobile §2 / §12, Leo follow-up). Momentum
+     scroll for iOS. */
+  .task-center-view .bt-tabbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .task-center-view .bt-tab {
+    flex-shrink: 0;
+  }
 }
