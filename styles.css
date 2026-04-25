@@ -1211,3 +1211,39 @@
 .task-center-bottom-sheet .bt-sheet-action:active {
   background: var(--background-modifier-hover);
 }
+
+/* ============================================================================
+ * Mobile drag (US-507) — floating clone follows the pointer; the original
+ * card stays put (slightly muted via .dragging) so the user can see where
+ * the card came from.
+ * ============================================================================ */
+.bt-mobile-drag-clone {
+  /* Position is set inline (transform: translate(...)) by the controller. */
+  opacity: 0.85;
+  box-shadow: var(--shadow-l);
+  border-radius: 6px;
+  /* Touch should never interact with the clone; controller already sets
+   * pointer-events: none inline, this is belt-and-suspenders for paths
+   * that strip inline styles. */
+  pointer-events: none;
+  /* Keep the clone visually contained — too tall a clone is awkward when
+   * it overlays half the screen. */
+  max-height: 60vh;
+  overflow: hidden;
+}
+
+/* Visual hover paint applied by MobileDragController.paintHover. Same
+ * underlying CSS variables as desktop drop-hover so the feel is consistent. */
+.task-center-view [data-tc-drop-hover="true"] {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  background: var(--background-modifier-hover);
+}
+.task-center-view [data-task-id][data-tc-drop-hover="true"] {
+  /* Card-as-nest-target: stronger highlight than a column */
+  outline-color: var(--color-green);
+}
+.task-center-view [data-drop-zone="trash"][data-tc-drop-hover="true"] {
+  outline-color: var(--color-red);
+  background: var(--background-modifier-error-hover, var(--background-modifier-hover));
+}

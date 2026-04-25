@@ -30,7 +30,8 @@ import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
 import { ContextPopoverController } from "./view/popover";
 import { BottomSheet } from "./view/bottom-sheet";
-import { attachLongPress, attachSwipe } from "./view/touch";
+import { attachCardGestures } from "./view/touch";
+import { MobileDragController } from "./view/drag-mobile";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -87,6 +88,9 @@ export class TaskCenterView extends ItemView {
   // Undo stack — only records writes initiated from this view (drag / keyboard).
   // CLI writes are not captured. Max 20 entries (UndoStack.MAX).
   private undoStack: UndoStack;
+  // Mobile drag controller (US-507) — pointer-based replacement for HTML5
+  // DnD that doesn't fire from touch. Lazily created on first mobile drag.
+  private mobileDrag: MobileDragController<TabKey> | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
@@ -154,6 +158,10 @@ export class TaskCenterView extends ItemView {
     }
     this.dwellTracker.reset();
     this.contextPopover.close();
+    if (this.mobileDrag) {
+      this.mobileDrag.destroy();
+      this.mobileDrag = null;
+    }
   }
 
   private scheduleRefresh() {
@@ -1143,19 +1151,123 @@ export class TaskCenterView extends ItemView {
     if (!Platform.isMobile) {
       this.contextPopover.attach(card, t);
     } else {
-      attachLongPress(card, {
-        durationMs: 500,
+      // Unified mobile gesture controller (UX-mobile §13 #6: long-press +
+      // drag + swipe must share one state machine). attachCardGestures
+      // routes:
+      //   - hold 500ms still     → openCardActionSheet (US-506)
+      //   - swipe ≥ 30% left     → done (US-508)
+      //   - swipe ≥ 30% right    → drop (US-508)
+      //   - hold 250ms then move → enter pointer-drag (US-507)
+      attachCardGestures(card, {
+        longPressMs: 500,
+        dragArmMs: 250,
         moveThresholdPx: 4,
-        onTrigger: () => this.openCardActionSheet(t),
-      });
-      // US-508: left-swipe = done, right-swipe = drop. Long-press cancels
-      // itself once the user moves, so swipe and long-press are mutually
-      // exclusive without extra coordination. Threshold = 30% card width.
-      attachSwipe(card, {
-        thresholdRatio: 0.3,
+        swipeThresholdRatio: 0.3,
+        onLongPress: () => this.openCardActionSheet(t),
         onSwipeLeft: () => this.swipeAction(t, "done"),
         onSwipeRight: () => this.swipeAction(t, "drop"),
+        onDragArmed: () => this.mobileDragSession(card, t),
       });
+    }
+  }
+
+  /**
+   * Lazy-initialise the mobile drag controller and start a session for
+   * `card`. Called from `attachCardGestures.onDragArmed`. The controller
+   * owns the floating clone + hit-testing + dwell + edge-scroll; this
+   * function only wires its drop handlers back into the existing
+   * api.schedule / api.drop / api.nest pipeline (so undo + animation +
+   * notice toasts all reuse the desktop code paths).
+   */
+  private mobileDragSession(card: HTMLElement, t: ParsedTask) {
+    if (!this.mobileDrag) {
+      this.mobileDrag = new MobileDragController<TabKey>({
+        scrollEl: this.contentEl,
+        contentEl: this.contentEl,
+        // UX-mobile §5.2: 800ms (vs desktop 600ms — fingers are jitterier).
+        dwellMs: 800,
+        // UX-mobile §5.2: 60px edge → auto-scroll.
+        edgeScrollPx: 60,
+        edgeScrollMaxSpeed: 600,
+        getCurrentTab: () => this.state.tab,
+        onTabSwitch: (tab) => this.setTab(tab),
+        onScheduleDrop: (taskId, dateISO) => this.handleMobileScheduleDrop(taskId, dateISO),
+        onTrashDrop: (taskId) => this.handleMobileTrashDrop(taskId),
+        onNestDrop: (droppedId, parentId) => this.handleMobileNestDrop(droppedId, parentId),
+      });
+    }
+    return this.mobileDrag.begin(card, t.id, /* x= */ 0, /* y= */ 0);
+  }
+
+  private async handleMobileScheduleDrop(taskId: string, dateISO: string): Promise<void> {
+    const task = this.tasks.find((x) => x.id === taskId);
+    if (!task) return;
+    if ((task.scheduled ?? null) === dateISO) return; // no-op same-day drop
+    try {
+      await this.runWithRemoveAnim(taskId, async () => {
+        const r = await this.api.schedule(taskId, dateISO);
+        if (!r.unchanged) {
+          this.undoStack.push({
+            label: `⏳ ${dateISO}`,
+            ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
+          });
+          new Notice(tr("notice.scheduled", { date: dateISO }));
+        }
+      });
+    } catch (err) {
+      new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+      this.scheduleRefresh();
+    }
+  }
+
+  private async handleMobileTrashDrop(taskId: string): Promise<void> {
+    const task = this.tasks.find((x) => x.id === taskId);
+    if (!task) return;
+    try {
+      await this.runWithRemoveAnim(taskId, async () => {
+        const r = await this.api.drop(taskId);
+        if (!r.unchanged) {
+          this.undoStack.push({
+            label: "🗑 dropped",
+            ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
+          });
+          new Notice(tr("trash.dropped"));
+        }
+      });
+    } catch (err) {
+      new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+      this.scheduleRefresh();
+    }
+  }
+
+  private async handleMobileNestDrop(droppedId: string, parentId: string): Promise<void> {
+    if (droppedId === parentId) return;
+    const droppedTask = this.tasks.find((x) => x.id === droppedId);
+    const parentTask = this.tasks.find((x) => x.id === parentId);
+    if (!droppedTask || !parentTask) return;
+    const awaitCachePaths = [parentTask.path];
+    if (droppedTask.path !== parentTask.path) awaitCachePaths.push(droppedTask.path);
+    try {
+      await this.runWithRemoveAnim(droppedId, async () => {
+        const r = await this.api.nest(droppedId, parentId);
+        if (!r.unchanged) {
+          if (r.undoOps && r.undoOps.length > 0) {
+            this.undoStack.push({
+              label: `nest under "${parentTask.title.slice(0, 20)}"`,
+              ops: r.undoOps,
+            });
+          }
+          new Notice(
+            tr("notice.nested", {
+              title: parentTask.title,
+              where: r.crossFile ? tr("notice.crossFile") : "",
+            }),
+          );
+        }
+      }, { awaitCachePaths });
+    } catch (err) {
+      new Notice(tr("notice.error", { msg: (err as Error).message }), 6000);
+      this.scheduleRefresh();
     }
   }
 
