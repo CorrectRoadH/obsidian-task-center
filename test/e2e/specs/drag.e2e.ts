@@ -73,24 +73,17 @@ async function openBoardWeekView() {
   await forFlush();
   // Switch to the week tab if not already there.
   await browser.execute(() => {
-    const tabs = document.querySelectorAll(".task-center-view [role='tab'], .task-center-view .bt-tab");
-    for (const t of Array.from(tabs)) {
-      if (t.textContent?.includes("本周") || t.textContent?.includes("Week")) {
-        (t as HTMLElement).click();
-        return;
-      }
-    }
+    const tab = document.querySelector<HTMLElement>(".task-center-view [data-tab='week']");
+    tab?.click();
   });
   await browser.waitUntil(
-    async () => {
-      const active = await browser.execute(() => {
-        const el = document.querySelector(
-          ".task-center-view [role='tab'][aria-selected='true'], .task-center-view .bt-tab.active",
-        );
-        return el?.textContent ?? "";
-      });
-      return String(active).includes("本周") || String(active).includes("Week");
-    },
+    () =>
+      browser.execute(
+        () =>
+          !!document.querySelector(
+            ".task-center-view [data-tab='week'].active, .task-center-view [data-tab='week'][aria-selected='true']",
+          ),
+      ),
     { timeout: 3000, interval: 100, timeoutMsg: "Week tab did not become active" },
   );
 }

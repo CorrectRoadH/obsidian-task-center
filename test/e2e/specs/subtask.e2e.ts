@@ -59,25 +59,17 @@ async function readFile(path: string): Promise<string> {
 
 async function switchToWeekTab() {
   await browser.execute(() => {
-    const tabs = document.querySelectorAll(".task-center-view [role='tab'], .task-center-view .bt-tab");
-    for (const t of Array.from(tabs)) {
-      if (t.textContent?.includes("本周") || t.textContent?.includes("Week")) {
-        (t as HTMLElement).click();
-        return;
-      }
-    }
+    const tab = document.querySelector<HTMLElement>(".task-center-view [data-tab='week']");
+    tab?.click();
   });
-  // Use waitUntil instead of a fixed pause — cheaper and more reliable.
   await browser.waitUntil(
-    async () => {
-      const active = await browser.execute(() => {
-        const el = document.querySelector(
-          ".task-center-view [role='tab'][aria-selected='true'], .task-center-view .bt-tab.active",
-        );
-        return el?.textContent ?? "";
-      });
-      return String(active).includes("本周") || String(active).includes("Week");
-    },
+    () =>
+      browser.execute(
+        () =>
+          !!document.querySelector(
+            ".task-center-view [data-tab='week'].active, .task-center-view [data-tab='week'][aria-selected='true']",
+          ),
+      ),
     { timeout: 3000, interval: 100, timeoutMsg: "Week tab did not become active" },
   );
 }
@@ -166,8 +158,11 @@ describe("Task Center — 子任务 (US-141/162)", function () {
           }
         }
       });
-      await browser.pause(150);
     }
+    await $(".task-center-view [data-date='2026-04-12']").waitForExist({
+      timeout: 3000,
+      timeoutMsg: "week containing 2026-04-12 did not appear after navigating back",
+    });
 
     const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
@@ -216,7 +211,10 @@ describe("Task Center — 子任务 (US-141/162)", function () {
         }
       }
     });
-    await browser.pause(150);
+    await $(`.task-center-view [data-date='${today}']`).waitForExist({
+      timeout: 2000,
+      timeoutMsg: "today's column did not appear after clicking Today",
+    });
 
     const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
