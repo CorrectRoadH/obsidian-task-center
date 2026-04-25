@@ -146,6 +146,21 @@ export class TaskCenterView extends ItemView {
     // Keyboard
     this.contentEl.tabIndex = 0;
     this.registerDomEvent(this.contentEl, "keydown", (e) => this.handleKey(e));
+
+    // US-510: best-effort portrait lock on mobile when user has the setting
+    // on. screen.orientation.lock requires fullscreen on most browsers and
+    // is blocked entirely on iOS Safari — we silently swallow the rejection
+    // rather than show an error nobody can act on.
+    if (Platform.isMobile && this.plugin.settings.mobileForcePortrait) {
+      const ori = (screen as Screen & {
+        orientation?: { lock?: (o: string) => Promise<void> };
+      }).orientation;
+      if (ori?.lock) {
+        ori.lock("portrait").catch(() => {
+          /* OS denied — expected on iOS Safari and Obsidian Mobile in some modes */
+        });
+      }
+    }
   }
 
   async onClose(): Promise<void> {
@@ -384,7 +399,8 @@ export class TaskCenterView extends ItemView {
   private renderOnboarding(parent: HTMLElement) {
     const wrap = parent.createDiv({ cls: "bt-onboarding" });
     wrap.createEl("h2", { text: tr("onboarding.title") });
-    wrap.createEl("p", { text: tr("onboarding.body") });
+    // UX-mobile §10: desktop body mentions Cmd/Ctrl+T which doesn't apply.
+    wrap.createEl("p", { text: tr(Platform.isMobile ? "onboarding.mobileBody" : "onboarding.body") });
     const btn = wrap.createEl("button", { text: tr("onboarding.cta"), cls: "bt-onboarding-cta" });
     btn.addEventListener("click", () => this.openQuickAdd());
   }
@@ -1036,7 +1052,8 @@ export class TaskCenterView extends ItemView {
       cls: "bt-unscheduled-big-label",
     });
     const hint = head.createSpan({ cls: "bt-unscheduled-big-hint" });
-    hint.setText(tr("unscheduled.hint"));
+    // UX-mobile §10: shortcut hint is desktop-only.
+    hint.setText(tr(Platform.isMobile ? "unscheduled.mobileHint" : "unscheduled.hint"));
 
     // Group by quadrant
     const otherLabel = tr("pool.other");
@@ -1154,18 +1171,25 @@ export class TaskCenterView extends ItemView {
       // Unified mobile gesture controller (UX-mobile §13 #6: long-press +
       // drag + swipe must share one state machine). attachCardGestures
       // routes:
-      //   - hold 500ms still     → openCardActionSheet (US-506)
-      //   - swipe ≥ 30% left     → done (US-508)
-      //   - swipe ≥ 30% right    → drop (US-508)
+      //   - hold N ms still      → openCardActionSheet (US-506)
+      //   - swipe ≥ 30% left     → done (US-508; settings can disable)
+      //   - swipe ≥ 30% right    → drop (US-508; settings can disable)
       //   - hold 250ms then move → enter pointer-drag (US-507)
+      const settings = this.plugin.settings;
       attachCardGestures(card, {
-        longPressMs: 500,
+        longPressMs: settings.mobileLongPressMs,
         dragArmMs: 250,
         moveThresholdPx: 4,
         swipeThresholdRatio: 0.3,
         onLongPress: () => this.openCardActionSheet(t),
-        onSwipeLeft: () => this.swipeAction(t, "done"),
-        onSwipeRight: () => this.swipeAction(t, "drop"),
+        // Per US-510, swipe is opt-out via settings. When disabled the
+        // gesture controller still parses left/right but never commits.
+        onSwipeLeft: settings.mobileSwipeEnabled
+          ? () => this.swipeAction(t, "done")
+          : undefined,
+        onSwipeRight: settings.mobileSwipeEnabled
+          ? () => this.swipeAction(t, "drop")
+          : undefined,
         onDragArmed: (e) => this.mobileDragSession(card, t, e.clientX, e.clientY),
       });
     }
@@ -1708,10 +1732,20 @@ export class TaskCenterView extends ItemView {
         text: ` · ${selected.path}:L${selected.line + 1}`,
         cls: "bt-footer-selected-path",
       });
-      bar.createSpan({
-        text: " · " + tr("footer.hint"),
-        cls: "bt-footer-selected-hint",
-      });
+      // UX-mobile §10: keyboard shortcut hints don't apply on touch — the
+      // gestures replace them — so suppress the hint string entirely on
+      // mobile. The selected-task line itself remains useful.
+      if (!Platform.isMobile) {
+        bar.createSpan({
+          text: " · " + tr("footer.hint"),
+          cls: "bt-footer-selected-hint",
+        });
+      } else {
+        bar.createSpan({
+          text: " · " + tr("footer.mobileHint"),
+          cls: "bt-footer-selected-hint",
+        });
+      }
     }
   }
 

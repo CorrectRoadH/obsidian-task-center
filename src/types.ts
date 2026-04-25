@@ -41,6 +41,10 @@ export interface TaskCenterSettings {
   // Last tab the user was on when they closed the board. Persists across
   // Obsidian restarts so morning-open lands where evening-close left off.
   lastTab: "week" | "month" | "completed" | "unscheduled" | null;
+  // Mobile-specific (US-510). Safe defaults so desktop users see no change.
+  mobileLongPressMs: number; // 200..1000, default 500
+  mobileSwipeEnabled: boolean; // default true (left=done, right=drop)
+  mobileForcePortrait: boolean; // default false (don't force orientation lock)
 }
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
@@ -51,6 +55,9 @@ export const DEFAULT_SETTINGS: TaskCenterSettings = {
   weekStartsOn: 1,
   stampCreated: true,
   lastTab: null,
+  mobileLongPressMs: 500,
+  mobileSwipeEnabled: true,
+  mobileForcePortrait: false,
 };
 
 export const VIEW_TYPE_TASK_CENTER = "task-center-board";

@@ -52,6 +52,8 @@ const EN = {
   // Unscheduled big view
   "unscheduled.hint":
     "Shortcuts: D date · Space done · 1-4 quadrant · Delete drop",
+  "unscheduled.mobileHint":
+    "Long-press a card for actions · swipe left = done · swipe right = drop",
 
   // Trash
   "trash.title": "Trash",
@@ -72,6 +74,8 @@ const EN = {
   "onboarding.title": "No tasks yet",
   "onboarding.body":
     "Create your first task: hit Cmd/Ctrl+T here, click + Add, or add a checkbox line in any note: `- [ ] My task #2q ⏳ tomorrow [estimate:: 30m]`.",
+  "onboarding.mobileBody":
+    "Create your first task: tap + Add below, or write `- [ ] My task #2q ⏳ tomorrow [estimate:: 30m]` in any note.",
   "onboarding.cta": "+ Add your first task",
   "completed.total": "total {actual}m",
 
@@ -80,6 +84,8 @@ const EN = {
   "footer.selected": "selected",
   "footer.hint":
     "1-4 quadrant · ←/→ day · D date · Space done · E edit · Delete drop · Ctrl+Z undo · / search",
+  "footer.mobileHint":
+    "long-press for menu · swipe left = done · swipe right = drop · drag to reschedule",
 
   // Notices
   "notice.scheduled": "→ ⏳ {date}",
@@ -145,6 +151,16 @@ const EN = {
   "settings.openOnStartup.name": "Open board on startup",
   "settings.openOnStartup.desc":
     "Opens the task board view automatically when Obsidian starts.",
+  "settings.mobileHeader": "Mobile",
+  "settings.mobileLongPress.name": "Long-press duration (ms)",
+  "settings.mobileLongPress.desc":
+    "Hold a card this long with no movement to open the action sheet. Higher = fewer accidental opens; lower = snappier.",
+  "settings.mobileSwipe.name": "Swipe gestures",
+  "settings.mobileSwipe.desc":
+    "Left = mark done, right = drop. Disable if swipes conflict with your scroll habits.",
+  "settings.mobileForcePortrait.name": "Lock to portrait orientation",
+  "settings.mobileForcePortrait.desc":
+    "Hint to the device to keep the board in portrait. Honoured only when the OS allows orientation lock from web apps.",
   "settings.cliHeader": "CLI",
   "settings.cliHelp":
     "Verbs register to the native Obsidian CLI (requires Obsidian 1.12.2+). Call them from your shell:",
@@ -177,6 +193,8 @@ const ZH: Partial<typeof EN> = {
 
   "unscheduled.hint":
     "快捷键: D 选日期 · Space 完成 · 1-4 改象限 · Delete 放弃",
+  "unscheduled.mobileHint":
+    "长按卡片打开操作 · 左滑 = 完成 · 右滑 = 放弃",
 
   "trash.title": "垃圾站",
   "trash.hint": "拖到此处 → [-] ❌",
@@ -193,6 +211,8 @@ const ZH: Partial<typeof EN> = {
   "onboarding.title": "还没有任务",
   "onboarding.body":
     "创建第一条任务：在此按 Cmd/Ctrl+T，或点击 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #2象限 ⏳ 明天 [estimate:: 30m]`。",
+  "onboarding.mobileBody":
+    "创建第一条任务：点击下方 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #2象限 ⏳ 明天 [estimate:: 30m]`。",
   "onboarding.cta": "+ 新建第一个任务",
   "completed.total": "总计 {actual}m",
 
@@ -200,6 +220,8 @@ const ZH: Partial<typeof EN> = {
   "footer.selected": "已选",
   "footer.hint":
     "1-4 象限 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃 · Ctrl+Z 撤销 · / 搜索",
+  "footer.mobileHint":
+    "长按弹菜单 · 左滑 = 完成 · 右滑 = 放弃 · 拖拽改期",
 
   "notice.scheduled": "→ ⏳ {date}",
   "notice.clearedSchedule": "已清除排期",
@@ -255,6 +277,16 @@ const ZH: Partial<typeof EN> = {
   "settings.weekStart.sun": "周日",
   "settings.openOnStartup.name": "启动时打开看板",
   "settings.openOnStartup.desc": "Obsidian 启动时自动打开任务看板。",
+  "settings.mobileHeader": "移动端",
+  "settings.mobileLongPress.name": "长按时长 (ms)",
+  "settings.mobileLongPress.desc":
+    "按住卡片不动达到该时长才弹出操作面板。值越大越不容易误触；越小响应越快。",
+  "settings.mobileSwipe.name": "滑动手势",
+  "settings.mobileSwipe.desc":
+    "左滑 = 完成，右滑 = 放弃。如果跟你的滚动习惯冲突可以关掉。",
+  "settings.mobileForcePortrait.name": "锁定竖屏",
+  "settings.mobileForcePortrait.desc":
+    "提示系统保持竖屏。是否生效取决于设备是否允许 Web 应用锁定方向。",
   "settings.cliHeader": "CLI",
   "settings.cliHelp":
     "所有命令都注册到 Obsidian 原生 CLI（需要 Obsidian ≥ 1.12.2）。在终端这样调用：",

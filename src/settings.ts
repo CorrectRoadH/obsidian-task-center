@@ -83,6 +83,47 @@ export class TaskCenterSettingTab extends PluginSettingTab {
         }),
       );
 
+    // Mobile-specific settings (US-510). Always rendered so cross-device
+    // syncs (desktop user configuring their phone behaviour) work; the
+    // values are no-ops on desktop. Heading is shown unconditionally.
+    {
+      containerEl.createEl("h3", { text: tr("settings.mobileHeader") });
+
+      new Setting(containerEl)
+        .setName(tr("settings.mobileLongPress.name"))
+        .setDesc(tr("settings.mobileLongPress.desc"))
+        .addSlider((s) =>
+          s
+            .setLimits(200, 1000, 50)
+            .setValue(this.plugin.settings.mobileLongPressMs)
+            .setDynamicTooltip()
+            .onChange(async (v) => {
+              this.plugin.settings.mobileLongPressMs = v;
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(tr("settings.mobileSwipe.name"))
+        .setDesc(tr("settings.mobileSwipe.desc"))
+        .addToggle((tg) =>
+          tg.setValue(this.plugin.settings.mobileSwipeEnabled).onChange(async (v) => {
+            this.plugin.settings.mobileSwipeEnabled = v;
+            await this.plugin.saveSettings();
+          }),
+        );
+
+      new Setting(containerEl)
+        .setName(tr("settings.mobileForcePortrait.name"))
+        .setDesc(tr("settings.mobileForcePortrait.desc"))
+        .addToggle((tg) =>
+          tg.setValue(this.plugin.settings.mobileForcePortrait).onChange(async (v) => {
+            this.plugin.settings.mobileForcePortrait = v;
+            await this.plugin.saveSettings();
+          }),
+        );
+    }
+
     containerEl.createEl("h3", { text: tr("settings.cliHeader") });
     const cliHelp = containerEl.createEl("div", { cls: "setting-item-description" });
     cliHelp.createEl("p", { text: tr("settings.cliHelp") });

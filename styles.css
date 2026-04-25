@@ -1247,3 +1247,22 @@
   outline-color: var(--color-red);
   background: var(--background-modifier-error-hover, var(--background-modifier-hover));
 }
+
+/* ============================================================================
+ * Quick Add — mobile bottom-sheet variant (US-509). Inherits the bottom-sheet
+ * shell (.task-center-bottom-sheet handles bottom-anchor + width); this
+ * adds the keyboard-avoidance shift via the --tc-vv-offset CSS var that
+ * QuickAddModal updates from window.visualViewport listeners.
+ * ============================================================================ */
+.task-center-quick-add-sheet {
+  /* When the soft keyboard pops up, visualViewport shrinks; we shift the
+   * sheet up by that offset so the input stays above the keyboard. Default
+   * 0 means "no keyboard, sit flush with bottom". */
+  bottom: var(--tc-vv-offset, 0px) !important;
+}
+.task-center-quick-add-sheet .task-center-quick-add-input {
+  /* Larger touch target on mobile + use full sheet width. */
+  font-size: 16px; /* >= 16px keeps iOS Safari from auto-zooming on focus */
+  padding: 12px 14px;
+  border-radius: 8px;
+}

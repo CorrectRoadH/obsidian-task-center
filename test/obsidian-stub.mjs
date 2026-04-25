@@ -16,3 +16,7 @@ export class Plugin {}
 export function normalizePath(p) {
   return p;
 }
+// `Platform` is consulted in places like quickadd.ts to branch UI by
+// device. For unit-testing the pure parsing logic we don't care, so the
+// stub reports "desktop" — quickadd.ts's mobile branch never runs.
+export const Platform = { isMobile: false, isMobileApp: false, isDesktop: true };

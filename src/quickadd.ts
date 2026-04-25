@@ -1,4 +1,4 @@
-import { App, Modal, TextComponent } from "obsidian";
+import { App, Modal, Platform, TextComponent } from "obsidian";
 import { TaskCenterApi } from "./cli";
 import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
@@ -10,6 +10,10 @@ export class QuickAddModal extends Modal {
   private api: TaskCenterApi;
   private onDone?: () => void;
   private settings?: TaskCenterSettings;
+  // visualViewport listeners for soft-keyboard avoidance (US-509). Stored so
+  // we can detach in onClose; visualViewport is a singleton so leaks would
+  // accumulate across modal reopens.
+  private vvOnResize: (() => void) | null = null;
 
   constructor(app: App, api: TaskCenterApi, onDone?: () => void, settings?: TaskCenterSettings) {
     super(app);
@@ -19,9 +23,19 @@ export class QuickAddModal extends Modal {
   }
 
   onOpen() {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
     contentEl.empty();
     contentEl.addClass("task-center-quick-add");
+    if (Platform.isMobile) {
+      // US-509: mobile Quick Add is a bottom sheet, not a centered modal.
+      // Reuse the BottomSheet visual class so styling stays in one place
+      // (styles.css `.task-center-bottom-sheet`).
+      modalEl.addClass("task-center-bottom-sheet");
+      modalEl.addClass("task-center-quick-add-sheet");
+      // Drag handle for affordance — same as BottomSheet primitive.
+      const handle = contentEl.createDiv({ cls: "bt-sheet-handle" });
+      handle.setAttr("aria-hidden", "true");
+    }
     contentEl.createEl("h3", { text: tr("qa.title") });
 
     const text = new TextComponent(contentEl);
@@ -43,7 +57,40 @@ export class QuickAddModal extends Modal {
       cls: "task-center-quick-add-hint",
     });
 
+    if (Platform.isMobile) this.installKeyboardAvoidance(modalEl);
+
     window.setTimeout(() => text.inputEl.focus(), 10);
+  }
+
+  onClose() {
+    // Detach visualViewport listeners — failing to do so leaks one closure
+    // per modal reopen since visualViewport is a global singleton.
+    if (this.vvOnResize && typeof window.visualViewport !== "undefined" && window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", this.vvOnResize);
+      window.visualViewport.removeEventListener("scroll", this.vvOnResize);
+      this.vvOnResize = null;
+    }
+    super.onClose();
+  }
+
+  /**
+   * UX-mobile §13 #5 / US-509: when soft keyboard pops up, the inner
+   * viewport shrinks — measure the offset between layout viewport
+   * (`window.innerHeight`) and visual viewport (`visualViewport.height`)
+   * and shift the bottom-sheet up by that delta. Listen on both
+   * `resize` (keyboard show/hide) and `scroll` (visualViewport pan).
+   */
+  private installKeyboardAvoidance(modalEl: HTMLElement): void {
+    if (typeof window.visualViewport === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const apply = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      modalEl.style.setProperty("--tc-vv-offset", `${offset}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    this.vvOnResize = apply;
   }
 
   async submit() {
