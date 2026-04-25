@@ -1,12 +1,14 @@
 /**
  * US-145: completing / dropping a parent auto-propagates to todo children
+ * US-148: subtask with own ⏳ ≠ parent ⏳ renders as standalone card on its own day
+ * US-149: when a subtask's ⏳ differs from parent, show ⏳ MM-DD badge on the subcard
  * US-407: rename / reschedule must not eat Obsidian Tasks extension fields
  *         (🛫 start, 🔁 recurrence, ⏫🔺🔼🔽⏬ priority, [id::] inline fields)
  *
  * All assertions are against the markdown file content — no CSS class coupling.
  * The only DOM coupling is `data-task-id` (stable identifier agreed with Tiger).
  */
-import { browser, expect } from "@wdio/globals";
+import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
@@ -15,6 +17,27 @@ function todayISO(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function offsetISO(deltaDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + deltaDays);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function switchToWeekTab() {
+  await browser.execute(() => {
+    document.querySelector<HTMLElement>(".task-center-view [data-tab='week']")?.click();
+  });
+  await browser.waitUntil(
+    () => browser.execute(() =>
+      !!document.querySelector(
+        ".task-center-view [data-tab='week'].active, .task-center-view [data-tab='week'][aria-selected='true']",
+      ),
+    ),
+    { timeout: 3000, interval: 100, timeoutMsg: "Week tab did not become active" },
+  );
 }
 
 async function writeAndWait(path: string, body: string) {
@@ -185,6 +208,50 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await expect(content).toContain("🔁 every week");
     await expect(content).toContain("⏫");
     await expect(content).toContain("[id:: abc-123]");
+  });
+
+  // US-148/149: subtask with own ⏳ ≠ parent ⏳ renders standalone on its own day
+  it("US-148/149: cross-day subtask appears as standalone card on its own day, not nested in parent", async function () {
+    const today = todayISO();
+    const tomorrow = offsetISO(1);
+    const path = "Tasks/Inbox.md";
+
+    // Parent ⏳ today; A-2 inherits (no own ⏳); A-3 has explicit ⏳ tomorrow.
+    await writeAndWait(
+      path,
+      [
+        `- [ ] Parent ⏳ ${today}`,
+        `    - [ ] Same-day child`,
+        `    - [ ] Cross-day child ⏳ ${tomorrow}`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
+    await switchToWeekTab();
+
+    // Parent card must appear in today's column.
+    const parentSel = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"]`;
+    await $(parentSel).waitForExist({ timeout: 5000, timeoutMsg: "parent card not found in today's column" });
+
+    // US-148: cross-day child (L3) must NOT be nested inside parent card in today's column.
+    const crossDayNested = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"] [data-task-id="${path}:L3"]`;
+    await expect(await browser.$(crossDayNested).isExisting()).toBe(
+      false,
+      "cross-day subtask should not be nested inside parent's card",
+    );
+
+    // US-148: same-day child (L2) IS still nested inside parent's card.
+    const sameDayNested = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"] [data-task-id="${path}:L2"]`;
+    await $(sameDayNested).waitForExist({ timeout: 3000, timeoutMsg: "same-day subtask not found nested in parent" });
+
+    // US-148: cross-day child must appear as a top-level card in tomorrow's column.
+    const standaloneSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L3"]`;
+    await $(standaloneSel).waitForExist({
+      timeout: 3000,
+      timeoutMsg: "cross-day subtask not found as standalone card in tomorrow's column",
+    });
   });
 
   // US-407: reschedule (set ⏳) must not eat other fields
