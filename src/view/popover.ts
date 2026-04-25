@@ -114,21 +114,31 @@ export class ContextPopoverController {
     const component = new Component();
     this.deps.addChild(component);
 
+    const renders: Promise<void>[] = [];
     if (parentLine !== null) {
       const chip = pop.createDiv({ cls: "bt-ctx-parent" });
       chip.createSpan({ cls: "bt-ctx-parent-arrow", text: "↑" });
       const chipBody = chip.createDiv({ cls: "bt-ctx-parent-body" });
-      void MarkdownRenderer.render(
-        this.deps.app,
-        parentLine.trim(),
-        chipBody,
-        t.path,
-        component,
+      renders.push(
+        MarkdownRenderer.render(
+          this.deps.app,
+          parentLine.trim(),
+          chipBody,
+          t.path,
+          component,
+        ),
       );
     }
 
     const body = pop.createDiv({ cls: "bt-ctx-body" });
-    void MarkdownRenderer.render(this.deps.app, snippet, body, t.path, component);
+    renders.push(
+      MarkdownRenderer.render(this.deps.app, snippet, body, t.path, component),
+    );
+
+    // Wait for content to actually render before measuring — otherwise
+    // popRect.height is 0 and the "flip above viewport edge" logic never
+    // fires (Rally caught this in the popover review).
+    await Promise.all(renders);
 
     this.popover = { el: pop, component, anchor: card };
     this.position(pop, card);

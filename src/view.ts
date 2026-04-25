@@ -357,6 +357,10 @@ export class TaskCenterView extends ItemView {
     ];
     for (const t of tabs) {
       const btn = bar.createDiv({ cls: "bt-tab" + (this.state.tab === t.key ? " active" : "") });
+      // Stable e2e selector: `[data-tab="week|month|completed|unscheduled"]`.
+      // The visible label changes (i18n + week-number formatting), so tests
+      // must not depend on text content.
+      btn.dataset.tab = t.key;
       btn.createSpan({ text: t.label });
       if (t.count > 0) {
         btn.createSpan({ text: String(t.count), cls: "bt-tab-count" });
@@ -473,6 +477,9 @@ export class TaskCenterView extends ItemView {
 
     for (const day of days) {
       const col = wrapper.createDiv({ cls: "bt-week-col" + (day === today ? " today" : "") });
+      // e2e drop-target selector: `[data-date="YYYY-MM-DD"]`. Stable across
+      // i18n / weekday labels.
+      col.dataset.date = day;
       const head = col.createDiv({ cls: "bt-week-head" });
       const d = fromISO(day);
       head.createSpan({
@@ -569,6 +576,8 @@ export class TaskCenterView extends ItemView {
           (day === today ? " today" : "") +
           (isCurMonth ? "" : " other-month"),
       });
+      // e2e drop-target selector — same contract as the week view.
+      cell.dataset.date = day;
       const dayTasksAll = this.tasks
         .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
         .filter(filter);
@@ -759,6 +768,9 @@ export class TaskCenterView extends ItemView {
 
   private renderTrashZone(parent: HTMLElement) {
     const trash = parent.createDiv({ cls: "bt-trash" });
+    // e2e drop-zone selector: `[data-drop-zone="trash"]`. Stable across the
+    // visible icon / label / theme.
+    trash.dataset.dropZone = "trash";
     trash.createDiv({ cls: "bt-trash-icon", text: "🗑" });
     const label = trash.createDiv({ cls: "bt-trash-label" });
     label.createSpan({ text: tr("trash.title"), cls: "bt-trash-title" });
