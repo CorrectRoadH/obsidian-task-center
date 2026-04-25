@@ -58,6 +58,9 @@ const EN = {
   "trash.hint": "Drop here → [-] ❌",
   "trash.dropped": "🗑 dropped",
 
+  // Mobile bottom sheet (US-504)
+  "sheet.empty": "No tasks scheduled this day.",
+
   // Completed
   "completed.weekOf": "Week of {date}",
   "completed.tasks": "{n} tasks",
@@ -178,6 +181,8 @@ const ZH: Partial<typeof EN> = {
   "trash.title": "垃圾站",
   "trash.hint": "拖到此处 → [-] ❌",
   "trash.dropped": "🗑 已放弃",
+
+  "sheet.empty": "这一天没有任务。",
 
   "completed.weekOf": "{date} 那一周",
   "completed.tasks": "{n} 条任务",

@@ -29,6 +29,7 @@ import { animateOut } from "./anim";
 import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
 import { ContextPopoverController } from "./view/popover";
+import { BottomSheet } from "./view/bottom-sheet";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -679,7 +680,56 @@ export class TaskCenterView extends ItemView {
       if (dayTasks.length > 6) {
         list.createDiv({ text: `+${dayTasks.length - 6} more`, cls: "bt-mini-more" });
       }
+      // Mobile (US-504): tap a cell opens that day's task list as a
+      // bottom sheet. The desktop path leaves the click as a no-op (chips
+      // inside handle their own drag / select). Detection is by viewport
+      // width, not Platform — a narrow desktop pane still gets the sheet.
+      cell.addEventListener("click", (e) => {
+        if (window.innerWidth >= 600) return;
+        // Don't fire when the click bubbled from a chip — that's a select
+        // intent, not "open the day".
+        if ((e.target as HTMLElement).closest(".bt-mini-card")) return;
+        this.openDayTasksSheet(day, dayTasks);
+      });
     }
+  }
+
+  /**
+   * Mobile-only: bottom sheet listing every todo task scheduled to `day`.
+   * Tapping a row switches to the week tab anchored on that day with the
+   * row's day expanded (so the user can act on the task with the full
+   * card UI rather than re-implementing card actions inside the sheet).
+   */
+  private openDayTasksSheet(day: string, dayTasks: ParsedTask[]): void {
+    const sheet = new BottomSheet(this.app, {
+      title: day,
+      populate: (el) => {
+        if (dayTasks.length === 0) {
+          el.createDiv({ cls: "bt-sheet-empty", text: tr("sheet.empty") });
+          return;
+        }
+        for (const t of dayTasks) {
+          const row = el.createDiv({ cls: "bt-sheet-task" });
+          row.dataset.taskId = t.id;
+          row.createSpan({ cls: "bt-sheet-task-title", text: t.title });
+          if (t.deadline) {
+            row.createSpan({
+              cls: "bt-sheet-task-meta",
+              text: `📅 ${t.deadline}`,
+            });
+          }
+          row.addEventListener("click", () => {
+            this.state.tab = "week";
+            this.state.anchorISO = day;
+            this.state.expandedDays.add(day);
+            this.state.selectedTaskId = t.id;
+            sheet.close();
+            this.render();
+          });
+        }
+      },
+    });
+    sheet.open();
   }
 
   // ---------- Completed ----------
