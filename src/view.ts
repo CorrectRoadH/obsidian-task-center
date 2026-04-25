@@ -3,6 +3,7 @@ import {
   WorkspaceLeaf,
   Menu,
   Notice,
+  Platform,
   TFile,
   MarkdownView,
 } from "obsidian";
@@ -287,6 +288,7 @@ export class TaskCenterView extends ItemView {
 
     const header = el.createDiv({ cls: "bt-header" });
     this.renderTabBar(header);
+    this.renderMobileStatusRow(header);
     this.renderToolbar(header);
 
     const body = el.createDiv({ cls: "bt-body" });
@@ -312,6 +314,7 @@ export class TaskCenterView extends ItemView {
     }
 
     this.renderFooter(el);
+    this.renderMobileActionBar(el);
 
     // Restore scroll after layout settles
     if (savedScrollTop > 0) {
@@ -323,6 +326,44 @@ export class TaskCenterView extends ItemView {
         });
       }
     }
+  }
+
+  /**
+   * US-507 (mobile portion): on narrow viewports there's no Obsidian status
+   * bar slot, so we mirror `📋 N today · ⚠ M overdue` inside the board
+   * header. Always rendered; styles.css hides it on ≥600px (where the real
+   * status bar widget is visible).
+   */
+  private renderMobileStatusRow(header: HTMLElement) {
+    const row = header.createDiv({ cls: "bt-mobile-status" });
+    const today = todayISO();
+    const todo = this.tasks.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+    const todayCount = todo.filter((t) => t.scheduled === today).length;
+    const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
+    const parts = [`📋 ${todayCount} today`];
+    if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
+    row.setText(parts.join(" · "));
+  }
+
+  /**
+   * US-502 mobile sticky action bar: 🗑 (drop = drop task) on the left,
+   * ➕ Add (open Quick Add) on the right. Always rendered; styles.css
+   * hides it on ≥600px viewports. Drop semantics share the same wiring
+   * as the desktop pool trash zone via `wireTrashDropTarget`.
+   */
+  private renderMobileActionBar(parent: HTMLElement) {
+    const bar = parent.createDiv({ cls: "bt-mobile-action-bar" });
+
+    const trash = bar.createDiv({ cls: "bt-mobile-trash" });
+    trash.dataset.dropZone = "trash";
+    trash.createSpan({ cls: "bt-mobile-trash-icon", text: "🗑" });
+    this.wireTrashDropTarget(trash);
+
+    const add = bar.createEl("button", {
+      text: tr("toolbar.add"),
+      cls: "bt-mobile-add-btn",
+    });
+    add.addEventListener("click", () => this.openQuickAdd());
   }
 
   private renderOnboarding(parent: HTMLElement) {
@@ -779,7 +820,9 @@ export class TaskCenterView extends ItemView {
   private renderTrashZone(parent: HTMLElement) {
     const trash = parent.createDiv({ cls: "bt-trash" });
     // e2e drop-zone selector: `[data-drop-zone="trash"]`. Stable across the
-    // visible icon / label / theme.
+    // visible icon / label / theme. (The mobile action bar carries the
+    // same data attribute on a different element; styles.css hides one
+    // or the other based on viewport width — see UX-mobile.md §2 / §13.)
     trash.dataset.dropZone = "trash";
     trash.createDiv({ cls: "bt-trash-icon", text: "🗑" });
     const label = trash.createDiv({ cls: "bt-trash-label" });
@@ -788,22 +831,31 @@ export class TaskCenterView extends ItemView {
       text: tr("trash.hint"),
       cls: "bt-trash-hint",
     });
+    this.wireTrashDropTarget(trash);
+  }
 
-    trash.addEventListener("dragover", (e) => {
+  /**
+   * Wires `dragover` / `dragleave` / `drop` for any element acting as a
+   * trash drop target. Drop = `api.drop(id)` (mark `[-] ❌`). Used by both
+   * the desktop pool trash zone (UX.md §6) and the mobile sticky action
+   * bar (UX-mobile.md §2). Single helper so semantics never diverge.
+   */
+  private wireTrashDropTarget(el: HTMLElement) {
+    el.addEventListener("dragover", (e) => {
       const dt = e.dataTransfer;
       if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
       e.preventDefault();
       dt.dropEffect = "move";
-      trash.addClass("drop-hover");
+      el.addClass("drop-hover");
     });
-    trash.addEventListener("dragleave", () => trash.removeClass("drop-hover"));
-    trash.addEventListener("drop", async (e) => {
+    el.addEventListener("dragleave", () => el.removeClass("drop-hover"));
+    el.addEventListener("drop", async (e) => {
       const dt = e.dataTransfer;
       if (!dt) return;
       const id = dt.getData("text/task-id");
       if (!id) return;
       e.preventDefault();
-      trash.removeClass("drop-hover");
+      el.removeClass("drop-hover");
       try {
         await this.runWithRemoveAnim(id, async () => {
           await this.api.drop(id);
@@ -1273,6 +1325,14 @@ export class TaskCenterView extends ItemView {
   // ---------- Keyboard ----------
 
   async handleKey(e: KeyboardEvent) {
+    // US-501: keyboard shortcuts silent no-op on Obsidian Mobile (no
+    // physical keyboard expected; virtual-keyboard `keydown` we drop on
+    // purpose so the board never claims to handle a key the user can't
+    // produce). Layout switching is screen-width based (CSS @media), but
+    // *capability* gating like this is a Platform check — allowed at the
+    // UI layer per UX-mobile §13 #7.
+    if (Platform.isMobile) return;
+
     // Global tab switching
     if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       const map: Record<string, TabKey> = { "1": "week", "2": "month", "3": "completed", "4": "unscheduled" };

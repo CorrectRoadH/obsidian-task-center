@@ -877,3 +877,79 @@
 .bt-ctx-popover .bt-ctx-body > *:last-child {
   margin-bottom: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Mobile layout (UX-mobile.md §2 / §13).
+   Decision is by viewport WIDTH, not platform — a 600px split pane on a
+   desktop should still get the desktop layout. The 600px breakpoint is
+   the orientation/size split, not a mobile/desktop probe (§13 #1, #8).
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Status row (mirrors the desktop status bar widget) — mobile only. */
+.task-center-view .bt-mobile-status {
+  display: none;
+}
+@media (max-width: 599.98px) {
+  .task-center-view .bt-mobile-status {
+    display: block;
+    padding: 4px 8px 6px 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--background-modifier-border);
+  }
+}
+
+/* Bottom sticky action bar (🗑 + ➕) — mobile only. */
+.task-center-view .bt-mobile-action-bar {
+  display: none;
+}
+@media (max-width: 599.98px) {
+  .task-center-view .bt-mobile-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 12px;
+    background: var(--background-primary);
+    border-top: 1px solid var(--background-modifier-border);
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+    z-index: 10;
+  }
+  .task-center-view .bt-mobile-trash {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--background-secondary);
+    cursor: pointer;
+  }
+  .task-center-view .bt-mobile-trash.drop-hover {
+    background: var(--background-modifier-error);
+    color: var(--text-on-accent);
+  }
+  .task-center-view .bt-mobile-trash-icon {
+    font-size: 18px;
+  }
+  .task-center-view .bt-mobile-add-btn {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    font-weight: 600;
+  }
+
+  /* Desktop pool trash hidden on mobile — the action bar replaces it. */
+  .task-center-view .bt-trash {
+    display: none;
+  }
+
+  /* Toolbar `+ Add` is duplicated by the action bar; hide on mobile so the
+     thumb-reachable bottom button is the canonical entry. */
+  .task-center-view .bt-toolbar .bt-add-btn {
+    display: none;
+  }
+}
