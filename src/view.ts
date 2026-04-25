@@ -613,7 +613,7 @@ export class TaskCenterView extends ItemView {
       // `simulateDrag()` never reaches it.
       this.makeDropZone(col, day);
       for (const t of topLevel) {
-        this.renderCard(list, t);
+        this.renderCard(list, t, day);
       }
     }
   }
@@ -1113,7 +1113,21 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Card ----------
 
-  private renderCard(parent: HTMLElement, t: ParsedTask) {
+  /**
+   * Render a top-level task card.
+   *
+   * `contextDate` (US-150): if the card is being rendered inside a column
+   * whose day already represents the task's `⏳`, the meta-row `⏳ {date}`
+   * badge is suppressed — it'd just repeat what the column header says.
+   * Pass the column's ISO date for week / month tabs; pass `null` (the
+   * default) for unscheduled / completed views, where the date isn't
+   * implied by position and the badge is useful.
+   */
+  private renderCard(
+    parent: HTMLElement,
+    t: ParsedTask,
+    contextDate: string | null = null,
+  ) {
     const card = parent.createDiv({ cls: "bt-card" });
     card.dataset.taskId = t.id;
     card.draggable = true;
@@ -1167,7 +1181,11 @@ export class TaskCenterView extends ItemView {
     if (t.estimate) meta.createSpan({ text: `est ${formatMinutes(t.estimate)}`, cls: "bt-meta-est" });
     if (t.deadline) meta.createSpan({ text: `📅${t.deadline}`, cls: "bt-meta-deadline" });
     if (t.actual) meta.createSpan({ text: `act ${formatMinutes(t.actual)}`, cls: "bt-meta-actual" });
-    if (t.scheduled && !isTodayISO(t.scheduled)) {
+    // US-150: hide the `⏳ {date}` badge when the card is rendered in a
+    // column whose day already implies it. Otherwise (unscheduled pool /
+    // completed view / etc.) the badge stays — date isn't implied by
+    // position there, and the user needs to see when it was scheduled.
+    if (t.scheduled && t.scheduled !== contextDate) {
       meta.createSpan({ text: `⏳${t.scheduled}`, cls: "bt-meta-sched" });
     }
     const path = meta.createSpan({ text: compactPath(t.path), cls: "bt-meta-path" });
@@ -1187,7 +1205,7 @@ export class TaskCenterView extends ItemView {
         .map((l) => this.tasks.find((x) => x.path === t.path && x.line === l))
         .filter((x): x is ParsedTask => !!x)
         .filter((c) => !(c.scheduled && c.scheduled !== t.scheduled));
-      for (const c of children) this.renderSubcard(expander, c, t);
+      for (const c of children) this.renderSubcard(expander, c);
     }
 
     // Inline "+ subtask" affordance — visible on every card so adding a
@@ -1363,7 +1381,12 @@ export class TaskCenterView extends ItemView {
   // Renders a subcard + its own children recursively. The nested
   // `.bt-card-children` block is a sibling of the subcard so each level
   // inherits the 22px margin-left from CSS, producing a staircase indent.
-  private renderSubcard(container: HTMLElement, c: ParsedTask, parent: ParsedTask) {
+  //
+  // No `parent` parameter: cross-day subtasks are surfaced as top-level
+  // cards on their own day (US-148), so by the time we reach this
+  // function the subtask either rides with its parent's `⏳` or has none
+  // — no `parent` comparison needed.
+  private renderSubcard(container: HTMLElement, c: ParsedTask) {
     const subCard = container.createDiv({ cls: "bt-subcard" });
     subCard.dataset.taskId = c.id;
     subCard.draggable = true;
@@ -1386,10 +1409,11 @@ export class TaskCenterView extends ItemView {
       this.enterTitleEdit(title, c);
     });
 
-    if (c.scheduled && c.scheduled !== parent.scheduled) {
-      // Flag when a subtask is scheduled to a different day than its parent
-      subCard.createDiv({ cls: "bt-sub-sched", text: `⏳${c.scheduled}` });
-    }
+    // (Previous `bt-sub-sched` badge for cross-day subtasks removed —
+    //  US-148 now surfaces such subtasks as standalone top-level cards
+    //  on their own day, so the inline badge can never trigger. Subcards
+    //  reaching this branch always share their parent's `⏳` or have
+    //  none of their own; no badge needed in either case.)
     if (c.estimate) subCard.createDiv({ cls: "bt-sub-est", text: formatMinutes(c.estimate) });
     if (c.status === "done") subCard.addClass("done");
     this.wireCardEvents(subCard, c);
@@ -1418,7 +1442,7 @@ export class TaskCenterView extends ItemView {
           .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
           .filter((x): x is ParsedTask => !!x)
           .filter((g) => !(g.scheduled && g.scheduled !== c.scheduled));
-        for (const g of grand) this.renderSubcard(sub, g, c);
+        for (const g of grand) this.renderSubcard(sub, g);
       }
     }
   }
@@ -2080,10 +2104,6 @@ function statusIcon(s: string): string {
   if (s === "dropped") return "✕";
   if (s === "in_progress") return "◐";
   return "○";
-}
-
-function isTodayISO(iso: string): boolean {
-  return iso === todayISO();
 }
 
 function compactPath(p: string): string {
