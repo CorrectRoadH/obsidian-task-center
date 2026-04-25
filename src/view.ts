@@ -40,6 +40,10 @@ interface ViewState {
   filter: string;
   showUnscheduledPool: boolean;
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
+  // Mobile week view: each day-row collapses by default; today is open and
+  // tapping a day's head adds its ISO to this set to expand. Desktop ignores
+  // this — CSS forces the list visible regardless of the class.
+  expandedDays: Set<string>;
 }
 
 // `UndoOp` and `UndoEntry` re-exported from `./view/undo` (the canonical
@@ -104,6 +108,7 @@ export class TaskCenterView extends ItemView {
       filter: "",
       showUnscheduledPool: true,
       collapsedWeeks: new Set(),
+      expandedDays: new Set(),
     };
   }
 
@@ -523,11 +528,30 @@ export class TaskCenterView extends ItemView {
     const filter = this.getTextFilter();
 
     for (const day of days) {
-      const col = wrapper.createDiv({ cls: "bt-week-col" + (day === today ? " today" : "") });
+      // Mobile collapsible per-day rows (UX-mobile §3.1): `today` always
+      // shows its body; other days show body only when `expanded` class
+      // is present. Desktop CSS overrides and shows body unconditionally,
+      // so this class is mobile-only state.
+      const isToday = day === today;
+      const isExpanded = this.state.expandedDays.has(day);
+      let cls = "bt-week-col";
+      if (isToday) cls += " today";
+      if (isExpanded) cls += " expanded";
+      const col = wrapper.createDiv({ cls });
       // e2e drop-target selector: `[data-date="YYYY-MM-DD"]`. Stable across
       // i18n / weekday labels.
       col.dataset.date = day;
       const head = col.createDiv({ cls: "bt-week-head" });
+      // Tap-to-toggle on mobile. Today's row stays open (no toggle).
+      if (!isToday) {
+        head.addEventListener("click", (e) => {
+          // Ignore clicks that bubbled up from the card area inside the body.
+          if ((e.target as HTMLElement).closest(".bt-card, .bt-subcard")) return;
+          if (this.state.expandedDays.has(day)) this.state.expandedDays.delete(day);
+          else this.state.expandedDays.add(day);
+          this.render();
+        });
+      }
       const d = fromISO(day);
       head.createSpan({
         text: weekdayLabel(d.getDay()),

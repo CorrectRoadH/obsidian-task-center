@@ -1011,4 +1011,38 @@
   .task-center-view .bt-card .bt-subtask-add-trigger {
     opacity: 1;
   }
+
+  /* ───── Week view: vertical collapsible list (US-503) ───── */
+
+  /* Stack the 7 day rows top-to-bottom instead of side-by-side. */
+  .task-center-view .bt-week {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    overflow-x: visible;
+  }
+  .task-center-view .bt-week-col {
+    min-height: 0;
+  }
+  /* Body collapsed by default; today and explicitly-expanded show it. */
+  .task-center-view .bt-week-col:not(.today):not(.expanded) .bt-week-list {
+    display: none;
+  }
+  /* Tap target hint on the row head. */
+  .task-center-view .bt-week-col:not(.today) .bt-week-head {
+    cursor: pointer;
+    user-select: none;
+  }
+  /* Caret indicator (▸ collapsed / ▾ expanded). Today is implicitly open. */
+  .task-center-view .bt-week-col:not(.today):not(.expanded) .bt-week-head::after {
+    content: "▸";
+    margin-left: 4px;
+    color: var(--text-faint);
+    font-size: 10px;
+  }
+  .task-center-view .bt-week-col.expanded:not(.today) .bt-week-head::after {
+    content: "▾";
+    margin-left: 4px;
+    color: var(--text-faint);
+    font-size: 10px;
+  }
 }
