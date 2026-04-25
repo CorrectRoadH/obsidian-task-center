@@ -48,6 +48,27 @@
 .task-center-view .bt-tab.drag-hover {
   outline: 2px dashed var(--interactive-accent);
   outline-offset: -1px;
+  position: relative;
+}
+/* Cross-tab drag dwell progress bar (UX.md §6.1). The TabDwellTracker
+   writes `--tc-dwell-progress` as a 0..1 value on the hovered tab; this
+   pseudo-element renders it as a horizontal bar. */
+.task-center-view .bt-tab.drag-hover::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: calc(var(--tc-dwell-progress, 0) * 100%);
+  background: var(--interactive-accent);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No transition — the bar still updates per rAF tick, but we drop any
+     incidental easing on width changes. */
+  .task-center-view .bt-tab.drag-hover::after {
+    transition: none;
+  }
 }
 .task-center-view .bt-tab-count {
   font-size: 10px;

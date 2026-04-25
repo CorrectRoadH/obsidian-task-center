@@ -27,6 +27,7 @@ import { QuickAddModal } from "./quickadd";
 import { DatePromptModal } from "./dateprompt";
 import { t as tr, getLocale } from "./i18n";
 import { animateOut } from "./anim";
+import { TabDwellTracker } from "./view/dnd";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -75,6 +76,13 @@ export class TaskCenterView extends ItemView {
   private refreshTimer: number | null = null;
   private cacheVersion = 0;
   private cacheUnsub: (() => void) | null = null;
+  // Cross-tab drag dwell: hovering a card over a tab head for 600ms switches
+  // tabs. UX.md §6.1 / ARCHITECTURE.md §11. One tracker for the whole view —
+  // tab heads route their dragover events through `update()`.
+  private dwellTracker = new TabDwellTracker<TabKey>({
+    durationMs: 600,
+    onCommit: (tab) => this.setTab(tab),
+  });
   // Context hover: at most one popover alive at a time. The open timer defers
   // work until the cursor has genuinely settled, so quickly skimming the board
   // doesn't thrash the vault read/markdown render pipeline.
@@ -142,6 +150,7 @@ export class TaskCenterView extends ItemView {
       this.cacheUnsub();
       this.cacheUnsub = null;
     }
+    this.dwellTracker.reset();
     this.closeContextPopover();
   }
 
@@ -361,30 +370,21 @@ export class TaskCenterView extends ItemView {
       btn.createSpan({ text: t.hotkey, cls: "bt-hotkey" });
       btn.addEventListener("click", () => this.setTab(t.key));
 
-      // Cross-tab drag: hover a card over a tab for 350ms to switch to it
-      // mid-drag (the tab itself doesn't accept drops — user picks a day
-      // within the newly-switched view).
-      let hoverTimer: number | null = null;
+      // Cross-tab drag: hover a card over a tab head for 600ms to switch to
+      // it mid-drag. Tab heads themselves do not accept drops — the user
+      // picks a day within the newly-switched view. Dwell timing is rAF +
+      // performance.now() (drift-free under main-thread stalls; UX.md §6.1).
       btn.addEventListener("dragover", (e) => {
         const dt = e.dataTransfer;
         if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
         e.preventDefault();
         dt.dropEffect = "move";
         btn.addClass("drag-hover");
-        if (this.state.tab === t.key) return;
-        if (hoverTimer === null) {
-          hoverTimer = window.setTimeout(() => {
-            hoverTimer = null;
-            this.setTab(t.key);
-          }, 350);
-        }
+        this.dwellTracker.update(t.key, btn, this.state.tab);
       });
       btn.addEventListener("dragleave", () => {
         btn.removeClass("drag-hover");
-        if (hoverTimer !== null) {
-          window.clearTimeout(hoverTimer);
-          hoverTimer = null;
-        }
+        this.dwellTracker.reset();
       });
     }
   }
