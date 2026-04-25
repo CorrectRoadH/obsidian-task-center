@@ -270,59 +270,83 @@
 
 ### 6.6 Quick Add（新建任务）
 
-`⌘/Ctrl+T` / `+ Add` 唤起一个**带实时解析反馈**的输入面板（US-163 + 拟 US-167 redesign 2026-04-25）：
+`⌘/Ctrl+T` / `+ Add` 唤起一个 **Spotlight 风格的紧凑命令面板**（US-163 + US-167 redesign v2 / 2026-04-25）。设计参照 Linear `Cmd+K` + Things 3 add-task：紧凑、命令式、自带语法智能。
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                                                                      │
-│   去营业厅问携号转网 #3象限 周六 [estimate:: 25m]_                    │  ← 单行输入，~16-18px，焦点边框
-│                                                                      │
-├──────────────────────────────────────────────────────────────────────┤
-│   📝 去营业厅问携号转网                                               │  ← 解析预览区（实时 update）
-│   #3象限    ⏳ 04-26 (Sat)    est 25m                                  │     - title clean、tag chip、scheduled chip、estimate chip
-├──────────────────────────────────────────────────────────────────────┤
-│   ↵ 写入 Daily/2026-04-25.md   ·   Esc 取消   ·   语法见下           │  ← 操作提示 + 写入路径前置预告
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  去营业厅问携号转网 #3象限 周六 [estimate:: 25m]│  →  ⏳ 04-26 (Sat) │  ← 单行 input，placeholder 例子；右侧 inline parse hint 暗显
+│  ────────────────────────────────────────────────────────────  │
+│  [Today]  [Tomorrow]  [Q1]  [Q2]  [Q3]  [Q4]  [Inbox]            │  ← 可点 quick-chip 行（点 = prefill 到 input）
+│  ↵ Daily/2026-04-25.md                              Esc          │  ← 极简 footer，1 行 12px text-muted
+└────────────────────────────────────────────────────────────────┘
 ```
 
-**输入区**：
-- 单行文本，min-height 44px（移动端触控）/ 38px（桌面），font-size 16-18px（iOS focus 不放大需 ≥ 16px）
-- 焦点态：1.5px `--interactive-accent` border + subtle glow，无焦点时 1px `--background-modifier-border`
-- placeholder 改成示例（不只描述）：`例：去营业厅 #3象限 周六 [estimate:: 25m]`
-- 输入即解析（不等 debounce，每 keystroke）
+**核心理念**（跟 v1 的差）：
+- 删 `<h3>` 标题——input placeholder 自己说了在干嘛
+- 删 X 关闭——Esc / 点外部就走，少一个噪音元素
+- 删 prose hint "Shortcuts: today/tomorrow/Mon-Sun auto-resolve to..."——改成**可点 chip**：5-7 个 quick chips（`Today / Tomorrow / Q1~Q4 / Inbox`），点一下自动 prefill 到 input
+- 解析预览**inline 在 input 右侧**（不另起 chip 行），用 `text-muted + monospace` 显 `→ ⏳ 04-26 (Sat)` 这样的暗示，不抢主输入注意力
+- 整个 modal 紧凑到 ~240px 高、540px 宽，**无空白堆**
 
-**解析预览区**（实时 update）：
-- **Title chip**：📝 + 干净标题（去掉 emoji / tag / inline field 之后）。空标题时用 `text-muted` 占位
-- **Tag chips**：每个 hashtag 一个 chip，用 Obsidian 标签颜色
-- **Scheduled chip**：`⏳ MM-DD (Day)`，自然语言已解析时显 ISO + 星期
-- **Deadline chip**：`📅 MM-DD`（如有）
-- **Estimate chip**：`est Xm` 或 `est Xh`
-- 没解析出的部分**不显**（不是显空，而是整个 chip 不出现，避免噪音）
-- 视觉：浅灰底 chip + 紧凑间距，单行能放下；超出 wrap 到第二行
+**容器与布局**：
+- 桌面：modal 宽 540px，最大高 240px（按内容自适应，预设上限），垂直居中**偏上**（视口 30% 处，类似 Spotlight），不在正中央
+- 移动：bottom sheet（沿用 US-509），软键盘按 §13 #5 visualViewport 避让
+- 圆角：14px
+- 背景：`linear-gradient(180deg, var(--background-primary) 0%, var(--background-secondary) 100%)` —— 让 brand 触感不依赖第三方
+- 阴影：`0 24px 64px -16px rgba(0,0,0,0.5), 0 8px 24px -8px rgba(0,0,0,0.4)` —— spotlight 那种"漂浮感"（用透明黑而非 Obsidian shadow var，是这个组件独有的强调）
+- 分隔：input 和 chip row 间 1px `--background-modifier-border`；chip row 和 footer 间不分隔（间距说话）
 
-**操作提示区**：
-- 左侧：`↵ 写入 <实际目标路径>`——把目标路径**前置预告**，让用户知道按 Enter 后这条写到哪里。路径从 settings.dailyFolder + todayISO 计算；无 daily 配置时显 inbox 路径
-- 右侧：`Esc 取消`
-- 三个分隔点：`· 语法见下` 链接，悬停弹简短语法 cheat sheet（`#tag` / `周X` / `[estimate::]` / `📅`），不弹外部页面
+**Input**：
+- 单行，无 border、无 background（透明融入容器），focus 时也无 border——靠 cursor 反馈
+- font-size 18px 桌面 / 16px 移动（iOS 16px 防 zoom）
+- font-weight 400，color `--text-normal`
+- placeholder color `--text-faint`，举例式（不是描述式）：`例：买菜 #3 周六 25m`
+- padding：input 区域整体 20px 上下 / 24px 左右，input 自身无 padding
+- 输入即解析（每 keystroke），输出 → inline parse hint（见下）
 
-**视觉与 brand**：
-- 整个面板用**圆角 12px**（比 Obsidian 默认 modal 更柔和）
-- 三段（input / preview / footer）之间用 1px `--background-modifier-border` 浅分隔，**不**用大色块或阴影
-- 容器最大宽 560px（桌面）/ 屏宽 - 32px（移动端）
-- 移动端 bottom sheet 时整个面板从底部 slide-up（120ms ease-out），软键盘上移按 §13 #5
+**Inline parse hint**（在 input 右侧 / 下方）：
+- 解析出 ⏳ → input 右侧暗显 `→ ⏳ 04-26 (Sat)`（text-muted，monospace）
+- 解析出 #tag / [estimate::] → 不显（用户自己输入的字面已经在 input 里了，不需要重复）
+- 解析出 deadline (📅) → 同 ⏳ 处理
+- input 太长时 hint 折行到 input 下方，仍 text-muted
 
-**行为**：
-- 唯一写入位置：**当天的 daily note 文件尾**（US-163）。无 daily 配置时回退到设置里的 inbox 路径。
-- **不允许选目标文件**（避免有第二个新建入口造成混乱——回引 US-163 "只允许这个文件入口"）。
-- 自然语言日期（`今天 / 明天 / 周六 / Mon / today / tomorrow`）解析成 ISO `⏳`，无法识别就不加 `⏳`，**不假设**。
-- 默认情况打 `➕ YYYY-MM-DD` 创建戳（设置可关，US-213 用来覆盖）。
-- 当 quick add 由"周列空列占位行"触发时，预填 `⏳ <该列日期>`。
-- **错误态**：解析层错误（不可能发生 — parseQuickAdd 不抛）vs 写入层错误（API 报 not_found / write_conflict 等）→ 在 footer 上方插一行红色 `⚠ <一句人话>`，输入不清空，让用户重试。
+**Quick chips（可点 prefill）**：
+- 5-7 个 chip，水平排布，溢出可横向滚动
+- 内容：`Today` / `Tomorrow` / `周六` / `下周` / `Q1` / `Q2` / `Q3` / `Q4` / `Inbox`
+- 点击行为：把对应 token 追加进 input 当前光标位置（已存在则不重复加）；input 重新 focus
+- 视觉：浅灰底 chip（`--background-modifier-hover`）+ 12px text-muted + 6px round + hover 加深底色
+- chip 间距 6px
 
-**对比当前实现**（2026-04-25 重设计前）：
-- 当前是 `<h3>` 标题 + 裸 TextComponent input + 一行 hint paragraph。零解析反馈、零层级、零 brand 触感。本次重设计目标 = 把"功能能用"变成"用着想用"。
+**Footer**：
+- 单行 12px text-muted
+- 左侧：`↵ <实际写入路径>`——`Daily/2026-04-25.md`（按 settings.dailyFolder + todayISO 计算；无 daily 走 inbox 路径）
+- 右侧：`Esc`
+- 不写"取消" / "确认" 等动词——用纯 keystroke 标志（视觉简洁）
+- 误操作恢复：错误态在 footer **上方**插一行红色 `⚠ <一句人话>`，input 不清空让用户重试
 
-**拟新故事 US-167**（落进 USER_STORIES.md）：Quick Add 输入时**实时显示解析预览**——title / tag / scheduled / deadline / estimate 各一个 chip，未解析的部分不显示；footer 区前置显示**实际目标写入路径**，让用户确认后按 Enter 不开盲盒。
+**默认行为**（不变 v1，从 v2 保留）：
+- 唯一写入位置：当天 daily note 文件尾（US-163）。无 daily 配置时 inbox 回退。
+- 不允许选目标文件入口（仅这一个）
+- 自然语言日期：中英两套（`今天/明天/周六/Mon/today/tomorrow`）解析为 ISO ⏳；不识别**不假设**
+- 默认打 ➕ 创建戳（设置可关）
+- 周列空列占位触发时预填 `⏳ <该列日期>`
+- 错误态：footer 上方红色 `⚠`
+
+**对比 v1 spec / 当前实现**：
+
+| 维度 | 当前实现（2026-04-25 截图） | v1 spec（撤回） | **v2 spec（采用）** |
+| --- | --- | --- | --- |
+| 标题 | `<h3> "Add task"` 占行 | 保留 h3 | **删** — placeholder 自己说 |
+| Input | 默认 TextComponent | 单独 input 段，加 focus border | 透明 input，融入容器；只靠 cursor 反馈 focus |
+| Hint | 散文 prose | 解析 chip 行（独立段） | inline parse hint（input 右侧暗显） + 可点 quick chips（一行） |
+| Footer | 无 | 三段："写入 X / Esc / 语法" | 极简两端：`↵ 路径` 和 `Esc` |
+| 关闭 | 右上 X | 保留 X | **删 X** — Esc / 外部点关 |
+| Modal 形态 | 标准 Obsidian modal（中央，~600×300，多空白） | 同当前但加内容 | Spotlight 风格（顶部偏上 ~30%、540×~240、紧凑无空白、自家 shadow） |
+| Brand | 标准 Obsidian chrome | 圆角 12px | gradient bg + spotlight shadow + 14px 圆角 = 自有质感 |
+
+> v2 是**重构**而不只是**填充**——取消那些不传达信息的元素（h3 / X / 散文 hint / 大留白），换成**可操作 + 可瞥见 + 紧凑**的命令面板形态。
+
+**拟 US-167（落 USER_STORIES.md）**：Quick Add 是 Spotlight 风格紧凑命令面板——单行 input + 右侧 inline parse hint + 一行 quick chips（Today/Tomorrow/Q1~Q4/Inbox 可点 prefill）+ 单行 footer 显写入路径。不要 h3 标题、不要 X 关闭、不要 prose hint。视觉品质走 Linear Cmd+K + Things 3 add-task 心智线。
 
 ### 6.7 Undo
 

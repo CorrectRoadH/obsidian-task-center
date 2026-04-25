@@ -111,7 +111,13 @@
 - `US-164` 右键卡片弹菜单(打开源 / 切完成 / 安排到今天/明天/清空 / 切 1-4 象限 / 放弃)，鼠标用户不用记快捷键。
 - `US-165` 鼠标悬停卡片一会儿弹 popover，显示父任务链 + 源文件上下文几行，知道这条任务在哪个项目下。
 - `US-166` 全局快捷键：`Ctrl+1~4` 切 tab、`/` 聚焦筛选输入框。
-- `US-167` Quick Add 输入面板**实时显示解析预览**：输入即解析，下方显 title chip + tag chips + ⏳ chip + 📅 chip + estimate chip（未解析的不显，避免噪音）；footer 区**前置显示实际目标写入路径**（`↵ 写入 Daily/<today>.md` 或 inbox fallback path），让用户按 Enter 不开盲盒。视觉品质要求详 [UX.md §6.6](./UX.md#66-quick-add-新建任务)。
+- `US-167` Quick Add 是 **Spotlight 风格的紧凑命令面板**（v2，2026-04-25 重设计）——
+  - 单行 input + 右侧 inline parse hint（暗显 `→ ⏳ 04-26 (Sat)`）
+  - 一行可点 quick chips（`Today / Tomorrow / 周六 / 下周 / Q1~Q4 / Inbox`，点击 prefill）
+  - 单行 footer：`↵ <实际写入路径>` 左 + `Esc` 右（不写"取消"/"确认" 动词）
+  - 删除：`<h3>` 标题、X 关闭按钮、散文 hint
+  - 容器：540×~240px 桌面 / bottom sheet 移动；圆角 14px；linear-gradient 背景；Spotlight 浮起阴影
+  - 视觉心智线：Linear Cmd+K + Things 3 add-task。视觉品质细节详 [UX.md §6.6](./UX.md#66-quick-add-新建任务)。
 
 ---
 
