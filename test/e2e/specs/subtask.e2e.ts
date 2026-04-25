@@ -9,36 +9,28 @@ function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-describe("Task Center — inline + 子任务", function () {
-  beforeEach(async function () {
-    await obsidianPage.resetVault(VAULT);
+async function forFlush() {
+  await browser.executeObsidian(async ({ app }) => {
+    // @ts-expect-error — runtime plugin
+    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
   });
+}
 
-  async function readFile(path: string): Promise<string> {
-    return (await browser.executeObsidian(async ({ app }, p: string) => {
-      const f = app.vault.getAbstractFileByPath(p);
-      if (!f) return "";
-      // @ts-expect-error — runtime TFile
-      return await app.vault.read(f);
-    }, path)) as unknown as string;
-  }
-
-  async function switchToWeekTab() {
-    await browser.execute(() => {
-      const tabs = document.querySelectorAll(".task-center-view .bt-tab");
-      for (const t of Array.from(tabs)) {
-        if (t.textContent?.includes("本周")) {
-          (t as HTMLElement).click();
-          return;
-        }
+/** Write file content and wait for cache, then poll until file matches expected content. */
+async function writeAndWait(path: string, body: string) {
+  await browser.executeObsidian(
+    async ({ app }, p: string, content: string) => {
+      let f = app.vault.getAbstractFileByPath(p);
+      if (!f) {
+        const folder = p.split("/").slice(0, -1).join("/");
+        if (folder) await app.vault.createFolder(folder).catch(() => undefined);
+        f = await app.vault.create(p, content);
+      } else {
+        // @ts-expect-error — runtime TFile
+        await app.vault.modify(f, content);
       }
-    });
-    await browser.pause(300);
-  }
-
-  async function waitForCache(path: string) {
-    await browser.executeObsidian(async ({ app }, p: string) => {
       await new Promise<void>((resolve) => {
+        // @ts-expect-error — runtime TFile
         const ref = app.metadataCache.on("changed", (file) => {
           if (file.path === p) {
             app.metadataCache.offref(ref);
@@ -50,30 +42,52 @@ describe("Task Center — inline + 子任务", function () {
           resolve();
         }, 2000);
       });
-    }, path);
-  }
+    },
+    path,
+    body,
+  );
+}
 
-  async function writeAndWait(path: string, body: string) {
-    await browser.executeObsidian(
-      async ({ app }, p: string, content: string) => {
-        let f = app.vault.getAbstractFileByPath(p);
-        if (!f) {
-          const folder = p.split("/").slice(0, -1).join("/");
-          if (folder) {
-            await app.vault.createFolder(folder).catch(() => undefined);
-          }
-          f = await app.vault.create(p, content);
-        } else {
-          // @ts-expect-error — runtime TFile
-          await app.vault.modify(f, content);
-        }
-      },
-      path,
-      body,
-    );
-    await waitForCache(path);
-  }
+async function readFile(path: string): Promise<string> {
+  return (await browser.executeObsidian(async ({ app }, p: string) => {
+    const f = app.vault.getAbstractFileByPath(p);
+    if (!f) return "";
+    // @ts-expect-error — runtime TFile
+    return await app.vault.read(f);
+  }, path)) as unknown as string;
+}
 
+async function switchToWeekTab() {
+  await browser.execute(() => {
+    const tabs = document.querySelectorAll(".task-center-view [role='tab'], .task-center-view .bt-tab");
+    for (const t of Array.from(tabs)) {
+      if (t.textContent?.includes("本周") || t.textContent?.includes("Week")) {
+        (t as HTMLElement).click();
+        return;
+      }
+    }
+  });
+  // Use waitUntil instead of a fixed pause — cheaper and more reliable.
+  await browser.waitUntil(
+    async () => {
+      const active = await browser.execute(() => {
+        const el = document.querySelector(
+          ".task-center-view [role='tab'][aria-selected='true'], .task-center-view .bt-tab.active",
+        );
+        return el?.textContent ?? "";
+      });
+      return String(active).includes("本周") || String(active).includes("Week");
+    },
+    { timeout: 3000, interval: 100, timeoutMsg: "Week tab did not become active" },
+  );
+}
+
+describe("Task Center — 子任务 (US-141/162)", function () {
+  beforeEach(async function () {
+    await obsidianPage.resetVault(VAULT);
+  });
+
+  // US-141/162: add a subtask via the UI button
   it("adds a subtask under a parent task in the inbox", async function () {
     const today = todayISO();
     await writeAndWait(
@@ -82,15 +96,15 @@ describe("Task Center — inline + 子任务", function () {
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
-    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
+    await forFlush();
 
     await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await browser.pause(500);
     await switchToWeekTab();
 
-    const parentSel = `.task-center-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
+    const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
+    // Click the add-subtask trigger (semantic: any button/element with subtask-add role or class)
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
     await trigger.waitForExist({ timeout: 5000 });
     await trigger.click();
@@ -102,6 +116,7 @@ describe("Task Center — inline + 子任务", function () {
     const commit = $(`${parentSel} .bt-subtask-add-commit`);
     await commit.click();
 
+    // Primary assertion: the markdown file was updated correctly.
     await browser.waitUntil(
       async () => (await readFile("Tasks/Inbox.md")).includes("Newly added subtask"),
       { timeout: 5000, timeoutMsg: "subtask never appeared in file" },
@@ -112,24 +127,22 @@ describe("Task Center — inline + 子任务", function () {
     await expect(content).toContain("    - [ ] First child");
     await expect(content).toContain("    - [ ] Newly added subtask");
 
-    // Verify the UI also shows the new subtask (not just the file).
+    // Secondary: UI also shows the new subtask.
     await browser.waitUntil(
       async () => {
-        const texts = await browser.execute(() => {
-          const els = document.querySelectorAll(".task-center-view .bt-subcard-title");
-          return Array.from(els).map((e) => e.textContent);
-        });
+        const texts = await browser.execute(() =>
+          Array.from(document.querySelectorAll(".task-center-view .bt-subcard-title")).map(
+            (e) => e.textContent,
+          ),
+        );
         return (texts as string[]).some((t) => t?.includes("Newly added subtask"));
       },
       { timeout: 3000, timeoutMsg: "new subtask never rendered in the UI" },
     );
   });
 
-  it("adds a subtask when navigating to a past week (parent in older daily note)", async function () {
-    // Reproduces the user's report: parent is in Daily/2026-04-12.md with
-    // ⏳ 2026-04-12. User navigated back to that week (via ◀ button) so the
-    // parent renders in that week's column. Clicking "+ 子任务", typing, and
-    // clicking ✓ should add the child to the parent's source file.
+  // US-141: subtask added to a past-week parent (regression for daily-note + week navigation)
+  it("adds a subtask when parent is in a past week's daily note", async function () {
     const dailyPath = `Daily/2026-04-12.md`;
     await writeAndWait(
       dailyPath,
@@ -137,15 +150,13 @@ describe("Task Center — inline + 子任务", function () {
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
-    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
+    await forFlush();
 
     await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await browser.pause(500);
     await switchToWeekTab();
 
-    // Navigate back to the 2026-04-12 week by clicking ◀ repeatedly.
-    // (Today is 2026-04-24, exactly 2 weeks back.)
-    for (let i = 0; i < 2; i++) {
+    // Navigate back until the 2026-04-12 week is visible.
+    for (let i = 0; i < 3; i++) {
       await browser.execute(() => {
         const btns = document.querySelectorAll(".task-center-view .bt-nav button");
         for (const b of Array.from(btns)) {
@@ -158,7 +169,7 @@ describe("Task Center — inline + 子任务", function () {
       await browser.pause(150);
     }
 
-    const parentSel = `.task-center-view .bt-card[data-task-id="${dailyPath}:L1"]`;
+    const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
@@ -181,7 +192,8 @@ describe("Task Center — inline + 子任务", function () {
     await expect(content).toContain("    - [ ] 新子任务");
   });
 
-  it("commits on Enter key (not just click) and the subtask is written", async function () {
+  // US-162: Enter key commits the new subtask
+  it("commits subtask on Enter key press", async function () {
     const today = todayISO();
     await writeAndWait(
       "Tasks/Inbox.md",
@@ -189,25 +201,24 @@ describe("Task Center — inline + 子任务", function () {
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
-    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
+    await forFlush();
 
     await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await browser.pause(500);
     await switchToWeekTab();
 
-    // Reset the week anchor to today (previous test may have navigated back).
+    // Reset to current week in case a previous test navigated away.
     await browser.execute(() => {
       const btns = document.querySelectorAll(".task-center-view .bt-nav button");
       for (const b of Array.from(btns)) {
-        if (b.textContent === "今天") {
+        if (b.textContent === "今天" || b.textContent === "Today") {
           (b as HTMLElement).click();
           return;
         }
       }
     });
-    await browser.pause(200);
+    await browser.pause(150);
 
-    const parentSel = `.task-center-view .bt-card[data-task-id="Tasks/Inbox.md:L1"]`;
+    const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
@@ -222,11 +233,12 @@ describe("Task Center — inline + 子任务", function () {
 
     await browser.waitUntil(
       async () => (await readFile("Tasks/Inbox.md")).includes("Enter-commit child"),
-      { timeout: 5000, timeoutMsg: "Enter-committed subtask never appeared" },
+      { timeout: 5000, timeoutMsg: "Enter-committed subtask never appeared in file" },
     );
   });
 
-  it("adds a subtask under a parent task living in a daily note", async function () {
+  // US-141/162: subtask added to a parent in a daily note (no ⏳ on parent)
+  it("adds a subtask to a parent living in a daily note (no scheduled date)", async function () {
     const today = todayISO();
     const dailyPath = `Daily/${today}.md`;
     await writeAndWait(
@@ -235,13 +247,12 @@ describe("Task Center — inline + 子任务", function () {
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
-    await browser.executeObsidianCommand("obsidian-task-center:reload-tasks");
+    await forFlush();
 
     await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await browser.pause(500);
     await switchToWeekTab();
 
-    const parentSel = `.task-center-view .bt-card[data-task-id="${dailyPath}:L1"]`;
+    const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     const trigger = $(`${parentSel} .bt-subtask-add-trigger`);

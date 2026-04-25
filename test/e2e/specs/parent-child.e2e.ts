@@ -1,0 +1,219 @@
+/**
+ * US-145: completing / dropping a parent auto-propagates to todo children
+ * US-407: rename / reschedule must not eat Obsidian Tasks extension fields
+ *         (🛫 start, 🔁 recurrence, ⏫🔺🔼🔽⏬ priority, [id::] inline fields)
+ *
+ * All assertions are against the markdown file content — no CSS class coupling.
+ * The only DOM coupling is `data-task-id` (stable identifier agreed with Tiger).
+ */
+import { browser, expect } from "@wdio/globals";
+import { obsidianPage } from "wdio-obsidian-service";
+
+const VAULT = "test/e2e/vaults/simple";
+
+function todayISO(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function writeAndWait(path: string, body: string) {
+  await browser.executeObsidian(
+    async ({ app }, p: string, content: string) => {
+      let f = app.vault.getAbstractFileByPath(p);
+      if (!f) {
+        const folder = p.split("/").slice(0, -1).join("/");
+        if (folder) await app.vault.createFolder(folder).catch(() => undefined);
+        f = await app.vault.create(p, content);
+      } else {
+        // @ts-expect-error — runtime TFile
+        await app.vault.modify(f, content);
+      }
+      await new Promise<void>((resolve) => {
+        // @ts-expect-error — runtime TFile
+        const ref = app.metadataCache.on("changed", (file) => {
+          if (file.path === p) { app.metadataCache.offref(ref); resolve(); }
+        });
+        setTimeout(() => { app.metadataCache.offref(ref); resolve(); }, 2000);
+      });
+    },
+    path,
+    body,
+  );
+}
+
+async function forFlush() {
+  await browser.executeObsidian(async ({ app }) => {
+    // @ts-expect-error — runtime plugin
+    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+  });
+}
+
+async function readFile(path: string): Promise<string> {
+  return (await browser.executeObsidian(async ({ app }, p: string) => {
+    const f = app.vault.getAbstractFileByPath(p);
+    if (!f) return "";
+    // @ts-expect-error — runtime TFile
+    return await app.vault.read(f);
+  }, path)) as unknown as string;
+}
+
+/**
+ * Call TaskCenterApi inside Obsidian and return the serialisable result.
+ * Uses the plugin's registered API so tests are agnostic to internal refactors.
+ */
+async function callApi<T>(
+  fn: (api: { done(id: string): Promise<unknown>; drop(id: string): Promise<unknown> }) => Promise<T>,
+): Promise<T> {
+  return (await browser.executeObsidian(async ({ app }, fnSrc: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+    if (!plugin?.api) throw new Error("plugin api not found");
+    // Reconstruct the callable from serialised source — WDIO passes args by value.
+    // eslint-disable-next-line no-new-func
+    const callable = new Function("api", `return (${fnSrc})(api)`);
+    return await callable(plugin.api);
+  }, fn.toString())) as T;
+}
+
+describe("Task Center — 父子任务状态继承 (US-145/124/407)", function () {
+  beforeEach(async function () {
+    await obsidianPage.resetVault(VAULT);
+  });
+
+  // US-145: marking parent done auto-completes todo children; done children unchanged
+  it("US-145: completing parent marks todo children done, leaves already-done children", async function () {
+    const today = todayISO();
+    const path = "Tasks/Inbox.md";
+    await writeAndWait(
+      path,
+      [
+        `- [ ] Parent ⏳ ${today}`,
+        `    - [ ] Child A`,
+        `    - [x] Child B ✅ 2026-01-01`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    // Mark parent done via the API (UI-agnostic).
+    await callApi((api) => api.done("Tasks/Inbox.md:L1"));
+
+    await browser.waitUntil(
+      async () => {
+        const c = await readFile(path);
+        return c.includes("[x]") && c.includes("✅");
+      },
+      { timeout: 5000, timeoutMsg: "parent was not marked done" },
+    );
+
+    const content = await readFile(path);
+    // Parent: completed
+    await expect(content).toMatch(/\[x\] Parent.*✅/);
+    // Child A (was todo): also completed
+    await expect(content).toMatch(/\[x\] Child A.*✅/);
+    // Child B (was already done with a date): date must be preserved, not overwritten
+    await expect(content).toContain("[x] Child B ✅ 2026-01-01");
+  });
+
+  // US-124: dropping parent drops todo children; done children preserved
+  it("US-124: dropping parent drops todo children, preserves done children", async function () {
+    const today = todayISO();
+    const path = "Tasks/Inbox.md";
+    await writeAndWait(
+      path,
+      [
+        `- [ ] Parent ⏳ ${today}`,
+        `    - [ ] Child A`,
+        `    - [x] Child B ✅ 2026-01-01`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    await callApi((api) => api.drop("Tasks/Inbox.md:L1"));
+
+    await browser.waitUntil(
+      async () => (await readFile(path)).includes("[-]"),
+      { timeout: 5000, timeoutMsg: "parent was not dropped" },
+    );
+
+    const content = await readFile(path);
+    // Parent: dropped
+    await expect(content).toMatch(/\[-\] Parent.*❌/);
+    // Child A (was todo): also dropped
+    await expect(content).toMatch(/\[-\] Child A.*❌/);
+    // Child B (was done): untouched — US-124
+    await expect(content).toContain("[x] Child B ✅ 2026-01-01");
+  });
+
+  // US-407: rename must not eat Obsidian Tasks extension fields
+  it("US-407: rename preserves 🛫 start, 🔁 recurrence, ⏫ priority and [id::] inline field", async function () {
+    const path = "Tasks/Inbox.md";
+    // A task that uses all the extension fields this plugin does not render.
+    await writeAndWait(
+      path,
+      `- [ ] Original title 🛫 2026-04-20 🔁 every week ⏫ [id:: abc-123]\n`,
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    // Rename via API — the UI rename path should also be tested separately,
+    // but the file-level invariant is what matters here.
+    await browser.executeObsidian(
+      async ({ app }, p: string) => {
+        // @ts-expect-error — runtime plugin access
+        const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+        await plugin?.api?.rename("Tasks/Inbox.md:L1", "Renamed title");
+      },
+      path,
+    );
+
+    await browser.waitUntil(
+      async () => (await readFile(path)).includes("Renamed title"),
+      { timeout: 5000, timeoutMsg: "rename never written to file" },
+    );
+
+    const content = await readFile(path);
+    // New title present
+    await expect(content).toContain("Renamed title");
+    // All extension fields must survive byte-for-byte
+    await expect(content).toContain("🛫 2026-04-20");
+    await expect(content).toContain("🔁 every week");
+    await expect(content).toContain("⏫");
+    await expect(content).toContain("[id:: abc-123]");
+  });
+
+  // US-407: reschedule (set ⏳) must not eat other fields
+  it("US-407: setting ⏳ scheduled date preserves all other extension fields", async function () {
+    const path = "Tasks/Inbox.md";
+    await writeAndWait(
+      path,
+      `- [ ] Task with extras 🛫 2026-04-20 📅 2026-05-01 ⏫ [estimate:: 30m]\n`,
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    await browser.executeObsidian(async ({ app }) => {
+      // @ts-expect-error — runtime plugin access
+      const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+      await plugin?.api?.schedule("Tasks/Inbox.md:L1", "2026-04-28");
+    });
+
+    await browser.waitUntil(
+      async () => (await readFile(path)).includes("⏳ 2026-04-28"),
+      { timeout: 5000, timeoutMsg: "scheduled date was not written" },
+    );
+
+    const content = await readFile(path);
+    await expect(content).toContain("⏳ 2026-04-28");
+    await expect(content).toContain("🛫 2026-04-20");
+    await expect(content).toContain("📅 2026-05-01");
+    await expect(content).toContain("⏫");
+    await expect(content).toContain("[estimate:: 30m]");
+  });
+});
