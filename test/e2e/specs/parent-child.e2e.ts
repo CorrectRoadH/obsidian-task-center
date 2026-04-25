@@ -318,4 +318,72 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       "⏳ badge must not show for a task in its own scheduled day column (tomorrow)",
     );
   });
+
+  // US-105: tab counter must equal the count of top-level cards rendered
+  // when the user switches to that tab. Without dedup the badge would
+  // include children that ride with a visible parent and never appear as
+  // their own card (the bug from ctrdh's "Unscheduled 15 vs body (1)"
+  // screenshot).
+  it("US-105: tab counter equals visible top-level card count post-dedup", async function () {
+    const path = "Tasks/Inbox.md";
+    // 1 unscheduled parent with 3 unscheduled children. Children ride
+    // with the parent and don't appear as their own cards in the
+    // Unscheduled tab — only the parent does.
+    await writeAndWait(
+      path,
+      [
+        `- [ ] Parent unscheduled`,
+        `    - [ ] Child A`,
+        `    - [ ] Child B`,
+        `    - [ ] Child C`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    // Read the Unscheduled tab badge count.
+    const badgeCount = await browser.execute(() => {
+      const tab = document.querySelector(
+        ".task-center-view [data-tab='unscheduled'] .bt-tab-count",
+      );
+      return tab ? parseInt(tab.textContent || "0", 10) : 0;
+    });
+
+    // Switch to Unscheduled tab and count actual top-level cards.
+    await browser.execute(() => {
+      document
+        .querySelector<HTMLElement>(".task-center-view [data-tab='unscheduled']")
+        ?.click();
+    });
+    await browser.waitUntil(
+      () =>
+        browser.execute(() =>
+          !!document.querySelector(
+            ".task-center-view [data-tab='unscheduled'].active",
+          ),
+        ),
+      { timeout: 3000, interval: 100, timeoutMsg: "Unscheduled tab did not become active" },
+    );
+
+    // Count top-level `.bt-card` (skip nested `.bt-card-children .bt-card`
+    // — though the unscheduled view doesn't have those, this guard keeps
+    // the assertion robust if rendering changes).
+    const visibleTopLevelCount = await browser.execute(() => {
+      const root = document.querySelector(".task-center-view .bt-body");
+      if (!root) return -1;
+      // Top-level cards = `.bt-card` whose closest `.bt-card` ancestor is
+      // itself (i.e. not nested under another card).
+      let count = 0;
+      for (const card of Array.from(root.querySelectorAll(".bt-card"))) {
+        const ancestor = card.parentElement?.closest(".bt-card");
+        if (!ancestor) count++;
+      }
+      return count;
+    });
+
+    await expect(badgeCount).toBe(visibleTopLevelCount);
+    // Concretely: 1 parent → 1 visible card, badge should read "1".
+    await expect(badgeCount).toBe(1);
+  });
 });
