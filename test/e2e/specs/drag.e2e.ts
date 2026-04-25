@@ -59,6 +59,34 @@ async function forFlush() {
   });
 }
 
+/**
+ * Synthetic HTML5 DnD: fires dragstart → dragenter → dragover → drop → dragend
+ * using a shared DataTransfer carrying "text/task-id". wdio's built-in
+ * dragAndDrop does not reliably trigger Chromium's HTML5 DnD for day columns,
+ * but dispatching events directly bypasses the browser's gesture requirements.
+ */
+async function simulateDrag(srcSel: string, tgtSel: string) {
+  await browser.execute(
+    (src: string, tgt: string) => {
+      const srcEl = document.querySelector<HTMLElement>(src);
+      const tgtEl = document.querySelector<HTMLElement>(tgt);
+      if (!srcEl || !tgtEl) throw new Error(`simulateDrag: missing ${src} | ${tgt}`);
+      const taskId = srcEl.dataset.taskId ?? "";
+      const dt = new DataTransfer();
+      dt.setData("text/task-id", taskId);
+      const mk = (type: string) =>
+        new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt });
+      srcEl.dispatchEvent(mk("dragstart"));
+      tgtEl.dispatchEvent(mk("dragenter"));
+      tgtEl.dispatchEvent(mk("dragover"));
+      tgtEl.dispatchEvent(mk("drop"));
+      srcEl.dispatchEvent(mk("dragend"));
+    },
+    srcSel,
+    tgtSel,
+  );
+}
+
 async function readFile(path: string): Promise<string> {
   return (await browser.executeObsidian(async ({ app }, p: string) => {
     const f = app.vault.getAbstractFileByPath(p);
@@ -108,7 +136,7 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await $(cardSel).waitForExist({ timeout: 5000 });
     await $(targetSel).waitForExist({ timeout: 5000, timeoutMsg: `day column [data-date="${tomorrow}"] not found` });
 
-    await $(cardSel).dragAndDrop($(targetSel));
+    await simulateDrag(cardSel, targetSel);
 
     await browser.waitUntil(
       async () => (await readFile(path)).includes(`⏳ ${tomorrow}`),
@@ -134,7 +162,7 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await $(cardSel).waitForExist({ timeout: 5000 });
     await $(trashSel).waitForExist({ timeout: 5000, timeoutMsg: `trash zone [data-drop-zone="trash"] not found` });
 
-    await $(cardSel).dragAndDrop($(trashSel));
+    await simulateDrag(cardSel, trashSel);
 
     await browser.waitUntil(
       async () => (await readFile(path)).includes("[-]"),

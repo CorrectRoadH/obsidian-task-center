@@ -147,16 +147,12 @@ describe("Task Center — 子任务 (US-141/162)", function () {
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
 
-    // Navigate back until the 2026-04-12 week is visible.
-    for (let i = 0; i < 3; i++) {
+    // Navigate back until the 2026-04-12 week is visible (2 weeks back from current).
+    for (let i = 0; i < 2; i++) {
       await browser.execute(() => {
-        const btns = document.querySelectorAll(".task-center-view .bt-nav button");
-        for (const b of Array.from(btns)) {
-          if (b.textContent === "◀") {
-            (b as HTMLElement).click();
-            return;
-          }
-        }
+        document
+          .querySelector<HTMLElement>(".task-center-view [data-action='nav-prev']")
+          ?.click();
       });
     }
     await $(".task-center-view [data-date='2026-04-12']").waitForExist({
@@ -203,13 +199,9 @@ describe("Task Center — 子任务 (US-141/162)", function () {
 
     // Reset to current week in case a previous test navigated away.
     await browser.execute(() => {
-      const btns = document.querySelectorAll(".task-center-view .bt-nav button");
-      for (const b of Array.from(btns)) {
-        if (b.textContent === "今天" || b.textContent === "Today") {
-          (b as HTMLElement).click();
-          return;
-        }
-      }
+      document
+        .querySelector<HTMLElement>(".task-center-view [data-action='nav-today']")
+        ?.click();
     });
     await $(`.task-center-view [data-date='${today}']`).waitForExist({
       timeout: 2000,
