@@ -8,7 +8,7 @@
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc -noEmit",
     "test": "npm run test:unit",
-    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs",
+    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs test/cache.test.mjs",
     "test:e2e": "npm run build && wdio run ./wdio.conf.mts",
     "lint": "eslint src"
   },

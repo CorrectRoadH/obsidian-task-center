@@ -14,6 +14,13 @@ import { ParsedTask } from "./types";
 import { parseFileTasks } from "./parser";
 import { TaskWriterError, parseTaskId } from "./writer";
 
+// Re-exported so cache.test.mjs can construct TFile instances that pass the
+// bundle's `instanceof TFile` checks. esbuild's `--alias:obsidian=...` makes
+// this resolve to the same class the bundle uses internally; using a fresh
+// `import { TFile } from "obsidian-stub"` in the test would yield a *sibling*
+// class and `instanceof` would silently fail.
+export { TFile } from "obsidian";
+
 export interface FileEntry {
   mtime: number;
   tasks: ParsedTask[];
