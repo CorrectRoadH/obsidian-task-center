@@ -420,11 +420,25 @@ export class TaskCenterView extends ItemView {
     const monthStart = startOfMonth(today);
     const monthEnd = endOfMonth(today);
     const activeTodos = this.tasks.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+    // US-105: tab badge must match what the user sees after switching to
+    // the tab. Each tab's body applies `hideChildrenOfVisibleParents` to
+    // collapse children that ride with a visible parent — the badge has
+    // to apply the same dedup or it overcounts (the bug ctrdh hit:
+    // Unscheduled tab said 15, body showed 1 because 14 children rode
+    // with their parents).
     const counts = {
-      week: activeTodos.filter((t) => t.scheduled && t.scheduled >= weekStart && t.scheduled <= weekEnd).length,
-      month: activeTodos.filter((t) => t.scheduled && t.scheduled >= monthStart && t.scheduled <= monthEnd).length,
-      completed: this.tasks.filter((t) => t.status === "done").length,
-      unscheduled: activeTodos.filter((t) => !t.scheduled).length,
+      week: this.hideChildrenOfVisibleParents(
+        activeTodos.filter((t) => t.scheduled && t.scheduled >= weekStart && t.scheduled <= weekEnd),
+      ).length,
+      month: this.hideChildrenOfVisibleParents(
+        activeTodos.filter((t) => t.scheduled && t.scheduled >= monthStart && t.scheduled <= monthEnd),
+      ).length,
+      completed: this.hideChildrenOfVisibleParents(
+        this.tasks.filter((t) => t.status === "done"),
+      ).length,
+      unscheduled: this.hideChildrenOfVisibleParents(
+        activeTodos.filter((t) => !t.scheduled),
+      ).length,
     };
     const tabs: Array<{ key: TabKey; label: string; hotkey: string; count: number }> = [
       { key: "week", label: tr("tab.week"), hotkey: "⌃1", count: counts.week },
