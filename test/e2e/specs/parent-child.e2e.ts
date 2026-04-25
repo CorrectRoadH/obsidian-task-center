@@ -283,4 +283,39 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await expect(content).toContain("⏫");
     await expect(content).toContain("[estimate:: 30m]");
   });
+
+  // US-150: ⏳ badge hidden when top-level card is in its own scheduled day column
+  it("US-150: ⏳ badge not shown when card is rendered in its own scheduled day column", async function () {
+    const today = todayISO();
+    const tomorrow = offsetISO(1);
+    const path = "Tasks/Inbox.md";
+
+    await writeAndWait(
+      path,
+      [
+        `- [ ] Task today ⏳ ${today}`,
+        `- [ ] Task tomorrow ⏳ ${tomorrow}`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
+    await switchToWeekTab();
+
+    const todayCardSel = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"]`;
+    const tomorrowCardSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L2"]`;
+    await $(todayCardSel).waitForExist({ timeout: 5000, timeoutMsg: "today's task card not found" });
+    await $(tomorrowCardSel).waitForExist({ timeout: 5000, timeoutMsg: "tomorrow's task card not found" });
+
+    // US-150: column header already implies the date — badge must not appear
+    await expect(await browser.$(`${todayCardSel} .bt-meta-sched`).isExisting()).toBe(
+      false,
+      "⏳ badge must not show for a task in its own scheduled day column (today)",
+    );
+    await expect(await browser.$(`${tomorrowCardSel} .bt-meta-sched`).isExisting()).toBe(
+      false,
+      "⏳ badge must not show for a task in its own scheduled day column (tomorrow)",
+    );
+  });
 });
