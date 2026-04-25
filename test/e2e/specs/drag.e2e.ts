@@ -9,7 +9,7 @@
  *
  * All final assertions are against markdown file content, not CSS classes.
  */
-import { browser, expect } from "@wdio/globals";
+import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
