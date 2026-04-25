@@ -5,6 +5,19 @@ import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO, fromISO } from "./dates";
 import type { TaskCenterSettings } from "./types";
 
+// US-167-3: prefill chips. Token strings must match parseQuickAdd's
+// existing recognizers (resolveRelativeDate / tagRe). Quadrant tokens
+// follow the established `#N象限` form used in the v1 placeholder.
+const QUICK_CHIPS: ReadonlyArray<{ label: string; token: string }> = [
+  { label: "Today", token: "⏳ today" },
+  { label: "Tomorrow", token: "⏳ tomorrow" },
+  { label: "周六", token: "⏳ 周六" },
+  { label: "Q1", token: "#1象限" },
+  { label: "Q2", token: "#2象限" },
+  { label: "Q3", token: "#3象限" },
+  { label: "Q4", token: "#4象限" },
+];
+
 export class QuickAddModal extends Modal {
   private input = "";
   private api: TaskCenterApi;
@@ -98,14 +111,66 @@ export class QuickAddModal extends Modal {
       if (e.key === "Escape") this.close();
     });
 
-    contentEl.createEl("p", {
-      text: tr("qa.hint"),
-      cls: "task-center-quick-add-hint",
-    });
+    if (!Platform.isMobile) {
+      // US-167-3: quick chips row replaces the v1 prose hint. Click =
+      // append token at cursor (idempotent — already-present tokens are
+      // not duplicated). 7 chips chosen from spec list (Today/Tomorrow/
+      // 周六/Q1~Q4); Inbox + 下周 omitted: Inbox token semantics are not
+      // defined in parser.ts, 下周 is rarer than 周六.
+      const chipsRow = contentEl.createDiv({ cls: "tc-qa-chips" });
+      for (const c of QUICK_CHIPS) {
+        const chip = chipsRow.createSpan({ cls: "tc-qa-chip", text: c.label });
+        chip.setAttr("role", "button");
+        chip.setAttr("tabindex", "0");
+        chip.setAttr("data-chip", c.label);
+        const fire = () => {
+          this.insertChipToken(text.inputEl, c.token);
+          refreshHint();
+        };
+        chip.addEventListener("click", fire);
+        chip.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fire();
+          }
+        });
+      }
+    } else {
+      // Mobile keeps the v1 prose hint (separate redesign track).
+      contentEl.createEl("p", {
+        text: tr("qa.hint"),
+        cls: "task-center-quick-add-hint",
+      });
+    }
 
     if (Platform.isMobile) this.installKeyboardAvoidance(modalEl);
 
     window.setTimeout(() => text.inputEl.focus(), 10);
+  }
+
+  /**
+   * US-167-3 chip click: append `token` at cursor (or end). Idempotent —
+   * if `token` already appears in the input, do nothing. Adds a leading
+   * space when the prior char isn't whitespace so the parser can split
+   * tokens cleanly.
+   */
+  private insertChipToken(inputEl: HTMLInputElement, token: string): void {
+    const current = inputEl.value;
+    if (current.includes(token)) {
+      inputEl.focus();
+      return;
+    }
+    const pos = inputEl.selectionStart ?? current.length;
+    const before = current.slice(0, pos);
+    const after = current.slice(pos);
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);
+    const insert = (needsLeadingSpace ? " " : "") + token;
+    const next = before + insert + after;
+    inputEl.value = next;
+    this.input = next;
+    const newPos = (before + insert).length;
+    inputEl.setSelectionRange(newPos, newPos);
+    inputEl.focus();
   }
 
   onClose() {

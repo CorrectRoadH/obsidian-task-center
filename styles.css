@@ -1339,11 +1339,34 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-/* Hide the v1 prose hint paragraph in v2 — chunk 3 replaces it with
- * clickable quick chips, but until then keep the DOM in place (still
- * rendered for mobile / a11y) and just suppress visually on desktop. */
-.task-center-quick-add-v2 .task-center-quick-add-hint {
-  display: none;
+/* Quick chips row (US-167-3). Replaces the v1 prose hint with clickable
+ * prefill chips. Horizontal flex with horizontal scroll fallback for
+ * narrow viewports. */
+.task-center-quick-add-v2 .tc-qa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.task-center-quick-add-v2 .tc-qa-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 100ms ease-out, color 100ms ease-out;
+}
+.task-center-quick-add-v2 .tc-qa-chip:hover,
+.task-center-quick-add-v2 .tc-qa-chip:focus {
+  background: var(--background-modifier-active-hover);
+  color: var(--text-normal);
+  outline: none;
 }
 /* Drop the default Obsidian X close button — Esc / outside-click handles
  * dismissal. Keeping the button creates visual clutter against the
