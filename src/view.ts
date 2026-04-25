@@ -28,6 +28,7 @@ import { DatePromptModal } from "./dateprompt";
 import { t as tr, getLocale } from "./i18n";
 import { animateOut } from "./anim";
 import { TabDwellTracker } from "./view/dnd";
+import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -41,17 +42,9 @@ interface ViewState {
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
 }
 
-interface UndoOp {
-  path: string;
-  line: number;
-  before: string[];
-  after: string[];
-}
-
-interface UndoEntry {
-  label: string; // short human description for the toast
-  ops: UndoOp[]; // forward ops; undo applies them in reverse
-}
+// `UndoOp` and `UndoEntry` re-exported from `./view/undo` (the canonical
+// definitions). Local re-export so existing usage in this file compiles.
+export type { UndoOp, UndoEntry };
 
 const WEEKDAY_KEYS = [
   "weekday.0",
@@ -93,14 +86,17 @@ export class TaskCenterView extends ItemView {
     anchor: HTMLElement;
   } | null = null;
   // Undo stack — only records writes initiated from this view (drag / keyboard).
-  // CLI writes are not captured. Max 20 entries.
-  private undoStack: UndoEntry[] = [];
-  private static UNDO_MAX = 20;
+  // CLI writes are not captured. Max 20 entries (UndoStack.MAX).
+  private undoStack: UndoStack;
 
   constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.api = plugin.api;
+    this.undoStack = new UndoStack(this.app, {
+      onApplied: () => this.scheduleRefresh(),
+      notify: (msg, ms) => new Notice(msg, ms),
+    });
     this.state = {
       // Priority: last-closed tab → defaultView setting → "week"
       tab: plugin.settings.lastTab ?? plugin.settings.defaultView ?? "week",
@@ -1247,7 +1243,7 @@ export class TaskCenterView extends ItemView {
           const r = await this.api.nest(droppedId, t.id);
           if (!r.unchanged) {
             if (r.undoOps && r.undoOps.length > 0) {
-              this.pushUndo({
+              this.undoStack.push({
                 label: `nest under "${t.title.slice(0, 20)}"`,
                 ops: r.undoOps,
               });
@@ -1307,7 +1303,7 @@ export class TaskCenterView extends ItemView {
       const work = async () => {
         const r = await this.api.schedule(id, targetDate);
         if (!r.unchanged && task) {
-          this.pushUndo({
+          this.undoStack.push({
             label: targetDate ? `⏳ ${targetDate}` : "⏳ cleared",
             ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
           });
@@ -1397,7 +1393,7 @@ export class TaskCenterView extends ItemView {
       if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
       e.preventDefault();
       e.stopPropagation();
-      this.performUndo();
+      void this.undoStack.pop();
       return;
     }
 
@@ -1441,7 +1437,7 @@ export class TaskCenterView extends ItemView {
       await this.runWithRemoveAnim(sel.id, async () => {
         const r = await this.api.schedule(sel.id, newDate);
         if (!r.unchanged) {
-          this.pushUndo({
+          this.undoStack.push({
             label: `⏳ ${newDate}`,
             ops: [{ path: sel.path, line: sel.line, before: [r.before], after: [r.after] }],
           });
@@ -1479,54 +1475,9 @@ export class TaskCenterView extends ItemView {
     }
   }
 
-  private pushUndo(entry: UndoEntry) {
-    this.undoStack.push(entry);
-    if (this.undoStack.length > TaskCenterView.UNDO_MAX) {
-      this.undoStack.shift();
-    }
-  }
-
-  private async performUndo() {
-    const entry = this.undoStack.pop();
-    if (!entry) {
-      new Notice("nothing to undo");
-      return;
-    }
-    try {
-      // Apply ops in reverse. Each op is: "at path:line, `after` is present;
-      // replace with `before`". Multi-file moves record one op per touched
-      // file, so reversing restores both sides of a cross-file nest.
-      for (let i = entry.ops.length - 1; i >= 0; i--) {
-        const op = entry.ops[i];
-        const file = this.app.vault.getAbstractFileByPath(op.path);
-        if (!(file instanceof TFile)) {
-          throw new Error(`file not found: ${op.path}`);
-        }
-        await this.app.vault.process(file, (data) => {
-          const lines = data.split("\n");
-          for (let j = 0; j < op.after.length; j++) {
-            if (lines[op.line + j] !== op.after[j]) {
-              throw new Error(
-                `content diverged at ${op.path}:L${op.line + j + 1} — skipping undo`,
-              );
-            }
-          }
-          const out = [
-            ...lines.slice(0, op.line),
-            ...op.before,
-            ...lines.slice(op.line + op.after.length),
-          ];
-          return out.join("\n");
-        });
-      }
-      new Notice(`undo: ${entry.label}`);
-      this.scheduleRefresh();
-    } catch (e) {
-      new Notice(`cannot undo: ${(e as Error).message}`, 4000);
-      // If it failed because file diverged, don't re-push; the user edited
-      // over our change on purpose.
-    }
-  }
+  // Undo stack push / pop now live on `this.undoStack` (UndoStack instance).
+  // Kept callsites use `this.undoStack.push(entry)` and
+  // `this.undoStack.pop()` — see `./view/undo` for the implementation.
 
   private getSelectedTask(): ParsedTask | null {
     if (!this.state.selectedTaskId) return null;
@@ -1635,7 +1586,7 @@ export class TaskCenterView extends ItemView {
         const work = async () => {
           const r = await this.api.schedule(task.id, resolved);
           if (!r.unchanged) {
-            this.pushUndo({
+            this.undoStack.push({
               label: resolved ? `⏳ ${resolved}` : "⏳ cleared",
               ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
             });
@@ -1672,7 +1623,7 @@ export class TaskCenterView extends ItemView {
         try {
           const r = await this.api.rename(task.id, newVal);
           if (!r.unchanged) {
-            this.pushUndo({
+            this.undoStack.push({
               label: `rename "${oldText.slice(0, 20)}" → "${newVal.slice(0, 20)}"`,
               ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
             });
