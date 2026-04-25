@@ -1138,3 +1138,31 @@
   color: var(--text-muted);
   font-size: 11px;
 }
+
+/* Long-press card action sheet (UX-mobile.md §5.1 / US-506). */
+.task-center-bottom-sheet .bt-sheet-source {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  margin: 4px 0 12px;
+  font-family: var(--font-monospace);
+}
+.task-center-bottom-sheet .bt-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-center-bottom-sheet .bt-sheet-action {
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 14px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.task-center-bottom-sheet .bt-sheet-action:active {
+  background: var(--background-modifier-hover);
+}

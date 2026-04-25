@@ -30,6 +30,7 @@ import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
 import { ContextPopoverController } from "./view/popover";
 import { BottomSheet } from "./view/bottom-sheet";
+import { attachLongPress } from "./view/touch";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -695,6 +696,68 @@ export class TaskCenterView extends ItemView {
   }
 
   /**
+   * Mobile-only: long-press a card → bottom sheet with task actions.
+   * Mirrors the desktop right-click menu + hover popover (UX-mobile.md
+   * §5.1 / US-506) into a single thumb-reachable surface. Buttons call
+   * the same `api.*` methods as the desktop UI; rendered as a flat list
+   * of large tap targets.
+   */
+  private openCardActionSheet(t: ParsedTask): void {
+    const today = todayISO();
+    const tomorrow = addDays(today, 1);
+    let sheet: BottomSheet | null = null;
+    const run = async (label: string, op: () => Promise<unknown>) => {
+      sheet?.close();
+      try {
+        await op();
+      } catch (err) {
+        new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
+      }
+      this.scheduleRefresh();
+      void label; // for future telemetry; intentional no-op
+    };
+
+    sheet = new BottomSheet(this.app, {
+      title: t.title,
+      populate: (el) => {
+        // Source location — replaces the desktop hover popover preview.
+        const source = el.createDiv({ cls: "bt-sheet-source" });
+        source.setText(`${t.path}:L${t.line + 1}`);
+
+        const actions = el.createDiv({ cls: "bt-sheet-actions" });
+
+        const btn = (text: string, action: () => Promise<unknown> | unknown) => {
+          const b = actions.createEl("button", {
+            cls: "bt-sheet-action",
+            text,
+          });
+          b.addEventListener("click", () => {
+            void run(text, async () => action());
+          });
+        };
+
+        btn(
+          t.status === "done" ? "↩ Mark undone" : "✓ Done",
+          () => (t.status === "done" ? this.api.undone(t.id) : this.api.done(t.id)),
+        );
+        btn(`⏳ ${today}`, () => this.api.schedule(t.id, today));
+        btn(`⏳ ${tomorrow}`, () => this.api.schedule(t.id, tomorrow));
+        btn("⏳ —", () => this.api.schedule(t.id, null));
+        btn("📂 Open source", async () => {
+          sheet?.close();
+          const file = this.app.vault.getAbstractFileByPath(t.path);
+          if (file instanceof TFile) {
+            const leaf = this.app.workspace.getLeaf(false);
+            await leaf.openFile(file, { eState: { line: t.line } });
+          }
+        });
+        btn("🗑 Drop", () => this.api.drop(t.id));
+      },
+    });
+    sheet.open();
+  }
+
+  /**
    * Mobile-only: bottom sheet listing every todo task scheduled to `day`.
    * Tapping a row switches to the week tab anchored on that day with the
    * row's day expanded (so the user can act on the task with the full
@@ -1076,8 +1139,16 @@ export class TaskCenterView extends ItemView {
     // Hover popover is desktop-only — UX-mobile.md §4: "不显 hover popover".
     // On touch, browsers fire emulated mouseenter on first tap and stale
     // mouseleave on next tap elsewhere; the popover would flash and stay.
-    // Long-press menu (M-3) replaces it on mobile.
-    if (!Platform.isMobile) this.contextPopover.attach(card, t);
+    // Long-press menu replaces it on mobile (UX-mobile §5.1 / US-506).
+    if (!Platform.isMobile) {
+      this.contextPopover.attach(card, t);
+    } else {
+      attachLongPress(card, {
+        durationMs: 500,
+        moveThresholdPx: 4,
+        onTrigger: () => this.openCardActionSheet(t),
+      });
+    }
   }
 
   // Renders a subcard + its own children recursively. The nested
