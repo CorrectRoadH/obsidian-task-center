@@ -5,8 +5,6 @@ import {
   Notice,
   TFile,
   MarkdownView,
-  MarkdownRenderer,
-  Component,
 } from "obsidian";
 import { ParsedTask, VIEW_TYPE_TASK_CENTER } from "./types";
 import { formatMinutes } from "./parser";
@@ -29,6 +27,7 @@ import { t as tr, getLocale } from "./i18n";
 import { animateOut } from "./anim";
 import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
+import { ContextPopoverController } from "./view/popover";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -76,15 +75,8 @@ export class TaskCenterView extends ItemView {
     durationMs: 600,
     onCommit: (tab) => this.setTab(tab),
   });
-  // Context hover: at most one popover alive at a time. The open timer defers
-  // work until the cursor has genuinely settled, so quickly skimming the board
-  // doesn't thrash the vault read/markdown render pipeline.
-  private ctxHoverTimer: number | null = null;
-  private ctxPopover: {
-    el: HTMLElement;
-    component: Component;
-    anchor: HTMLElement;
-  } | null = null;
+  // Card hover popover — implementation in src/view/popover.ts.
+  private contextPopover: ContextPopoverController;
   // Undo stack — only records writes initiated from this view (drag / keyboard).
   // CLI writes are not captured. Max 20 entries (UndoStack.MAX).
   private undoStack: UndoStack;
@@ -96,6 +88,12 @@ export class TaskCenterView extends ItemView {
     this.undoStack = new UndoStack(this.app, {
       onApplied: () => this.scheduleRefresh(),
       notify: (msg, ms) => new Notice(msg, ms),
+    });
+    this.contextPopover = new ContextPopoverController({
+      app: this.app,
+      addChild: (c) => this.addChild(c),
+      removeChild: (c) => this.removeChild(c),
+      isDragging: () => this.contentEl.hasClass("dragging-active"),
     });
     this.state = {
       // Priority: last-closed tab → defaultView setting → "week"
@@ -147,7 +145,7 @@ export class TaskCenterView extends ItemView {
       this.cacheUnsub = null;
     }
     this.dwellTracker.reset();
-    this.closeContextPopover();
+    this.contextPopover.close();
   }
 
   private scheduleRefresh() {
@@ -927,7 +925,7 @@ export class TaskCenterView extends ItemView {
     if (t.status === "todo") this.renderAddSubtaskRow(card, t);
 
     this.wireCardEvents(card, t);
-    this.attachContextHover(card, t);
+    this.contextPopover.attach(card, t);
   }
 
   // Renders a subcard + its own children recursively. The nested
@@ -974,133 +972,9 @@ export class TaskCenterView extends ItemView {
     }
   }
 
-  // ---------- Context hover popover ----------
-  //
-  // Rendered on mouseenter (after ~350ms settle delay) to show the task's
-  // surrounding lines from its source file. Gives enough context to remember
-  // where a task came from without leaving the board. Suppressed during
-  // drags so the popover doesn't fight the drop-target highlighting.
-
-  private attachContextHover(card: HTMLElement, t: ParsedTask) {
-    card.addEventListener("mouseenter", () => {
-      if (this.contentEl.hasClass("dragging-active")) return;
-      if (this.ctxHoverTimer !== null) window.clearTimeout(this.ctxHoverTimer);
-      this.ctxHoverTimer = window.setTimeout(() => {
-        this.ctxHoverTimer = null;
-        if (this.contentEl.hasClass("dragging-active")) return;
-        if (!document.body.contains(card)) return;
-        void this.openContextPopover(card, t);
-      }, 350);
-    });
-    card.addEventListener("mouseleave", () => {
-      if (this.ctxHoverTimer !== null) {
-        window.clearTimeout(this.ctxHoverTimer);
-        this.ctxHoverTimer = null;
-      }
-      if (this.ctxPopover && this.ctxPopover.anchor === card) {
-        this.closeContextPopover();
-      }
-    });
-    // If the user starts dragging this card, kill any pending/open popover.
-    card.addEventListener("dragstart", () => {
-      if (this.ctxHoverTimer !== null) {
-        window.clearTimeout(this.ctxHoverTimer);
-        this.ctxHoverTimer = null;
-      }
-      this.closeContextPopover();
-    });
-  }
-
-  private async openContextPopover(card: HTMLElement, t: ParsedTask) {
-    const file = this.app.vault.getAbstractFileByPath(t.path);
-    if (!(file instanceof TFile)) return;
-    const data = await this.app.vault.cachedRead(file);
-    const lines = data.split("\n");
-    if (t.line < 0 || t.line >= lines.length) return;
-
-    // Walk the entire subtree by indent so multi-level nested subtasks render
-    // whole. Stop as soon as we hit a line that isn't indented deeper than
-    // the task itself — that's a sibling or outdent, which would pull in
-    // unrelated content. Line ± naive window was wrong for any depth > 1.
-    const taskIndent = t.indent.length;
-    let subtreeEnd = t.line;
-    for (let i = t.line + 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.trim() === "") break;
-      const m = line.match(/^\s*/);
-      const indent = m ? m[0].length : 0;
-      if (indent <= taskIndent) break;
-      subtreeEnd = i;
-    }
-
-    const LEAD = 2; // lines of context above the task itself
-    const start = Math.max(0, t.line - LEAD);
-    const end = subtreeEnd;
-    const snippet = lines.slice(start, end + 1).join("\n");
-
-    // If the parent task lives outside the window, surface it as a separate
-    // "↑ 父任务" chip. Inside the window it's already visible in the snippet.
-    const parentLine =
-      t.parentLine !== null && (t.parentLine < start || t.parentLine > end)
-        ? lines[t.parentLine] ?? null
-        : null;
-
-    // Tear down any existing popover before opening a new one.
-    this.closeContextPopover();
-
-    const pop = document.body.createDiv({ cls: "bt-ctx-popover" });
-    const component = new Component();
-    this.addChild(component);
-
-    if (parentLine !== null) {
-      const chip = pop.createDiv({ cls: "bt-ctx-parent" });
-      chip.createSpan({ cls: "bt-ctx-parent-arrow", text: "↑" });
-      const chipBody = chip.createDiv({ cls: "bt-ctx-parent-body" });
-      void MarkdownRenderer.render(
-        this.app,
-        parentLine.trim(),
-        chipBody,
-        t.path,
-        component,
-      );
-    }
-
-    const body = pop.createDiv({ cls: "bt-ctx-body" });
-    void MarkdownRenderer.render(this.app, snippet, body, t.path, component);
-
-    this.ctxPopover = { el: pop, component, anchor: card };
-    this.positionContextPopover(pop, card);
-  }
-
-  private positionContextPopover(pop: HTMLElement, anchor: HTMLElement) {
-    const rect = anchor.getBoundingClientRect();
-    const margin = 8;
-    // Measure after insert; popover is already in the DOM.
-    const popRect = pop.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    let top = rect.bottom + margin;
-    if (top + popRect.height > vh - margin) {
-      // Flip above if there's no room below.
-      top = Math.max(margin, rect.top - popRect.height - margin);
-    }
-    let left = rect.left;
-    if (left + popRect.width > vw - margin) {
-      left = Math.max(margin, vw - popRect.width - margin);
-    }
-
-    pop.style.top = `${top}px`;
-    pop.style.left = `${left}px`;
-  }
-
-  private closeContextPopover() {
-    const p = this.ctxPopover;
-    if (!p) return;
-    this.ctxPopover = null;
-    p.el.remove();
-    this.removeChild(p.component);
-  }
+  // Context hover popover lives in `./view/popover` (ContextPopoverController).
+  // Wired in the constructor; cards register via `this.contextPopover.attach()`
+  // in renderCard.
 
   private renderAddSubtaskRow(card: HTMLElement, parent: ParsedTask) {
     const row = card.createDiv({ cls: "bt-subtask-add" });
