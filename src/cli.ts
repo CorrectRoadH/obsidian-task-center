@@ -104,13 +104,29 @@ export class TaskCenterApi {
     return await setEstimate(this.app, task, minutes);
   }
 
-  async done(id: string, at: string | null = null) {
+  async done(id: string, at: string | null = null, cascade = true) {
     if (at && !isValidISO(at)) {
       throw new TaskWriterError("invalid_date", `--at requires YYYY-MM-DD: ${at}`);
     }
     const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
-    return await markDone(this.app, task, at);
+    // US-145: completing a parent cascades to its `todo` descendants. Tasks
+    // that are already `[x] / [-] / [>]` are left alone — overwriting their
+    // recorded ✅ / ❌ / 🛫 dates would destroy history. Cross-file parent /
+    // child relationships are not modelled (ARCHITECTURE §1.4), so we walk
+    // only this file's tasks.
+    const fileTasks = this.cache.get(task.path)?.tasks ?? [task];
+    const descendants = cascade
+      ? collectDescendants(task, fileTasks).filter((t) => t.status === "todo")
+      : [];
+    const targets = [task, ...descendants];
+    // Bottom-up so line numbers stay stable across each mutation.
+    targets.sort((a, b) => b.line - a.line);
+    let lastResult = await markDone(this.app, targets[0], at);
+    for (let i = 1; i < targets.length; i++) {
+      lastResult = await markDone(this.app, targets[i], at);
+    }
+    return lastResult;
   }
 
   async undone(id: string) {
