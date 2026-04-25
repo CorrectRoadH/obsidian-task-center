@@ -1270,12 +1270,10 @@
  * in chunks b/c/d. Reference: UX.md §6.6.
  * ============================================================================ */
 .task-center-quick-add-v2.modal {
-  /* Compact 540×auto container; height grows to fit chips + footer in
-   * later chunks. Min-height keeps the shell visible during chunk 1
-   * before the body fills out. */
+  /* Compact 540×auto container; height grows to fit chips + footer.
+   * Spec UX.md §6.6: 540 wide, max ~240 tall (content-adaptive). */
   width: 540px;
   max-width: 90vw;
-  min-height: 240px;
   border-radius: 14px;
   /* Linear-gradient body — primary→secondary creates a subtle Spotlight
    * top-light effect without depending on theme accent. */
@@ -1367,6 +1365,42 @@
   background: var(--background-modifier-active-hover);
   color: var(--text-normal);
   outline: none;
+}
+
+/* Inline error line (US-167-4). Sits between chips and footer; rendered
+ * empty + hidden until submit() catches an error. Reused across retries
+ * so repeated failures don't stack. */
+.task-center-quick-add-v2 .tc-qa-error {
+  margin-top: 10px;
+  color: var(--color-red);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Footer (US-167-4). Two-side flex: write target preview on the left,
+ * `Esc` keystroke marker on the right. No verbs ("Cancel" / "Submit") —
+ * pure keystroke vocabulary keeps the panel visually quiet. */
+.task-center-quick-add-v2 .tc-qa-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.task-center-quick-add-v2 .tc-qa-footer-left {
+  font-family: var(--font-monospace);
+  /* Truncate very long paths gracefully — long vault paths should not
+   * push the Esc marker off-screen. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.task-center-quick-add-v2 .tc-qa-footer-right {
+  font-family: var(--font-monospace);
+  flex-shrink: 0;
+  margin-left: 16px;
 }
 /* Drop the default Obsidian X close button — Esc / outside-click handles
  * dismissal. Keeping the button creates visual clutter against the

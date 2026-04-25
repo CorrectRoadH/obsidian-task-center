@@ -27,6 +27,9 @@ export class QuickAddModal extends Modal {
   // we can detach in onClose; visualViewport is a singleton so leaks would
   // accumulate across modal reopens.
   private vvOnResize: (() => void) | null = null;
+  // US-167-4 inline error slot. Reused across retries so we don't stack
+  // ⚠ lines on repeated failures. Only created on desktop v2.
+  private errorEl: HTMLElement | null = null;
 
   constructor(app: App, api: TaskCenterApi, onDone?: () => void, settings?: TaskCenterSettings) {
     super(app);
@@ -135,6 +138,25 @@ export class QuickAddModal extends Modal {
           }
         });
       }
+
+      // US-167-4 error slot — pre-rendered empty so submit() can fill in
+      // place rather than appending fresh nodes on each failure (which
+      // would stack ⚠ lines if the user retried).
+      this.errorEl = contentEl.createDiv({ cls: "tc-qa-error" });
+      this.errorEl.setAttr("role", "alert");
+      this.errorEl.hide();
+
+      // US-167-4 footer: `↵ <write target path>` left, `Esc` right.
+      // Static — write target is determined by settings.dailyFolder +
+      // todayISO at modal open and doesn't change with input. Spec
+      // UX.md §6.6 explicitly: "按 settings.dailyFolder + todayISO 计算；
+      // 无 daily 走 inbox 路径".
+      const footer = contentEl.createDiv({ cls: "tc-qa-footer" });
+      footer.createSpan({
+        cls: "tc-qa-footer-left",
+        text: `↵ ${computeWriteTarget(this.settings)}`,
+      });
+      footer.createSpan({ cls: "tc-qa-footer-right", text: "Esc" });
     } else {
       // Mobile keeps the v1 prose hint (separate redesign track).
       contentEl.createEl("p", {
@@ -218,8 +240,16 @@ export class QuickAddModal extends Modal {
       if (this.onDone) this.onDone();
     } catch (e) {
       const note = contentErr(e);
-      const err = this.contentEl.createDiv({ cls: "task-center-err" });
-      err.setText("error: " + note);
+      // Prefer the v2 inline error slot (rendered above the footer) so
+      // failed submits don't stack ⚠ lines. Fall back to the legacy
+      // append-on-failure path on mobile (which still renders v1).
+      if (this.errorEl) {
+        this.errorEl.setText(`⚠ ${note}`);
+        this.errorEl.show();
+      } else {
+        const err = this.contentEl.createDiv({ cls: "task-center-err" });
+        err.setText("error: " + note);
+      }
     }
   }
 }
@@ -240,6 +270,19 @@ function formatHintDate(iso: string): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${mm}-${dd} (${WEEKDAY_SHORT[d.getDay()]})`;
+}
+
+// US-167-4: compute the file path the new task will be appended to, for
+// the footer's `↵ <path>` preview. Spec UX.md §6.6: dailyFolder +
+// todayISO when set, inbox fallback otherwise. Note this preview is a
+// best-effort approximation of writer.ts's actual target resolution
+// (which also consults Obsidian's daily-notes internal plugin); the
+// preview matches the spec wording exactly while the writer remains the
+// authority on actual write location.
+function computeWriteTarget(settings?: TaskCenterSettings): string {
+  const dailyFolder = settings?.dailyFolder?.trim();
+  if (dailyFolder) return `${dailyFolder}/${todayISO()}.md`;
+  return settings?.inboxPath ?? "Tasks/Inbox.md";
 }
 
 const ZH_DAYS: Record<string, number> = {
