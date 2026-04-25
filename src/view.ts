@@ -1274,9 +1274,15 @@ export class TaskCenterView extends ItemView {
   private openSubtreeSheet(root: ParsedTask): void {
     // Walk the subtree depth-first, recording each task with its depth
     // relative to the root. Same-file children only (ARCHITECTURE §1.4).
+    // Cycle guard mirrors `countDescendants` — production data shouldn't
+    // produce cycles, but parser bugs / hand-edited files could, and a
+    // BottomSheet that hangs is worse than one that under-counts.
     const rows: Array<{ task: ParsedTask; depth: number }> = [];
+    const seen = new Set<number>();
     const walk = (parent: ParsedTask, depth: number) => {
       for (const line of parent.childrenLines) {
+        if (seen.has(line)) continue;
+        seen.add(line);
         const child = this.tasks.find(
           (t) => t.path === parent.path && t.line === line,
         );
