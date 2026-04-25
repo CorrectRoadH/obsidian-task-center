@@ -11,6 +11,7 @@ import {
   formatAdd,
 } from "./cli";
 import { TaskCache } from "./cache";
+import { StatusBar } from "./status-bar";
 import { QuickAddModal } from "./quickadd";
 import { t as tr } from "./i18n";
 import { todayISO } from "./dates";
@@ -26,9 +27,7 @@ export default class TaskCenterPlugin extends Plugin {
   settings!: TaskCenterSettings;
   api!: TaskCenterApi;
   cache!: TaskCache;
-  private statusBar: HTMLElement | null = null;
-  private statusBarTimer: number | null = null;
-  private cacheUnsub: (() => void) | null = null;
+  private statusBar: StatusBar | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -94,18 +93,12 @@ export default class TaskCenterPlugin extends Plugin {
       );
     }
 
-    // Status bar — shows the active todo count.
-    //
-    // Subscribes to `cache.on("changed")` only — never to vault events or to
-    // `metadataCache.on("resolved")` (BUG.md #3 / #4: those flooded the main
-    // thread on large vaults and froze Obsidian even when the board was never
-    // opened). The cache populates passively from `metadataCache.changed`
-    // single-file callbacks; the status-bar count grows as files are indexed.
-    this.statusBar = this.addStatusBarItem();
-    this.statusBar.addClass("task-center-status");
-    this.statusBar.addEventListener("click", () => this.activateView());
-    this.cacheUnsub = this.cache.on("changed", () => this.scheduleStatusBarRefresh());
-    this.app.workspace.onLayoutReady(() => this.refreshStatusBar());
+    // Status bar — implementation in `./status-bar`. The class owns its own
+    // cache subscription, debounce, and click handler.
+    this.statusBar = new StatusBar(this.addStatusBarItem(), this.cache, {
+      onClick: () => this.activateView(),
+    });
+    this.app.workspace.onLayoutReady(() => this.statusBar?.refresh());
 
     // Open on startup
     if (this.settings.openOnStartup) {
@@ -113,39 +106,9 @@ export default class TaskCenterPlugin extends Plugin {
     }
   }
 
-  private scheduleStatusBarRefresh() {
-    if (this.statusBarTimer !== null) window.clearTimeout(this.statusBarTimer);
-    this.statusBarTimer = window.setTimeout(() => {
-      this.statusBarTimer = null;
-      this.refreshStatusBar();
-    }, 500);
-  }
-
-  refreshStatusBar() {
-    if (!this.statusBar) return;
-    // Read cache.flatten() synchronously — no full vault scan, no await. The
-    // cache may not be fully primed (no one opened the board yet) and that's
-    // fine: the count grows as files get indexed (ARCHITECTURE.md §3.3).
-    const all = this.cache.flatten();
-    const today = todayISO();
-    const todo = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
-    const todayCount = todo.filter((t) => t.scheduled === today).length;
-    const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
-    const parts = [`📋 ${todayCount} today`];
-    if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
-    this.statusBar.setText(parts.join(" · "));
-    this.statusBar.title = "Click to open Task Board";
-  }
-
   onunload() {
-    if (this.statusBarTimer !== null) {
-      window.clearTimeout(this.statusBarTimer);
-      this.statusBarTimer = null;
-    }
-    if (this.cacheUnsub) {
-      this.cacheUnsub();
-      this.cacheUnsub = null;
-    }
+    this.statusBar?.dispose();
+    this.statusBar = null;
     this.cache?.dispose();
   }
 
@@ -153,16 +116,9 @@ export default class TaskCenterPlugin extends Plugin {
    * Test hook (ARCHITECTURE.md §8.5). Awaits all in-flight cache reparses,
    * the in-flight `ensureAll`, and any pending status-bar / view debounce
    * timers. Lets e2e tests advance deterministically without polling DOM.
-   *
-   * Always present, no production behavior change — equivalent to
-   * `cache.forFlush()` plus a status-bar timer flush plus a per-leaf flush.
    */
   async __forFlush(): Promise<void> {
-    if (this.statusBarTimer !== null) {
-      window.clearTimeout(this.statusBarTimer);
-      this.statusBarTimer = null;
-      this.refreshStatusBar();
-    }
+    this.statusBar?.flush();
     await this.cache.forFlush();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TASK_CENTER)) {
       const view = leaf.view;
