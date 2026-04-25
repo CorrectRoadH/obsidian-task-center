@@ -237,11 +237,11 @@
   text-overflow: ellipsis;
   cursor: grab;
 }
-.task-center-view .bt-mini-card.overdue {
+.task-center-view .bt-mini-card.bt-overdue {
   border-left-color: var(--color-red);
   color: var(--color-red);
 }
-.task-center-view .bt-mini-card.near-deadline {
+.task-center-view .bt-mini-card.bt-near-deadline {
   border-left-color: var(--color-orange);
 }
 .task-center-view .bt-mini-more {
@@ -277,11 +277,11 @@
 .task-center-view .bt-card.q2 { border-left-color: #43a047; }
 .task-center-view .bt-card.q3 { border-left-color: #fb8c00; }
 .task-center-view .bt-card.q4 { border-left-color: #757575; }
-.task-center-view .bt-card.overdue {
+.task-center-view .bt-card.bt-overdue {
   box-shadow: 0 0 0 1px var(--color-red) inset;
   background: color-mix(in srgb, var(--color-red) 6%, var(--background-primary));
 }
-.task-center-view .bt-card.near-deadline {
+.task-center-view .bt-card.bt-near-deadline {
   box-shadow: 0 0 0 1px var(--color-orange) inset;
 }
 .task-center-view .bt-card.done {
