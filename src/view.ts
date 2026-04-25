@@ -867,7 +867,11 @@ export class TaskCenterView extends ItemView {
     // Deadline signals — both a CSS hook (`bt-overdue` / `bt-near-deadline`)
     // and a data attribute. e2e selectors live on the data attrs per
     // ARCHITECTURE.md §8.6 (CSS class names are not part of the contract).
-    if (t.deadline) {
+    //
+    // Only annotate active (todo) tasks. A done / dropped task that happens
+    // to have a past deadline shouldn't render with the urgency styling — its
+    // outcome is already settled.
+    if (t.deadline && t.status === "todo") {
       const today = todayISO();
       const dd = daysBetween(today, t.deadline);
       if (dd < 0) {
