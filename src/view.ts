@@ -627,24 +627,47 @@ export class TaskCenterView extends ItemView {
   /**
    * If a task's parent is also in the visible set, hide the child at the top
    * level — it will still render inside the parent's children block.
+   *
+   * US-148 carve-out: a child that has its OWN `⏳` different from the
+   * parent's must NOT be hidden by the "parent has scheduled" branch — it
+   * needs to surface in its own day column as a top-level card. Only hide
+   * children that lack an independent schedule (so they ride with the
+   * parent) or that share the parent's day (already represented by the
+   * parent card).
    */
   private hideChildrenOfVisibleParents(visible: ParsedTask[]): ParsedTask[] {
     const ids = new Set(visible.map((t) => t.id));
     return visible.filter((t) => {
       if (t.parentLine === null) return true;
       const parentId = `${t.path}:L${t.parentLine + 1}`;
-      // Already in this list? Parent will render the child inline.
-      if (ids.has(parentId)) return false;
-      // Parent lives in another day column (has its own scheduled) — the
-      // child renders inline under it there. Without this check, a subtask
-      // with no scheduled but a scheduled parent would leak into the
-      // Unscheduled pool as a standalone card.
+      // Already in this list? Parent will render the child inline — but
+      // only if the child rides with the parent (no independent ⏳ or
+      // same day). Otherwise we want both: parent card without this
+      // child, and the child as a top-level card on its own day.
+      if (ids.has(parentId)) {
+        if (!t.scheduled || t.scheduled === this.findParentTask(t)?.scheduled) {
+          return false;
+        }
+        return true;
+      }
+      // Parent lives in another day column (has its own ⏳).
       const parent = this.tasks.find(
         (x) => x.path === t.path && x.line === t.parentLine,
       );
-      if (parent && parent.scheduled) return false;
+      if (parent && parent.scheduled) {
+        // Only hide when the child rides with the parent — no independent
+        // ⏳, or matching ⏳ (which is already covered by the parent card).
+        if (!t.scheduled || t.scheduled === parent.scheduled) return false;
+      }
       return true;
     });
+  }
+
+  private findParentTask(t: ParsedTask): ParsedTask | undefined {
+    if (t.parentLine === null) return undefined;
+    return this.tasks.find(
+      (x) => x.path === t.path && x.line === t.parentLine,
+    );
   }
 
   // ---------- Month ----------
@@ -1150,13 +1173,20 @@ export class TaskCenterView extends ItemView {
     const path = meta.createSpan({ text: compactPath(t.path), cls: "bt-meta-path" });
     path.title = t.path;
 
-    // Children expansion (recursive — renders grandchildren and deeper)
+    // Children expansion (recursive — renders grandchildren and deeper).
+    //
+    // US-148: a child with its own `⏳` ≠ the parent's belongs in *that* day's
+    // column as a standalone card, NOT nested here. `hideChildrenOfVisibleParents`
+    // surfaces it there; we just need to skip it on the parent side so it
+    // doesn't double-render. Children without an independent schedule (or
+    // matching the parent's) still render inline — they ride with the parent.
     const childLines = t.childrenLines;
     if (childLines.length > 0) {
       const expander = card.createDiv({ cls: "bt-card-children" });
       const children = childLines
         .map((l) => this.tasks.find((x) => x.path === t.path && x.line === l))
-        .filter((x): x is ParsedTask => !!x);
+        .filter((x): x is ParsedTask => !!x)
+        .filter((c) => !(c.scheduled && c.scheduled !== t.scheduled));
       for (const c of children) this.renderSubcard(expander, c, t);
     }
 
@@ -1379,10 +1409,15 @@ export class TaskCenterView extends ItemView {
           this.openSubtreeSheet(c);
         });
       } else {
+        // US-148 (recursive): a grandchild with its own ⏳ different from the
+        // current subcard's ⏳ should render independently in its own day,
+        // not nested here. Same rule as the top-level card / first-level
+        // subtask filter.
         const sub = container.createDiv({ cls: "bt-card-children" });
         const grand = grandLines
           .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
-          .filter((x): x is ParsedTask => !!x);
+          .filter((x): x is ParsedTask => !!x)
+          .filter((g) => !(g.scheduled && g.scheduled !== c.scheduled));
         for (const g of grand) this.renderSubcard(sub, g, c);
       }
     }
