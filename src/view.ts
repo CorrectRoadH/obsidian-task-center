@@ -511,7 +511,11 @@ export class TaskCenterView extends ItemView {
       stats.title = "scheduled estimate (hours)";
 
       const list = col.createDiv({ cls: "bt-week-list" });
-      this.makeDropZone(list, day);
+      // Drop handler on the COLUMN (which carries `data-date`), not the
+      // inner list. The column is the published e2e drop target; if the
+      // handler lives on a child the synthesized drop event from
+      // `simulateDrag()` never reaches it.
+      this.makeDropZone(col, day);
       for (const t of topLevel) {
         this.renderCard(list, t);
       }
