@@ -270,20 +270,59 @@
 
 ### 6.6 Quick Add（新建任务）
 
-`⌘/Ctrl+T` / `+ Add` 唤起一行输入（US-163）：
+`⌘/Ctrl+T` / `+ Add` 唤起一个**带实时解析反馈**的输入面板（US-163 + 拟 US-167 redesign 2026-04-25）：
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  ✏  去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]      │
-└──────────────────────────────────────────────────────────────┘
-                                              ⏎ 确认  Esc 取消
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│   去营业厅问携号转网 #3象限 周六 [estimate:: 25m]_                    │  ← 单行输入，~16-18px，焦点边框
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│   📝 去营业厅问携号转网                                               │  ← 解析预览区（实时 update）
+│   #3象限    ⏳ 04-26 (Sat)    est 25m                                  │     - title clean、tag chip、scheduled chip、estimate chip
+├──────────────────────────────────────────────────────────────────────┤
+│   ↵ 写入 Daily/2026-04-25.md   ·   Esc 取消   ·   语法见下           │  ← 操作提示 + 写入路径前置预告
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
+**输入区**：
+- 单行文本，min-height 44px（移动端触控）/ 38px（桌面），font-size 16-18px（iOS focus 不放大需 ≥ 16px）
+- 焦点态：1.5px `--interactive-accent` border + subtle glow，无焦点时 1px `--background-modifier-border`
+- placeholder 改成示例（不只描述）：`例：去营业厅 #3象限 周六 [estimate:: 25m]`
+- 输入即解析（不等 debounce，每 keystroke）
+
+**解析预览区**（实时 update）：
+- **Title chip**：📝 + 干净标题（去掉 emoji / tag / inline field 之后）。空标题时用 `text-muted` 占位
+- **Tag chips**：每个 hashtag 一个 chip，用 Obsidian 标签颜色
+- **Scheduled chip**：`⏳ MM-DD (Day)`，自然语言已解析时显 ISO + 星期
+- **Deadline chip**：`📅 MM-DD`（如有）
+- **Estimate chip**：`est Xm` 或 `est Xh`
+- 没解析出的部分**不显**（不是显空，而是整个 chip 不出现，避免噪音）
+- 视觉：浅灰底 chip + 紧凑间距，单行能放下；超出 wrap 到第二行
+
+**操作提示区**：
+- 左侧：`↵ 写入 <实际目标路径>`——把目标路径**前置预告**，让用户知道按 Enter 后这条写到哪里。路径从 settings.dailyFolder + todayISO 计算；无 daily 配置时显 inbox 路径
+- 右侧：`Esc 取消`
+- 三个分隔点：`· 语法见下` 链接，悬停弹简短语法 cheat sheet（`#tag` / `周X` / `[estimate::]` / `📅`），不弹外部页面
+
+**视觉与 brand**：
+- 整个面板用**圆角 12px**（比 Obsidian 默认 modal 更柔和）
+- 三段（input / preview / footer）之间用 1px `--background-modifier-border` 浅分隔，**不**用大色块或阴影
+- 容器最大宽 560px（桌面）/ 屏宽 - 32px（移动端）
+- 移动端 bottom sheet 时整个面板从底部 slide-up（120ms ease-out），软键盘上移按 §13 #5
+
+**行为**：
 - 唯一写入位置：**当天的 daily note 文件尾**（US-163）。无 daily 配置时回退到设置里的 inbox 路径。
 - **不允许选目标文件**（避免有第二个新建入口造成混乱——回引 US-163 "只允许这个文件入口"）。
 - 自然语言日期（`今天 / 明天 / 周六 / Mon / today / tomorrow`）解析成 ISO `⏳`，无法识别就不加 `⏳`，**不假设**。
 - 默认情况打 `➕ YYYY-MM-DD` 创建戳（设置可关，US-213 用来覆盖）。
 - 当 quick add 由"周列空列占位行"触发时，预填 `⏳ <该列日期>`。
+- **错误态**：解析层错误（不可能发生 — parseQuickAdd 不抛）vs 写入层错误（API 报 not_found / write_conflict 等）→ 在 footer 上方插一行红色 `⚠ <一句人话>`，输入不清空，让用户重试。
+
+**对比当前实现**（2026-04-25 重设计前）：
+- 当前是 `<h3>` 标题 + 裸 TextComponent input + 一行 hint paragraph。零解析反馈、零层级、零 brand 触感。本次重设计目标 = 把"功能能用"变成"用着想用"。
+
+**拟新故事 US-167**（落进 USER_STORIES.md）：Quick Add 输入时**实时显示解析预览**——title / tag / scheduled / deadline / estimate 各一个 chip，未解析的部分不显示；footer 区前置显示**实际目标写入路径**，让用户确认后按 Enter 不开盲盒。
 
 ### 6.7 Undo
 
