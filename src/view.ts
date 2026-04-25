@@ -4,13 +4,12 @@ import {
   Menu,
   Notice,
   TFile,
-  EventRef,
   MarkdownView,
   MarkdownRenderer,
   Component,
 } from "obsidian";
 import { ParsedTask, VIEW_TYPE_TASK_CENTER } from "./types";
-import { parseVaultTasks, formatMinutes } from "./parser";
+import { formatMinutes } from "./parser";
 import { TaskCenterApi, computeStats } from "./cli";
 import {
   todayISO,
@@ -74,8 +73,8 @@ export class TaskCenterView extends ItemView {
   tasks: ParsedTask[] = [];
   state: ViewState;
   private refreshTimer: number | null = null;
-  private modifyRef: EventRef | null = null;
-  private metadataRef: EventRef | null = null;
+  private cacheVersion = 0;
+  private cacheUnsub: (() => void) | null = null;
   // Context hover: at most one popover alive at a time. The open timer defers
   // work until the cursor has genuinely settled, so quickly skimming the board
   // doesn't thrash the vault read/markdown render pipeline.
@@ -121,22 +120,14 @@ export class TaskCenterView extends ItemView {
     this.contentEl.empty();
     this.contentEl.createDiv({ cls: "bt-loading", text: tr("loading") });
     await this.reloadTasks();
+    this.bumpCacheVersion();
     this.render();
 
-    // Subscribe to file mutations — modify, create, delete, rename all can
-    // change the task set. Metadata cache resolve is a coarser backstop.
-    const onChange = (f: unknown) => {
-      if (f instanceof TFile && f.extension === "md") {
-        this.scheduleRefresh();
-      }
-    };
-    this.modifyRef = this.app.vault.on("modify", onChange);
-    this.metadataRef = this.app.metadataCache.on("resolved", () => this.scheduleRefresh());
-    this.registerEvent(this.modifyRef);
-    this.registerEvent(this.app.vault.on("create", onChange));
-    this.registerEvent(this.app.vault.on("delete", onChange));
-    this.registerEvent(this.app.vault.on("rename", onChange));
-    this.registerEvent(this.metadataRef);
+    // Subscribe to the cache — and ONLY the cache. Vault and metadataCache
+    // events are handled in one place (cache.bind in main.ts); the view reads
+    // a settled snapshot via flatten() after each `cache.changed`. This is
+    // the structural fix for BUG.md #3 (double subscription → event flood).
+    this.cacheUnsub = this.plugin.cache.on("changed", () => this.scheduleRefresh());
 
     // Keyboard
     this.contentEl.tabIndex = 0;
@@ -147,6 +138,10 @@ export class TaskCenterView extends ItemView {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
     }
+    if (this.cacheUnsub) {
+      this.cacheUnsub();
+      this.cacheUnsub = null;
+    }
     this.closeContextPopover();
   }
 
@@ -155,8 +150,14 @@ export class TaskCenterView extends ItemView {
     this.refreshTimer = window.setTimeout(async () => {
       this.refreshTimer = null;
       await this.reloadTasks();
+      this.bumpCacheVersion();
       this.render();
     }, 400);
+  }
+
+  private bumpCacheVersion() {
+    this.cacheVersion++;
+    this.contentEl.dataset.testCacheVersion = String(this.cacheVersion);
   }
 
   private findCardEl(taskId: string): HTMLElement | null {
@@ -204,34 +205,60 @@ export class TaskCenterView extends ItemView {
   }
 
   /**
-   * Resolve once `metadataCache` has fired `'changed'` for every file in
+   * Resolve once `TaskCache` has emitted `'changed'` for every file in
    * `paths` (or after `timeoutMs` as a safety net). Used after structural
    * mutations so the next render sees up-to-date list-item line numbers.
+   *
+   * Reads `cache.on("changed")` (post-reparse), not raw metadataCache
+   * (ARCHITECTURE.md §3.1: cache is the sole subscriber to vault events).
    */
   private waitForCacheUpdate(paths: string[], timeoutMs = 1500): Promise<void> {
     const remaining = new Set(paths);
     if (remaining.size === 0) return Promise.resolve();
     return new Promise<void>((resolve) => {
       let timer: number | null = null;
-      const ref = this.app.metadataCache.on("changed", (file: TFile) => {
-        if (!remaining.has(file.path)) return;
-        remaining.delete(file.path);
+      const off = this.plugin.cache.on("changed", (changedPaths: Set<string>) => {
+        for (const p of changedPaths) remaining.delete(p);
         if (remaining.size === 0) {
           if (timer !== null) window.clearTimeout(timer);
-          this.app.metadataCache.offref(ref);
+          off();
           resolve();
         }
       });
-      this.registerEvent(ref);
       timer = window.setTimeout(() => {
-        this.app.metadataCache.offref(ref);
+        off();
         resolve();
       }, timeoutMs);
     });
   }
 
   async reloadTasks() {
-    this.tasks = await parseVaultTasks(this.app);
+    // Wait for any in-flight single-file reparses to settle, so the snapshot
+    // we take below reflects every metadataCache event Obsidian has dispatched
+    // up to now. Without this, a write-then-reload race could read pre-parse
+    // state.
+    //
+    // First reload also primes the cache (single full-vault pass, skipping
+    // files Obsidian has confirmed task-free). Subsequent calls are cache
+    // hits — `cache.ensureAll` returns the existing flatten().
+    await this.plugin.cache.forFlush();
+    this.tasks = await this.plugin.cache.ensureAll();
+  }
+
+  /**
+   * Test hook (ARCHITECTURE.md §8.5). Flushes the 400ms `scheduleRefresh`
+   * debounce and any reparse the cache has in flight, so e2e can wait on a
+   * single Promise instead of polling DOM versions.
+   */
+  async __forFlush(): Promise<void> {
+    if (this.refreshTimer !== null) {
+      window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+      await this.reloadTasks();
+      this.bumpCacheVersion();
+      this.render();
+    }
+    await this.plugin.cache.forFlush();
   }
 
   setTab(tab: TabKey) {

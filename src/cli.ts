@@ -1,8 +1,7 @@
 import { App } from "obsidian";
 import { ParsedTask, TaskStatus } from "./types";
-import { parseVaultTasks, formatMinutes } from "./parser";
+import { formatMinutes } from "./parser";
 import {
-  resolveTaskRef,
   setScheduled,
   setDeadline,
   setActual,
@@ -18,7 +17,13 @@ import {
   nestUnder,
   TaskWriterError,
 } from "./writer";
+import { TaskCache } from "./cache";
 import { todayISO, resolveWhen, isValidISO } from "./dates";
+
+// REMINDER: this module must NOT call `parseVaultTasks` or
+// `app.vault.getMarkdownFiles()` directly. All parse work goes through
+// `TaskCache`. Write verbs resolve refs via `cache.resolveRef`, which is
+// single-file for `path:Lnnn`. (ARCHITECTURE.md §3.3 / §5.1, BUG.md #2)
 
 export interface ListFilters {
   scheduled?: string;
@@ -40,26 +45,30 @@ export interface StatsOpts {
 }
 
 export class TaskCenterApi {
-  constructor(private readonly app: App) {}
+  constructor(private readonly app: App, private readonly cache: TaskCache) {}
 
+  /**
+   * Whole-vault snapshot. Used by `list` / `stats` / formatters that need the
+   * full set; cache primes once per session and subsequent calls are O(1).
+   * Write verbs MUST NOT call this — they go through `cache.resolveRef`.
+   */
   async allTasks(): Promise<ParsedTask[]> {
-    return parseVaultTasks(this.app);
+    return this.cache.ensureAll();
   }
 
   async list(filters: ListFilters): Promise<ParsedTask[]> {
-    const all = await this.allTasks();
+    const all = await this.cache.ensureAll();
     return filterTasks(all, filters);
   }
 
   async show(id: string): Promise<ParsedTask> {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", `no task matches ${id}`);
     return task;
   }
 
   async stats(opts: StatsOpts = {}): Promise<StatsResult> {
-    const all = await this.allTasks();
+    const all = await this.cache.ensureAll();
     return computeStats(all, opts);
   }
 
@@ -67,8 +76,7 @@ export class TaskCenterApi {
     if (date !== null && !isValidISO(date)) {
       throw new TaskWriterError("invalid_date", `not ISO YYYY-MM-DD: ${date}`);
     }
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await setScheduled(this.app, task, date);
   }
@@ -77,15 +85,13 @@ export class TaskCenterApi {
     if (date !== null && !isValidISO(date)) {
       throw new TaskWriterError("invalid_date", `not ISO YYYY-MM-DD: ${date}`);
     }
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await setDeadline(this.app, task, date);
   }
 
   async actual(id: string, minutes: number, mode: "set" | "add" = "set") {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return mode === "add"
       ? await addToActual(this.app, task, minutes)
@@ -93,8 +99,7 @@ export class TaskCenterApi {
   }
 
   async estimate(id: string, minutes: number | null) {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await setEstimate(this.app, task, minutes);
   }
@@ -103,27 +108,27 @@ export class TaskCenterApi {
     if (at && !isValidISO(at)) {
       throw new TaskWriterError("invalid_date", `--at requires YYYY-MM-DD: ${at}`);
     }
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await markDone(this.app, task, at);
   }
 
   async undone(id: string) {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await markUndone(this.app, task);
   }
 
   async drop(id: string, cascade = true) {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     // Cascade only to descendants that are still `todo` — don't overwrite a
     // done `[x] ✅ …` with a dropped `[-] ❌ …`; that would destroy history.
+    // Cross-file parent/child relationships are not modelled (ARCHITECTURE
+    // §1.4) so we only need this file's tasks.
+    const fileTasks = this.cache.get(task.path)?.tasks ?? [task];
     const descendants = cascade
-      ? collectDescendants(task, all).filter((t) => t.status === "todo")
+      ? collectDescendants(task, fileTasks).filter((t) => t.status === "todo")
       : [];
     const targets = [task, ...descendants];
     // Drop bottom-up so descending line numbers stay stable across each mutation
@@ -146,10 +151,9 @@ export class TaskCenterApi {
     stampCreated?: boolean;
     inboxFallback?: string;
   }) {
-    const all = await this.allTasks();
     let parent: ParsedTask | null = null;
     if (opts.parent) {
-      parent = await resolveTaskRef(this.app, opts.parent, all);
+      parent = await this.cache.resolveRef(opts.parent);
       if (!parent) throw new TaskWriterError("task_not_found", `parent: ${opts.parent}`);
     }
     return await addTask(this.app, {
@@ -166,30 +170,27 @@ export class TaskCenterApi {
   }
 
   async rename(id: string, newTitle: string) {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return await renameTask(this.app, task, newTitle);
   }
 
   async tag(id: string, tag: string, remove = false) {
-    const all = await this.allTasks();
-    const task = await resolveTaskRef(this.app, id, all);
+    const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
     return remove ? await removeTag(this.app, task, tag) : await addTag(this.app, task, tag);
   }
 
   async nest(childId: string, parentId: string) {
-    const all = await this.allTasks();
-    const child = await resolveTaskRef(this.app, childId, all);
+    const child = await this.cache.resolveRef(childId);
     if (!child) throw new TaskWriterError("task_not_found", `child: ${childId}`);
-    const parent = await resolveTaskRef(this.app, parentId, all);
+    const parent = await this.cache.resolveRef(parentId);
     if (!parent) throw new TaskWriterError("task_not_found", `parent: ${parentId}`);
     return await nestUnder(this.app, child, parent);
   }
 }
 
-function collectDescendants(task: ParsedTask, all: ParsedTask[]): ParsedTask[] {
+function collectDescendants(task: ParsedTask, sameFileTasks: ParsedTask[]): ParsedTask[] {
   const out: ParsedTask[] = [];
   const queue: number[] = [...task.childrenLines];
   const seen = new Set<number>();
@@ -197,7 +198,7 @@ function collectDescendants(task: ParsedTask, all: ParsedTask[]): ParsedTask[] {
     const line = queue.shift()!;
     if (seen.has(line)) continue;
     seen.add(line);
-    const child = all.find((t) => t.path === task.path && t.line === line);
+    const child = sameFileTasks.find((t) => t.line === line);
     if (child) {
       out.push(child);
       queue.push(...child.childrenLines);

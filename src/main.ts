@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Notice, TFile, CliData } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, CliData } from "obsidian";
 import { TaskCenterSettings, DEFAULT_SETTINGS, VIEW_TYPE_TASK_CENTER } from "./types";
 import { TaskCenterSettingTab } from "./settings";
 import { TaskCenterView } from "./view";
@@ -10,6 +10,7 @@ import {
   formatOkWrite,
   formatAdd,
 } from "./cli";
+import { TaskCache } from "./cache";
 import { QuickAddModal } from "./quickadd";
 import { t as tr } from "./i18n";
 import { todayISO } from "./dates";
@@ -24,12 +25,16 @@ type CliArgs = CliData;
 export default class TaskCenterPlugin extends Plugin {
   settings!: TaskCenterSettings;
   api!: TaskCenterApi;
+  cache!: TaskCache;
   private statusBar: HTMLElement | null = null;
   private statusBarTimer: number | null = null;
+  private cacheUnsub: (() => void) | null = null;
 
   async onload() {
     await this.loadSettings();
-    this.api = new TaskCenterApi(this.app);
+    this.cache = new TaskCache(this.app);
+    for (const ref of this.cache.bind()) this.registerEvent(ref);
+    this.api = new TaskCenterApi(this.app, this.cache);
 
     // View
     this.registerView(VIEW_TYPE_TASK_CENTER, (leaf) => new TaskCenterView(leaf, this));
@@ -52,7 +57,15 @@ export default class TaskCenterPlugin extends Plugin {
       id: "reload-tasks",
       name: tr("cmd.reloadTasks"),
       callback: async () => {
-        this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
+        // Awaited so e2e specs that issue this command (and anyone using it
+        // as a "settle now" handle) see updated state when the Promise
+        // resolves. After Phase 1 e2e migration, prefer `plugin.__forFlush()`.
+        try {
+          await this.__forFlush();
+          await this.refreshOpenViews();
+        } catch (e) {
+          console.warn("[task-center] reload-tasks:", e);
+        }
         new Notice(tr("notice.reloaded"));
       },
     });
@@ -81,21 +94,18 @@ export default class TaskCenterPlugin extends Plugin {
       );
     }
 
-    // Status bar — shows the active todo count, refreshed on vault changes.
+    // Status bar — shows the active todo count.
+    //
+    // Subscribes to `cache.on("changed")` only — never to vault events or to
+    // `metadataCache.on("resolved")` (BUG.md #3 / #4: those flooded the main
+    // thread on large vaults and froze Obsidian even when the board was never
+    // opened). The cache populates passively from `metadataCache.changed`
+    // single-file callbacks; the status-bar count grows as files are indexed.
     this.statusBar = this.addStatusBarItem();
     this.statusBar.addClass("task-center-status");
     this.statusBar.addEventListener("click", () => this.activateView());
+    this.cacheUnsub = this.cache.on("changed", () => this.scheduleStatusBarRefresh());
     this.app.workspace.onLayoutReady(() => this.refreshStatusBar());
-    const onVaultChange = (f: unknown) => {
-      if (f instanceof TFile && f.extension === "md") this.scheduleStatusBarRefresh();
-    };
-    this.registerEvent(this.app.vault.on("modify", onVaultChange));
-    this.registerEvent(this.app.vault.on("create", onVaultChange));
-    this.registerEvent(this.app.vault.on("delete", onVaultChange));
-    this.registerEvent(this.app.vault.on("rename", onVaultChange));
-    this.registerEvent(
-      this.app.metadataCache.on("resolved", () => this.scheduleStatusBarRefresh()),
-    );
 
     // Open on startup
     if (this.settings.openOnStartup) {
@@ -111,27 +121,54 @@ export default class TaskCenterPlugin extends Plugin {
     }, 500);
   }
 
-  async refreshStatusBar() {
+  refreshStatusBar() {
     if (!this.statusBar) return;
-    try {
-      const all = await this.api.allTasks();
-      const today = todayISO();
-      const todo = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
-      const todayCount = todo.filter((t) => t.scheduled === today).length;
-      const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
-      const parts = [`📋 ${todayCount} today`];
-      if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
-      this.statusBar.setText(parts.join(" · "));
-      this.statusBar.title = "Click to open Task Board";
-    } catch {
-      // ignore
-    }
+    // Read cache.flatten() synchronously — no full vault scan, no await. The
+    // cache may not be fully primed (no one opened the board yet) and that's
+    // fine: the count grows as files get indexed (ARCHITECTURE.md §3.3).
+    const all = this.cache.flatten();
+    const today = todayISO();
+    const todo = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+    const todayCount = todo.filter((t) => t.scheduled === today).length;
+    const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
+    const parts = [`📋 ${todayCount} today`];
+    if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
+    this.statusBar.setText(parts.join(" · "));
+    this.statusBar.title = "Click to open Task Board";
   }
 
   onunload() {
     if (this.statusBarTimer !== null) {
       window.clearTimeout(this.statusBarTimer);
       this.statusBarTimer = null;
+    }
+    if (this.cacheUnsub) {
+      this.cacheUnsub();
+      this.cacheUnsub = null;
+    }
+    this.cache?.dispose();
+  }
+
+  /**
+   * Test hook (ARCHITECTURE.md §8.5). Awaits all in-flight cache reparses,
+   * the in-flight `ensureAll`, and any pending status-bar / view debounce
+   * timers. Lets e2e tests advance deterministically without polling DOM.
+   *
+   * Always present, no production behavior change — equivalent to
+   * `cache.forFlush()` plus a status-bar timer flush plus a per-leaf flush.
+   */
+  async __forFlush(): Promise<void> {
+    if (this.statusBarTimer !== null) {
+      window.clearTimeout(this.statusBarTimer);
+      this.statusBarTimer = null;
+      this.refreshStatusBar();
+    }
+    await this.cache.forFlush();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TASK_CENTER)) {
+      const view = leaf.view;
+      if (view instanceof TaskCenterView) {
+        await view.__forFlush();
+      }
     }
   }
 
