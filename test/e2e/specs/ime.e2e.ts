@@ -117,6 +117,23 @@ describe("Task Center — IME composition guard (US-413)", function () {
     const content = await readFile("Tasks/Inbox.md");
     expect(content).toContain("Original title");
     expect(content).not.toContain("Renamed mid-composition");
+
+    // Cleanup: the input still has "Renamed mid-composition" in its
+    // value; without dismissal its blur listener (intentional UX —
+    // click-away saves) would async-commit between this test and the
+    // next, polluting chunk c's fixture. Esc → commit(save=false) is
+    // the explicit cancel path and tears down the editor cleanly.
+    await browser.execute((sel: string) => {
+      const el = document.querySelector(
+        `${sel} .bt-title-edit`,
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      el.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    }, cardSel);
+    await browser.pause(100);
   });
 
   // US-413 chunk c — subtask add input. Open the add-subtask editor,
@@ -164,5 +181,20 @@ describe("Task Center — IME composition guard (US-413)", function () {
     const content = await readFile("Tasks/Inbox.md");
     expect(content).not.toContain("Subtask mid-composition");
     expect(content).toContain("- [ ] Parent task");
+
+    // Cleanup: subtask add input has the same blur→finish(true) listener
+    // (view.ts:1615); dismiss explicitly so async commit doesn't race
+    // into the next test's fixture.
+    await browser.execute((sel: string) => {
+      const el = document.querySelector(
+        `${sel} .bt-subtask-add-input`,
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      el.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    }, parentSel);
+    await browser.pause(100);
   });
 });

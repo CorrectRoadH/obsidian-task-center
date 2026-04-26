@@ -1604,7 +1604,9 @@ export class TaskCenterView extends ItemView {
     input.addEventListener("keydown", (e) => {
       // Stop view-wide hotkeys (1-4, Space, D, E, Delete, arrows) firing while typing
       e.stopPropagation();
-      if (e.key === "Enter") {
+      // US-413: skip the Enter commit while IME composition is active —
+      // see src/quickadd.ts for the same pattern.
+      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
         e.preventDefault();
         finish(true);
       } else if (e.key === "Escape") {
@@ -2096,7 +2098,9 @@ export class TaskCenterView extends ItemView {
       this.scheduleRefresh();
     };
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      // US-413: skip the Enter commit while IME composition is active —
+      // see src/quickadd.ts for the same pattern.
+      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
         e.preventDefault();
         commit(true);
       } else if (e.key === "Escape") {
