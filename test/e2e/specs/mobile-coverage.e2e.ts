@@ -400,6 +400,31 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     await $(cardSel).waitForExist({ timeout: 5000 });
     await $(targetSel).waitForExist({ timeout: 5000 });
 
+    // Stage 1: pointerdown + brief stillness so the 250ms drag-arm timer
+    // fires (per touch.ts state machine, a move > 4px BEFORE the timer
+    // fires cancels arming instead of entering drag).
+    await browser.execute((sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el) throw new Error("card not found");
+      const rect = el.getBoundingClientRect();
+      const startX = rect.left + rect.width / 2;
+      const startY = rect.top + rect.height / 2;
+      el.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+          pointerId: 9,
+          clientX: startX,
+          clientY: startY,
+          button: 0,
+          isPrimary: true,
+        }),
+      );
+    }, cardSel);
+    await browser.pause(300); // > dragArmMs (250ms)
+
+    // Stage 2: now move into the target day column and release.
     await browser.execute(
       (src: string, tgt: string) => {
         const srcEl = document.querySelector<HTMLElement>(src);
@@ -422,10 +447,9 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
             button: 0,
             isPrimary: true,
           });
-        srcEl.dispatchEvent(mk("pointerdown", startX, startY));
-        // First move past the 4px arm threshold so the controller enters
-        // drag mode. Then walk to the target column.
+        // First move enters drag (now past arm timer + > 4px).
         window.dispatchEvent(mk("pointermove", startX + 10, startY + 10));
+        // Then walk to the target.
         window.dispatchEvent(mk("pointermove", endX, endY));
         window.dispatchEvent(mk("pointerup", endX, endY));
       },
@@ -457,9 +481,34 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     await openMobileBoardWeek();
 
     const cardSel = `.task-center-view [data-task-id="${path}:L1"]`;
-    const trashSel = `[data-drop-zone="trash"]`;
+    // Both desktop pool trash and mobile sticky action-bar trash carry
+    // `[data-drop-zone="trash"]`. We need the mobile one (the desktop
+    // pool element is `display:none` under `[data-mobile-layout="true"]`,
+    // so elementFromPoint resolves to the visible mobile bar instead).
+    const trashSel = `.bt-mobile-trash[data-drop-zone="trash"]`;
     await $(cardSel).waitForExist({ timeout: 5000 });
     await $(trashSel).waitForExist({ timeout: 5000 });
+
+    await browser.execute((sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el) throw new Error("card not found");
+      const rect = el.getBoundingClientRect();
+      const startX = rect.left + rect.width / 2;
+      const startY = rect.top + rect.height / 2;
+      el.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+          pointerId: 10,
+          clientX: startX,
+          clientY: startY,
+          button: 0,
+          isPrimary: true,
+        }),
+      );
+    }, cardSel);
+    await browser.pause(300); // > dragArmMs
 
     await browser.execute(
       (src: string, tgt: string) => {
@@ -483,7 +532,6 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
             button: 0,
             isPrimary: true,
           });
-        srcEl.dispatchEvent(mk("pointerdown", startX, startY));
         window.dispatchEvent(mk("pointermove", startX + 10, startY + 10));
         window.dispatchEvent(mk("pointermove", endX, endY));
         window.dispatchEvent(mk("pointerup", endX, endY));

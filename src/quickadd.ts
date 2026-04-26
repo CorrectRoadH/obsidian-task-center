@@ -3,6 +3,7 @@ import { TaskCenterApi } from "./cli";
 import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO, fromISO } from "./dates";
+import { isMobileMode } from "./platform";
 import type { TaskCenterSettings } from "./types";
 
 // US-167-3: prefill chips. Token strings must match parseQuickAdd's
@@ -42,7 +43,11 @@ export class QuickAddModal extends Modal {
     const { contentEl, modalEl } = this;
     contentEl.empty();
     contentEl.addClass("task-center-quick-add");
-    if (Platform.isMobile) {
+    // task #44: route through `isMobileMode()` so the e2e test can flip
+    // mobile behavior on via `plugin.__setTestForceMobile(true)` in
+    // WDIO desktop Chromium. Default value matches Platform.isMobile so
+    // the production code path is unchanged.
+    if (isMobileMode()) {
       // US-509: mobile Quick Add is a bottom sheet (not centered modal),
       // and the visualViewport-based keyboard avoidance below shifts the
       // sheet above the soft keyboard when it pops up.

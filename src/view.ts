@@ -32,6 +32,7 @@ import { ContextPopoverController } from "./view/popover";
 import { BottomSheet } from "./view/bottom-sheet";
 import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
+import { isMobileMode } from "./platform";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -1364,7 +1365,12 @@ export class TaskCenterView extends ItemView {
     // On touch, browsers fire emulated mouseenter on first tap and stale
     // mouseleave on next tap elsewhere; the popover would flash and stay.
     // Long-press menu replaces it on mobile (UX-mobile §5.1 / US-506).
-    if (!Platform.isMobile) {
+    //
+    // task #44: route through `isMobileMode()` so the e2e test can flip
+    // mobile gestures on via `plugin.__setTestForceMobile(true)` in the
+    // WDIO desktop Chromium runner. Default value matches Platform.isMobile
+    // so the production code path is unchanged.
+    if (!isMobileMode()) {
       this.contextPopover.attach(card, t);
     } else {
       // Unified mobile gesture controller (UX-mobile §13 #6: long-press +

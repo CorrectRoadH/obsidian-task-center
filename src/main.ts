@@ -17,6 +17,7 @@ import { t as tr } from "./i18n";
 import { todayISO } from "./dates";
 import { parseDurationToMinutes } from "./parser";
 import { TaskWriterError } from "./writer";
+import { __setTestForceMobile } from "./platform";
 
 // CliData / CliFlags / CliHandler come from obsidian.d.ts (since API 1.12.2).
 // CliData has an index signature of `string | 'true'` — boolean flags arrive
@@ -113,6 +114,20 @@ export default class TaskCenterPlugin extends Plugin {
     this.statusBar?.dispose();
     this.statusBar = null;
     this.cache?.dispose();
+  }
+
+  /**
+   * Test hook (task #44). Forces `isMobileMode()` to return true so the
+   * WDIO desktop Chromium runner can exercise mobile-only behavior
+   * (`Platform.isMobile`-gated long-press / swipe / pointer-drag /
+   * Quick Add bottom-sheet styling). Default value is false; production
+   * never calls this.
+   *
+   * After-each in every mobile spec resets to false to keep neighbor
+   * tests isolated. See test/e2e/specs/mobile-coverage.e2e.ts.
+   */
+  __setTestForceMobile(v: boolean): void {
+    __setTestForceMobile(v);
   }
 
   /**
