@@ -27,6 +27,14 @@ function offsetISO(deltaDays: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** See parent-child.e2e.ts for the same helper — picks an in-week neighbor. */
+function inWeekNeighbor(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -1 : 1));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 async function writeAndWait(path: string, body: string) {
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
@@ -124,7 +132,7 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
   // US-121: drag a card to a different day column → ⏳ in the file changes
   it("US-121: dragging a card to another day updates ⏳ scheduled date in markdown", async function () {
     const today = todayISO();
-    const tomorrow = offsetISO(1);
+    const tomorrow = inWeekNeighbor();
     const path = "Tasks/Inbox.md";
 
     await writeAndWait(path, `- [ ] Drag-reschedule task ⏳ ${today}\n`);

@@ -26,6 +26,20 @@ function offsetISO(deltaDays: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * Return today + 1 day if today is Mon-Sat, today - 1 day if today is
+ * Sunday. The week tab renders Mon-Sun (default `weekStartsOn: 1`); a
+ * naive `offsetISO(1)` falls into next week's view on Sundays and the
+ * `[data-date="<tomorrow>"]` column doesn't exist there. This helper
+ * keeps the chosen day inside the visible week regardless of weekday.
+ */
+function inWeekNeighbor(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -1 : 1));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 async function switchToWeekTab() {
   await browser.execute(() => {
     document.querySelector<HTMLElement>(".task-center-view [data-tab='week']")?.click();
@@ -213,7 +227,9 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
   // US-148/149: subtask with own ⏳ ≠ parent ⏳ renders standalone on its own day
   it("US-148/149: cross-day subtask appears as standalone card on its own day, not nested in parent", async function () {
     const today = todayISO();
-    const tomorrow = offsetISO(1);
+    // "tomorrow" semantically — pick whichever neighbor day is in the
+    // current week view (offsetISO(1) breaks on Sundays).
+    const tomorrow = inWeekNeighbor();
     const path = "Tasks/Inbox.md";
 
     // Parent ⏳ today; A-2 inherits (no own ⏳); A-3 has explicit ⏳ tomorrow.
@@ -287,7 +303,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
   // US-150: ⏳ badge hidden when top-level card is in its own scheduled day column
   it("US-150: ⏳ badge not shown when card is rendered in its own scheduled day column", async function () {
     const today = todayISO();
-    const tomorrow = offsetISO(1);
+    const tomorrow = inWeekNeighbor();
     const path = "Tasks/Inbox.md";
 
     await writeAndWait(
