@@ -36,7 +36,7 @@ import { isMobileMode } from "./platform";
 import { findGroupingTag, groupingTagForKey, groupingTagIndex, normalizeGroupingTags } from "./grouping";
 import type TaskCenterPlugin from "./main";
 
-type TabKey = "week" | "month" | "completed" | "unscheduled";
+type TabKey = "today" | "week" | "month" | "completed" | "unscheduled";
 
 interface ViewState {
   tab: TabKey;
@@ -363,10 +363,13 @@ export class TaskCenterView extends ItemView {
     this.renderToolbar(header);
 
     const body = el.createDiv({ cls: "bt-body" });
-    if (this.tasks.length === 0) {
+    if (this.tasks.length === 0 && this.state.tab !== "today") {
       this.renderOnboarding(body);
     } else {
       switch (this.state.tab) {
+        case "today":
+          this.renderToday(body);
+          break;
         case "week":
           this.renderWeek(body);
           this.renderUnscheduledPool(body);
@@ -468,7 +471,13 @@ export class TaskCenterView extends ItemView {
     // to apply the same dedup or it overcounts (the bug ctrdh hit:
     // Unscheduled tab said 15, body showed 1 because 14 children rode
     // with their parents).
+    // US-720 (task #63): today tab badge counts overdue + today scheduled
+    // todos. Unscheduled-rec is intentionally NOT counted — it's a single
+    // recommendation slot, not a backlog measure.
+    const overdueCount = activeTodos.filter((t) => t.deadline && t.deadline < today).length;
+    const todayScheduled = activeTodos.filter((t) => t.scheduled === today).length;
     const counts = {
+      today: overdueCount + todayScheduled,
       week: this.hideChildrenOfVisibleParents(
         activeTodos.filter((t) => t.scheduled && t.scheduled >= weekStart && t.scheduled <= weekEnd),
       ).length,
@@ -482,11 +491,14 @@ export class TaskCenterView extends ItemView {
         activeTodos.filter((t) => !t.scheduled),
       ).length,
     };
+    // US-720: Today is positioned first as the entry-point tab. Hotkeys
+    // shifted from ⌃1..⌃4 → ⌃1..⌃5 so each tab still has a number key.
     const tabs: Array<{ key: TabKey; label: string; hotkey: string; count: number }> = [
-      { key: "week", label: tr("tab.week"), hotkey: "⌃1", count: counts.week },
-      { key: "month", label: tr("tab.month"), hotkey: "⌃2", count: counts.month },
-      { key: "completed", label: tr("tab.completed"), hotkey: "⌃3", count: counts.completed },
-      { key: "unscheduled", label: tr("tab.unscheduled"), hotkey: "⌃4", count: counts.unscheduled },
+      { key: "today", label: tr("tab.today"), hotkey: "⌃1", count: counts.today },
+      { key: "week", label: tr("tab.week"), hotkey: "⌃2", count: counts.week },
+      { key: "month", label: tr("tab.month"), hotkey: "⌃3", count: counts.month },
+      { key: "completed", label: tr("tab.completed"), hotkey: "⌃4", count: counts.completed },
+      { key: "unscheduled", label: tr("tab.unscheduled"), hotkey: "⌃5", count: counts.unscheduled },
     ];
     for (const t of tabs) {
       const btn = bar.createDiv({ cls: "bt-tab" + (this.state.tab === t.key ? " active" : "") });
@@ -1175,6 +1187,147 @@ export class TaskCenterView extends ItemView {
         this.scheduleRefresh();
       }
     });
+  }
+
+  // US-720 (task #63): today execution view.
+  //
+  // Single question this view answers: "what should I do today?". Three
+  // capped groups — overdue, scheduled-for-today, and one recommendation
+  // pulled from the inbox/unscheduled. Each card carries the four minimal
+  // actions (done / reschedule-to-tomorrow / drop / open-source). The
+  // view intentionally does NOT mirror the full board: per-group cap is 3
+  // so the first screen stays scannable.
+  //
+  // DOM contract (frozen as test fixtures in test/e2e/specs/today-view.e2e.ts):
+  //   [data-view="today"]                    container
+  //   [data-today-group="overdue"]            section
+  //   [data-today-group="today"]              section
+  //   [data-today-group="unscheduled-rec"]    section
+  //   [data-today-empty]                      empty-state element
+  //   [data-action="reschedule-tomorrow"]     per-card primary action
+  // see USER_STORIES.md
+  private renderToday(parent: HTMLElement) {
+    const wrap = parent.createDiv({ cls: "bt-today" });
+    wrap.dataset.view = "today";
+
+    const today = todayISO();
+    const tomorrow = addDays(today, 1);
+    const activeTodos = this.tasks.filter(
+      (t) => t.status === "todo" && !t.inheritsTerminal && t.title.trim() !== "",
+    );
+
+    // Overdue: anything with a deadline in the past, regardless of schedule.
+    // Sort earliest-deadline first so the most-overdue rises to the top.
+    const overdue = activeTodos
+      .filter((t) => t.deadline && t.deadline < today)
+      .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
+
+    // Today: scheduled to land on today. Cards already in the overdue group
+    // are skipped to avoid double-listing.
+    const overdueIds = new Set(overdue.map((t) => t.id));
+    const todayList = activeTodos
+      .filter((t) => t.scheduled === today && !overdueIds.has(t.id));
+
+    // Unscheduled recommendation: just the one freshest unscheduled todo.
+    // The full backlog lives on the Unscheduled tab — this slot is a single
+    // nudge so the user doesn't sit on an empty Today screen when they have
+    // inbox items waiting.
+    const unscheduledRec = activeTodos
+      .filter((t) => !t.scheduled && !t.deadline)
+      .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""))
+      .slice(0, 1);
+
+    const PER_GROUP_CAP = 3;
+
+    const isAllEmpty =
+      overdue.length === 0 && todayList.length === 0 && unscheduledRec.length === 0;
+    if (isAllEmpty) {
+      const empty = wrap.createDiv({ cls: "bt-today-empty" });
+      empty.dataset.todayEmpty = "true";
+      empty.setText(tr("today.empty"));
+      return;
+    }
+
+    this.renderTodayGroup(wrap, "overdue", tr("today.groupOverdue"), overdue.slice(0, PER_GROUP_CAP), tomorrow);
+    this.renderTodayGroup(wrap, "today", tr("today.groupToday"), todayList.slice(0, PER_GROUP_CAP), tomorrow);
+    this.renderTodayGroup(wrap, "unscheduled-rec", tr("today.groupRec"), unscheduledRec, tomorrow);
+  }
+
+  private renderTodayGroup(
+    parent: HTMLElement,
+    key: "overdue" | "today" | "unscheduled-rec",
+    label: string,
+    list: ParsedTask[],
+    tomorrow: string,
+  ) {
+    const section = parent.createDiv({ cls: `bt-today-group bt-today-group-${key}` });
+    section.dataset.todayGroup = key;
+    const head = section.createDiv({ cls: "bt-today-group-head" });
+    head.createSpan({ text: label, cls: "bt-today-group-label" });
+    if (list.length > 0) {
+      head.createSpan({ text: String(list.length), cls: "bt-today-group-count" });
+    }
+    if (list.length === 0) {
+      section.createDiv({ cls: "bt-today-group-empty", text: tr("today.groupEmpty") });
+      return;
+    }
+    for (const t of list) this.renderTodayCard(section, t, tomorrow);
+  }
+
+  private renderTodayCard(parent: HTMLElement, t: ParsedTask, tomorrow: string) {
+    const card = parent.createDiv({ cls: "bt-today-card" });
+    card.dataset.taskId = t.id;
+    if (this.state.selectedTaskId === t.id) card.addClass("selected");
+
+    const main = card.createDiv({ cls: "bt-today-card-main" });
+    main.createDiv({ cls: "bt-today-card-title", text: t.title });
+    const meta = main.createDiv({ cls: "bt-today-card-meta" });
+    const metaParts: string[] = [];
+    metaParts.push(t.path);
+    if (t.scheduled) metaParts.push(`⏳ ${t.scheduled}`);
+    if (t.deadline) metaParts.push(`📅 ${t.deadline}`);
+    if (typeof t.estimate === "number") metaParts.push(`⏱ ${formatMinutes(t.estimate)}`);
+    meta.setText(metaParts.join(" · "));
+
+    const actions = card.createDiv({ cls: "bt-today-card-actions" });
+    const mkBtn = (
+      text: string,
+      action: "done" | "reschedule-tomorrow" | "drop" | "open-source",
+      handler: () => void | Promise<void>,
+    ) => {
+      const btn = actions.createEl("button", { text, cls: `bt-today-action bt-today-action-${action}` });
+      btn.dataset.action = action;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        Promise.resolve(handler()).catch((err) =>
+          console.warn("[task-center US-720] action failed:", err),
+        );
+      });
+      return btn;
+    };
+
+    mkBtn(tr("today.actionDone"), "done", async () => {
+      await this.api.done(t.id);
+      await this.refreshAfterAction();
+    });
+    mkBtn(tr("today.actionReschedule"), "reschedule-tomorrow", async () => {
+      await this.api.schedule(t.id, tomorrow);
+      await this.refreshAfterAction();
+    });
+    mkBtn(tr("today.actionDrop"), "drop", async () => {
+      await this.api.drop(t.id);
+      await this.refreshAfterAction();
+    });
+    mkBtn(tr("today.actionOpenSource"), "open-source", () => this.openAtSource(t));
+
+    card.addEventListener("dblclick", () => this.openAtSource(t));
+  }
+
+  private async refreshAfterAction(): Promise<void> {
+    await this.plugin.cache.forFlush();
+    await this.reloadTasks();
+    this.render();
   }
 
   private renderUnscheduledBig(parent: HTMLElement) {
@@ -2043,7 +2196,8 @@ export class TaskCenterView extends ItemView {
 
     // Global tab switching
     if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-      const map: Record<string, TabKey> = { "1": "week", "2": "month", "3": "completed", "4": "unscheduled" };
+      // US-720: today tab takes ⌃1, others shift one slot down.
+      const map: Record<string, TabKey> = { "1": "today", "2": "week", "3": "month", "4": "completed", "5": "unscheduled" };
       if (map[e.key]) {
         e.preventDefault();
         this.setTab(map[e.key]);

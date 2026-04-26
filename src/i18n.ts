@@ -30,6 +30,7 @@ function detectLocale(): Locale {
 
 const EN = {
   // View tabs
+  "tab.today": "Today",
   "tab.week": "Week",
   "tab.month": "Month",
   "tab.completed": "Completed",
@@ -154,6 +155,7 @@ const EN = {
     "Comma-separated tags for Unscheduled grouping, Quick Add chips, 1-9 shortcuts, and CLI group labels.",
   "settings.defaultView.name": "Default view",
   "settings.defaultView.desc": "Which tab to show when the board opens.",
+  "settings.defaultView.today": "Today",
   "settings.defaultView.week": "Week",
   "settings.defaultView.month": "Month",
   "settings.defaultView.completed": "Completed",
@@ -232,9 +234,22 @@ const EN = {
   "dep.dailyNotesNoFolder":
     "Daily Notes folder not set — tasks will be written to inbox",
   "dep.openSettings": "Click to open Obsidian settings",
+
+  // US-720 (task #63): today execution view — entry-point tab that
+  // answers "what should I do today?". Three groups + minimal actions.
+  "today.groupOverdue": "Overdue",
+  "today.groupToday": "Today",
+  "today.groupRec": "Recommended from inbox",
+  "today.groupEmpty": "Nothing in this group.",
+  "today.empty": "Nothing to do today — enjoy the quiet.",
+  "today.actionDone": "✓ Done",
+  "today.actionReschedule": "↷ Tomorrow",
+  "today.actionDrop": "🗑 Drop",
+  "today.actionOpenSource": "📂 Source",
 };
 
 const ZH: Partial<typeof EN> = {
+  "tab.today": "今日",
   "tab.week": "本周",
   "tab.month": "本月",
   "tab.completed": "已完成",
@@ -334,6 +349,7 @@ const ZH: Partial<typeof EN> = {
     "逗号分隔；用于未排期分组、快速新建 chip、1-9 快捷键和 CLI 分组列。",
   "settings.defaultView.name": "默认视图",
   "settings.defaultView.desc": "打开看板时默认展示哪个 tab。",
+  "settings.defaultView.today": "今日",
   "settings.defaultView.week": "本周",
   "settings.defaultView.month": "本月",
   "settings.defaultView.completed": "已完成",
@@ -397,6 +413,17 @@ const ZH: Partial<typeof EN> = {
   "dep.dailyNotesNoFolder":
     "Daily Notes 未设置文件夹 — 任务将写入收件箱",
   "dep.openSettings": "点击打开 Obsidian 设置",
+
+  // US-720: 今日执行视图
+  "today.groupOverdue": "逾期",
+  "today.groupToday": "今天",
+  "today.groupRec": "未排期推荐",
+  "today.groupEmpty": "本组暂无内容。",
+  "today.empty": "今天没有可执行任务。",
+  "today.actionDone": "✓ 完成",
+  "today.actionReschedule": "↷ 明天",
+  "today.actionDrop": "🗑 放弃",
+  "today.actionOpenSource": "📂 来源",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

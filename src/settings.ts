@@ -63,6 +63,7 @@ export class TaskCenterSettingTab extends PluginSettingTab {
       .addDropdown((dd) =>
         dd
           .addOptions({
+            today: tr("settings.defaultView.today"),
             week: tr("settings.defaultView.week"),
             month: tr("settings.defaultView.month"),
             completed: tr("settings.defaultView.completed"),
@@ -70,7 +71,7 @@ export class TaskCenterSettingTab extends PluginSettingTab {
           })
           .setValue(this.plugin.settings.defaultView)
           .onChange(async (v) => {
-            this.plugin.settings.defaultView = v as "week" | "month" | "completed" | "unscheduled";
+            this.plugin.settings.defaultView = v as "today" | "week" | "month" | "completed" | "unscheduled";
             await this.plugin.saveSettings();
           }),
       );

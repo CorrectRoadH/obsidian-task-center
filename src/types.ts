@@ -49,7 +49,7 @@ export interface TaskCenterSettings {
   // grouping actions.
   // see USER_STORIES.md
   groupingTags: string[];
-  defaultView: "week" | "month" | "completed" | "unscheduled";
+  defaultView: "today" | "week" | "month" | "completed" | "unscheduled";
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
   stampCreated: boolean;
@@ -58,7 +58,7 @@ export interface TaskCenterSettings {
   // left off. Read in `TaskCenterView.constructor`'s ViewState init,
   // written in `setTab`.
   // see USER_STORIES.md
-  lastTab: "week" | "month" | "completed" | "unscheduled" | null;
+  lastTab: "today" | "week" | "month" | "completed" | "unscheduled" | null;
   // US-510: platform-conditional UI strings — shortcut hints / mouse
   // descriptions are branched per platform (desktop hint vs mobile hint),
   // not localized; these tunables also live mobile-only. Safe defaults so
