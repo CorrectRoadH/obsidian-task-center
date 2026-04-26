@@ -28,13 +28,14 @@ before(() => {
 // include `latest-beta/latest`. Otherwise wdio-obsidian-service tries to
 // refresh the beta image and prompts for Insiders credentials which most
 // contributors don't have, blocking `pnpm test:e2e` outright.
-test("task #45 — default version matrix excludes beta when OBSIDIAN_USE_BETA is unset (even if beta is cached)", async () => {
+test("task #45 — default version matrix is just `latest/latest` (no beta, no earliest — both require Insiders download)", async () => {
   const { pickWdioVersions } = await import(
     `../test/.compiled/wdio-versions.js?cachebust=${Date.now()}`
   );
   const v = pickWdioVersions({}, /* betaCached */ true);
-  assert.equal(v, "earliest/earliest latest/latest");
+  assert.equal(v, "latest/latest");
   assert.doesNotMatch(v, /beta/);
+  assert.doesNotMatch(v, /earliest/);
 });
 
 // task #45 inverse: explicit opt-in keeps the beta workflow available
@@ -44,7 +45,7 @@ test("task #45 — OBSIDIAN_USE_BETA=1 + cached beta opts back into the beta mat
     `../test/.compiled/wdio-versions.js?cachebust=${Date.now()}_optin`
   );
   const v = pickWdioVersions({ OBSIDIAN_USE_BETA: "1" }, /* betaCached */ true);
-  assert.equal(v, "earliest/earliest latest/latest latest-beta/latest");
+  assert.equal(v, "latest/latest latest-beta/latest");
 });
 
 // Opt-in without the cached beta image also stays beta-free — running
@@ -55,7 +56,7 @@ test("task #45 — OBSIDIAN_USE_BETA=1 but beta not cached → still no beta (av
     `../test/.compiled/wdio-versions.js?cachebust=${Date.now()}_optin_nocache`
   );
   const v = pickWdioVersions({ OBSIDIAN_USE_BETA: "1" }, /* betaCached */ false);
-  assert.equal(v, "earliest/earliest latest/latest");
+  assert.equal(v, "latest/latest");
 });
 
 // Manual `OBSIDIAN_VERSIONS=...` override always wins (CI uses this to

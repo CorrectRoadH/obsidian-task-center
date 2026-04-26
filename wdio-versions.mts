@@ -1,19 +1,22 @@
 // Pure helper: decide which Obsidian versions wdio should run against.
 //
-// task #45 (US-602): the previous inline logic in wdio.conf.mts auto-added
-// `latest-beta/latest` to the default matrix whenever `obsidianBetaAvailable`
-// returned true (i.e. the beta was cached locally from a prior run). That
-// caused `pnpm test:e2e` to fail in clean local environments because
-// wdio-obsidian-service then tried to refresh the beta image and prompted
-// for `OBSIDIAN_EMAIL`/`OBSIDIAN_PASSWORD` which most contributors don't
-// have. Beta is now strictly opt-in via `OBSIDIAN_USE_BETA=1`.
+// task #45 (US-602): make `pnpm test:e2e` work out of the box for any
+// contributor without an Obsidian Insiders account.
 //
-// Decision order:
-//   1. Explicit `OBSIDIAN_VERSIONS` always wins (manual override).
-//   2. Otherwise default to `earliest/earliest latest/latest` — both are
-//      free-tier Obsidian downloads, no Insiders login needed.
-//   3. If the user opts in via `OBSIDIAN_USE_BETA` AND the beta is already
-//      cached locally (so we skip the login dance), append beta.
+// The previous inline logic in wdio.conf.mts defaulted to
+// `earliest/earliest latest/latest` and additionally appended
+// `latest-beta/latest` whenever `obsidianBetaAvailable` returned true.
+// Both `earliest` and `latest-beta` paths trigger an obsidian-launcher
+// login flow when the corresponding image isn't cached, so a clean
+// local install would die with "Obsidian Insiders account is required".
+//
+// New behavior:
+//   1. Explicit `OBSIDIAN_VERSIONS` wins (CI release.yml sets this; any
+//      contributor wanting earliest coverage sets it manually).
+//   2. Otherwise default to just `latest/latest` — a single image,
+//      free-tier download, sufficient for local hand-checks.
+//   3. Beta is opt-in via `OBSIDIAN_USE_BETA=1` AND requires the image
+//      already in cache (so we never force a fresh download login).
 
 export interface PickEnv {
   OBSIDIAN_VERSIONS?: string;
@@ -22,10 +25,7 @@ export interface PickEnv {
 
 export function pickWdioVersions(env: PickEnv, betaCached: boolean): string {
   if (env.OBSIDIAN_VERSIONS) return env.OBSIDIAN_VERSIONS;
-  let v = "earliest/earliest latest/latest";
-  // BUG (task #45): the previous code unconditionally appended beta when
-  // `betaCached` was true. The fix gates on the user opt-in env so a clean
-  // local install never hits the Insiders login path by surprise.
-  if (betaCached) v += " latest-beta/latest";
+  let v = "latest/latest";
+  if (env.OBSIDIAN_USE_BETA && betaCached) v += " latest-beta/latest";
   return v;
 }

@@ -1,17 +1,15 @@
 import * as path from "path";
 import { parseObsidianVersions, obsidianBetaAvailable } from "wdio-obsidian-service";
 import { env } from "process";
+import { pickWdioVersions } from "./wdio-versions.mts";
 
 const cacheDir = path.resolve(".obsidian-cache");
 
-let defaultVersions = "earliest/earliest latest/latest";
-if (await obsidianBetaAvailable({ cacheDir })) {
-  defaultVersions += " latest-beta/latest";
-}
-const desktopVersions = await parseObsidianVersions(
-  env.OBSIDIAN_VERSIONS ?? defaultVersions,
-  { cacheDir },
-);
+// task #45 (US-602): default to the stable matrix only; beta is opt-in
+// via `OBSIDIAN_USE_BETA=1`. See wdio-versions.mts for rationale.
+const betaCached = await obsidianBetaAvailable({ cacheDir });
+const defaultVersions = pickWdioVersions(env, betaCached);
+const desktopVersions = await parseObsidianVersions(defaultVersions, { cacheDir });
 if (env.CI) {
   console.log("obsidian-cache-key:", JSON.stringify([desktopVersions]));
 }
