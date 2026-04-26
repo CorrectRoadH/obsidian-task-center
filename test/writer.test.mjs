@@ -522,3 +522,97 @@ test("planCrossFileNest — destination insertion appears right after parent's l
   ]);
   assert.deepEqual(plan.newChildLines, ["- [ ] stays"]);
 });
+
+// task #57 (P1 regression): ctrdh's actual repro — drag a task from
+// `Daily/2026-04-26.md` into `AI-Native的人生` in `Daily/2026-04-19.md`.
+// The destination parent uses TAB-indented children; current
+// `planCrossFileNest` hard-codes `parentIndent + "    "` (4 spaces) for
+// the new child, which Obsidian's markdown list parser then nests under
+// the LAST tab-indented sibling instead of the parent. Fix: derive the
+// new-child indent from the parent's existing first-child indent style
+// when present, else fall back to "    ".
+//
+// This test reproduces the exact mixed-indent shape from
+// /Users/ctrdh/LifeSystem/Daily/2026-04-19.md:69-75 (one 4-space-indented
+// outlier among otherwise tab-indented children, plus a deeper
+// grandchild). The dragged subtree mirrors
+// /Users/ctrdh/LifeSystem/Daily/2026-04-26.md:5-6 (a task with one
+// 4-space-indented subchild).
+test("planCrossFileNest — task #57: parent has TAB-indented children → new child must use TAB to stay parent's direct child, not Obsidian's 'last tab-indented sibling''s child", () => {
+  // Mirrors `给Slock添加更多的AI CLI` + `让omar有管理这些cli skill的能力`.
+  const childFileLines = [
+    "- [ ] C_top ➕ 2026-04-26",
+    "    - [ ] C_subchild",
+  ];
+
+  // Mirrors `AI-Native的人生` subtree at /…/2026-04-19.md:69-75 verbatim
+  // for indent shape:
+  //   L0: A_parent           — indent="" (root)
+  //   L1: A_child_1          — indent="\t"
+  //   L2:   A_grandchild     — indent="\t    "
+  //   L3: A_child_2          — indent="\t"
+  //   L4: A_child_3_done     — indent="\t"
+  //   L5: A_child_4_4space   — indent="    "  (the one outlier user really has)
+  //   L6: A_child_5          — indent="\t"
+  const parentFileLines = [
+    "- [ ] A_parent ⏳ 2026-04-26",
+    "\t- [ ] A_child_1",
+    "\t    - [ ] A_grandchild",
+    "\t- [ ] A_child_2",
+    "\t- [x] A_child_3_done ✅ 2026-04-24",
+    "    - [ ] A_child_4_4space",
+    "\t- [ ] A_child_5",
+  ];
+
+  const plan = planCrossFileNest(
+    childFileLines,
+    0, // C_top is at line 0 of child file
+    0, // C_top's indent is "" (root) → indentLen 0
+    parentFileLines,
+    { line: 0, indentLen: 0 }, // A_parent at L0, indent="" → indentLen 0
+  );
+
+  // Source side: C_top + its subchild fully removed.
+  assert.deepEqual(plan.newChildLines, []);
+
+  // Destination side: the new child must use TAB indent so it parses as
+  // A_parent's direct child. Currently the planner emits `"    "` (4
+  // spaces), and after L6 (`\t- [ ] A_child_5`), Obsidian's CommonMark
+  // list parser walks back up to the deepest preceding item whose
+  // content column matches and treats `    - [ ] C_top` as a CHILD of
+  // `\t- [ ] A_child_5`. That's the user-reported regression.
+  //
+  // After fix: new child uses `\t` (matching A_child_1/_2/_3/_5) and
+  // C_subchild keeps its relative depth (so it ends up `\t    - [ ]`).
+  assert.deepEqual(plan.newParentLines, [
+    "- [ ] A_parent ⏳ 2026-04-26",
+    "\t- [ ] A_child_1",
+    "\t    - [ ] A_grandchild",
+    "\t- [ ] A_child_2",
+    "\t- [x] A_child_3_done ✅ 2026-04-24",
+    "    - [ ] A_child_4_4space",
+    "\t- [ ] A_child_5",
+    "\t- [ ] C_top ➕ 2026-04-26",
+    "\t    - [ ] C_subchild",
+  ]);
+});
+
+// Coverage backstop: when the parent has NO existing children, the
+// fallback to "    " (4 spaces) still applies. This keeps the original
+// task-#37 scenario green.
+test("planCrossFileNest — task #57 corollary: parent with NO children falls back to 4-space new-child indent", () => {
+  const childFileLines = ["- [ ] moved"];
+  const parentFileLines = ["- [ ] empty-parent"];
+  const plan = planCrossFileNest(
+    childFileLines,
+    0,
+    0,
+    parentFileLines,
+    { line: 0, indentLen: 0 },
+  );
+  assert.deepEqual(plan.newParentLines, [
+    "- [ ] empty-parent",
+    "    - [ ] moved",
+  ]);
+  assert.deepEqual(plan.newChildLines, []);
+});
