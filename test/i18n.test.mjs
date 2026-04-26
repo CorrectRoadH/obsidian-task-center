@@ -88,3 +88,63 @@ test("US-412 — err.task_not_found key exists in both EN and ZH tables", async 
   // Must differ from EN (i.e., actually translated).
   assert.notEqual(zhMsg, enMsg);
 });
+
+// task #43 (US-402): the persistent status bar text, mobile mirrored
+// status row, est/act metadata badges, mobile long-press action sheet,
+// and date prompt hint were all hard-coded English literals. In a
+// Chinese Obsidian session they leaked through unchanged. This test
+// asserts every replacement i18n key exists in both EN and ZH tables;
+// the green commit then routes the call sites through `tr()`.
+//
+// Coverage mirrors the categories Jerry called out:
+//   - status.today / status.overdue / status.openTooltip
+//     → status-bar.ts + view.ts:renderMobileStatusRow (shared keys)
+//   - meta.est / meta.act        → view.ts est/act badges
+//   - sheet.markUndone / sheet.done / sheet.scheduleAt /
+//     sheet.scheduleClear / sheet.openSource / sheet.drop
+//                                 → view.ts:openCardActionSheet
+//   - prompt.dateHint            → dateprompt.ts
+test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (translated where text-bearing)", async () => {
+  const keys = [
+    { key: "status.today", vars: { n: 3 }, mustDifferFromEnInZh: true },
+    { key: "status.overdue", vars: { n: 2 }, mustDifferFromEnInZh: true },
+    { key: "status.openTooltip", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "meta.est", vars: { dur: "30m" }, mustDifferFromEnInZh: true },
+    { key: "meta.act", vars: { dur: "25m" }, mustDifferFromEnInZh: true },
+    { key: "sheet.markUndone", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "sheet.done", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "sheet.scheduleAt", vars: { date: "2026-04-26" }, mustDifferFromEnInZh: false },
+    { key: "sheet.scheduleClear", vars: undefined, mustDifferFromEnInZh: false },
+    { key: "sheet.openSource", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "sheet.drop", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "prompt.dateHint", vars: undefined, mustDifferFromEnInZh: true },
+  ];
+
+  mockStorage.clear();
+  mockStorage.set("language", "en");
+  const en = await import(
+    `../test/.compiled/i18n.bundle.js?cachebust=${Date.now()}_t43_en`
+  );
+  mockStorage.set("language", "zh");
+  const zh = await import(
+    `../test/.compiled/i18n.bundle.js?cachebust=${Date.now()}_t43_zh`
+  );
+
+  for (const { key, vars, mustDifferFromEnInZh } of keys) {
+    mockStorage.set("language", "en");
+    const enMsg = en.t(key, vars);
+    assert.notEqual(enMsg, key, `EN table missing key: ${key}`);
+
+    mockStorage.set("language", "zh");
+    const zhMsg = zh.t(key, vars);
+    assert.notEqual(zhMsg, key, `ZH table missing key: ${key}`);
+
+    if (mustDifferFromEnInZh) {
+      assert.notEqual(
+        zhMsg,
+        enMsg,
+        `ZH translation for ${key} should differ from EN ("${enMsg}")`,
+      );
+    }
+  }
+});
