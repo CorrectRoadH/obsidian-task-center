@@ -163,7 +163,7 @@ export class QuickAddModal extends Modal {
       const footer = contentEl.createDiv({ cls: "tc-qa-footer" });
       footer.createSpan({
         cls: "tc-qa-footer-left",
-        text: `↵ ${computeWriteTarget(this.settings)}`,
+        text: `↵ ${computeWriteTarget(this.app, this.settings)}`,
       });
       footer.createSpan({ cls: "tc-qa-footer-right", text: "Esc" });
     } else {
@@ -282,13 +282,17 @@ function formatHintDate(iso: string): string {
 }
 
 // US-167-4: compute the file path the new task will be appended to, for
-// the footer's `↵ <path>` preview. Spec UX.md §6.6: dailyFolder +
-// todayISO when set, inbox fallback otherwise. Note this preview is a
-// best-effort approximation of writer.ts's actual target resolution
-// (which also consults Obsidian's daily-notes internal plugin); the
-// preview matches the spec wording exactly while the writer remains the
-// authority on actual write location.
-function computeWriteTarget(settings?: TaskCenterSettings): string {
+// the footer's `↵ <path>` preview. Currently uses settings.dailyFolder
+// — but writer.ts:addTask reads Obsidian's built-in daily-notes plugin
+// for its actual write target, so when daily-notes is disabled the
+// footer claims `Daily/today.md` while the writer actually puts the
+// task in `Tasks/Inbox.md` ("footer lies"). Task #31a fixes this to
+// mirror writer.ts.
+// Exported for unit testing.
+export function computeWriteTarget(
+  _app: App | null | undefined,
+  settings?: TaskCenterSettings,
+): string {
   const dailyFolder = settings?.dailyFolder?.trim();
   if (dailyFolder) return `${dailyFolder}/${todayISO()}.md`;
   return settings?.inboxPath ?? "Tasks/Inbox.md";
