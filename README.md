@@ -1,27 +1,31 @@
 # Obsidian Task Center
 
-Energy-aware task board + CLI on top of the [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) syntax. One plugin, two entry points:
+**Built on top of [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks)** — a kanban board, mobile experience, and AI-agent CLI that consumes your existing Obsidian Tasks markdown. No new format, no migration: install Tasks, install Task Center, your `- [ ]` lines just gain a board view and shell verbs.
 
 - **GUI** — a full-tab kanban view with week/month/completed/unscheduled tabs, drag-to-schedule, trash bin, keyboard shortcuts
 - **CLI** — verbs registered to Obsidian's native CLI (1.12.2+) so you (and an AI like Claude Code) can read/write tasks from the shell
 
 Data is plain markdown. No custom file format, no lock-in — Obsidian Tasks plugin, Dataview, and anything else that reads `- [ ] task 📅 2026-04-25 ⏳ 2026-04-24 [estimate:: 30m]` keeps working.
 
-## Why not just Obsidian Tasks?
+<!-- TODO @ctrdh: drop hero screenshots into docs/assets/ -->
+![Task Center board view (week tab)](docs/assets/board-week.png)
+![Quick Add Spotlight panel](docs/assets/quickadd-spotlight.png)
 
-Obsidian Tasks is the authoritative data-layer — keep it installed. Task Center adds on top:
+## What Task Center adds on top
 
-| Feature | Obsidian Tasks | Task Center |
+Obsidian Tasks owns the data model. Task Center adds presentation layers and a programmatic surface — the two are designed to coexist in the same vault. Obsidian Tasks is the authoritative data-layer — keep it installed.
+
+| Layer | Provided by Obsidian Tasks | Added by Task Center |
 |---|---|---|
-| Inline `- [ ]` syntax | ✅ authoritative | ✅ sources |
-| `✅ / ❌ / ➕` date stamps | ✅ | ✅ reads + writes |
-| Query blocks | ✅ | — |
-| Kanban tab with drag-to-date | — | ✅ |
-| Week / month calendar views | — | ✅ |
-| Native CLI verbs | — | ✅ |
-| `[estimate::]` / `[actual::]` tracking | — | ✅ |
-| Drop cascade to subtasks | — | ✅ |
-| Click-to-rename cards | — | ✅ |
+| Inline `- [ ]` syntax + emoji metadata | The format itself | Reads + writes, never overwrites Tasks-only fields |
+| `📅 ⏳ ✅ ❌ ➕` date stamps | Authoritative semantics | Renders + edits via drag / quick add |
+| Query blocks in your notes | Native query DSL | (use as-is — Task Center doesn't replace) |
+| Kanban board (week / month / unscheduled / completed) | — | New full-tab view |
+| Drag-to-reschedule + drag-to-nest | — | New |
+| Native Obsidian CLI verbs | — | New (registers via Obsidian 1.12.2+) |
+| `[estimate::]` / `[actual::]` time tracking | — | New, with `stats` summary |
+| Mobile board (iOS / iPad / Android) | — | New (full feature parity) |
+| i18n (中 / EN auto-switch) | — | New |
 
 ## Syntax
 
