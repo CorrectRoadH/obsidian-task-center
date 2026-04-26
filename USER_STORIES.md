@@ -201,6 +201,14 @@
 - `US-604` **作为用户，我点开 Release 页能一眼看到这个版本变了什么**。Release body 自动从"上次 tag 到这次 tag" 之间的 PR 标题 + 已 closed issue 标题生成，按 conventional commit 前缀分组（feat / fix / chore / refactor）。不要求人工写 changelog——但维护者保留**手动覆写** Release body 的余地（GitHub Release UI 改即可，不影响下次发版）。手动覆写是例外不是常态。
 - `US-605` **作为用户，我装插件 / 自动更新拿到的 zip 必须是 Obsidian 标准三件套**。每个 GitHub Release 必须挂 `main.js` + `manifest.json` + `styles.css` 三个 asset（不是打包进 zip，是三个独立文件）——这是 Obsidian community plugin store 拉取约定。**禁止把 build 产物 commit 回 main**（dynamic-views 那条样板**反例**——main.js 进 main 会污染 PR diff、和工程纪律冲突，artifact 上 GitHub Release 一处即可，store 自己拉）。
 
+### 插件依赖健康检查（US-701）
+
+插件写入路径依赖 Obsidian 内置的 **Daily Notes** 插件（读取 folder/format 配置决定每日文件路径）。过去在 Daily Notes 未启用或未配置时默默回退到 `Tasks/Inbox.md`，用户不知道为什么任务落到了收件箱而不是当天日记。US-701 要求这类依赖问题必须以**可操作的形式**告知用户。
+
+- `US-701a` **Daily Notes 未启用时必须展示可操作提示**。当 Obsidian 内置 Daily Notes 插件处于禁用状态，插件启动及用户打开看板时，**状态栏**（或持久 Notice）必须展示形如 "Daily Notes 插件未启用，任务将写入收件箱" 的提示，并提供一个跳转到 Obsidian 插件设置页的入口。不允许静默 fallback——用户需要知道写入目标已变更。
+- `US-701b` **Daily Notes 未配置时（folder 为空）必须展示可操作提示**。当 Daily Notes 启用但未设置日记文件夹，插件应在状态栏展示 "Daily Notes 未设置文件夹，任务将写入收件箱" 提示，并附设置入口。逻辑与 US-701a 对称。
+- `US-701c` **警告状态必须在配置修复后自动消失**。用户在 Obsidian 设置中启用 Daily Notes 或补齐配置后，警告应随下一次 workspace 事件（layout-change / settings-change）自动清除，无需重启 Obsidian。
+
 ## 故事变更怎么走
 
 1. 新故事:取下一个空编号,写进对应章节,默认 ⬜。
