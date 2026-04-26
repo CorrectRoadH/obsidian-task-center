@@ -1,0 +1,94 @@
+# task #52 — Xvfb minimal e2e POC.
+#
+# Scope: prove that ubuntu-latest with Xvfb virtual display can boot and
+# drive an Obsidian binary through wdio-obsidian-service for ONE
+# non-timing-sensitive spec. This is NOT a PR or release gate; it is
+# evidence for the Tiger + Jerry headless investigation (msg `da1efa28`).
+#
+# Strict scope per Leo task #52 and Tiger's narrowed plan:
+#   - workflow_dispatch + manual push trigger (NOT on push to main / PRs)
+#   - single spec only: board-basics.e2e.ts
+#   - WDIO_MAX_INSTANCES=1 hardcoded (independent of repo default,
+#     which is also 1 after task #48)
+#   - OBSIDIAN_VERSIONS=latest/latest hardcoded (no Insiders auth)
+#   - apt deps: explicit `xvfb` install + best-effort common Electron
+#     deps (libnss3, libgtk-3-0t64 / libgtk-3-0, libxss1, libasound2t64
+#     / libasound2, libgbm1, libxi6). If a startup failure surfaces a
+#     missing .so, the next iteration adds it here with the failure log
+#     pasted in the commit message (per Leo verification口径).
+#
+# Explicit non-goals (do NOT extend without a follow-up task):
+#   - Do not run on every push / PR.
+#   - Do not run mobile / drag / subtask specs.
+#   - Do not solve the Insiders/beta credentials path.
+#   - Do not replace release.yml's pre-flight gate.
+#
+# Reviewer: Jerry mandatory review of the first run output before any
+# proposal to extend scope (mandatory per AGENTS.md §1a).
+
+name: CI Xvfb POC (task #52)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      # Allow contributors to iterate on this workflow itself by pushing
+      # changes to it on a feature branch. Production paths NEVER trigger
+      # this — that's by design (POC, not gate).
+      - ".github/workflows/ci-xvfb-poc.yml"
+
+jobs:
+  xvfb-e2e-board-basics:
+    runs-on: ubuntu-latest
+    env:
+      OBSIDIAN_VERSIONS: latest/latest
+      WDIO_MAX_INSTANCES: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # Per Tiger msg `da1efa28` accepting Jerry's correction (msg
+      # `469d4b3a`): Electron / Obsidian on Linux needs more than just
+      # `xvfb`. We install xvfb + a candidate set of common Electron
+      # runtime deps. ubuntu-24.04 (current ubuntu-latest) uses the t64
+      # ABI suffix for some libraries; we pin the t64 names here. If a
+      # later runner image change breaks this, fix in this file with
+      # the missing .so listed in the commit message — do not silently
+      # extend other workflows.
+      - name: Install Xvfb + Electron Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libnss3 \
+            libxi6 \
+            libxss1 \
+            libgbm1 \
+            libgtk-3-0t64 \
+            libasound2t64
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      # Single spec, single worker — ONLY board-basics (chosen per
+      # Jerry msg `ec86573d`: not mobile / drag / subtask, those are
+      # known timing-sensitive. board-basics covers US-101/107/115 +
+      # status-bar US-106/107 + Quick Add modal open — proves the
+      # render + click + assertion path works without a visible GUI).
+      - name: Run minimal Obsidian e2e under Xvfb
+        run: |
+          # `xvfb-run` is a wrapper that launches Xvfb on an unused
+          # display, exports DISPLAY, runs the command, then tears down.
+          # `--auto-servernum` picks a free :N. `--server-args` keeps
+          # the display config minimal (1920x1080x24, no GLX needed).
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            npx wdio run ./wdio.conf.mts \
+              --spec test/e2e/specs/board-basics.e2e.ts
