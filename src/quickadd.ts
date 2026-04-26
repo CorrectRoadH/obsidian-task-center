@@ -281,21 +281,53 @@ function formatHintDate(iso: string): string {
   return `${mm}-${dd} (${WEEKDAY_SHORT[d.getDay()]})`;
 }
 
-// US-167-4: compute the file path the new task will be appended to, for
-// the footer's `↵ <path>` preview. Currently uses settings.dailyFolder
-// — but writer.ts:addTask reads Obsidian's built-in daily-notes plugin
-// for its actual write target, so when daily-notes is disabled the
-// footer claims `Daily/today.md` while the writer actually puts the
-// task in `Tasks/Inbox.md` ("footer lies"). Task #31a fixes this to
-// mirror writer.ts.
+// US-167-4 + US-31a: compute the footer's `↵ <path>` preview to MIRROR
+// writer.ts:addTask's actual write target so the preview never lies.
+// Resolution order (must match src/writer.ts:addTask exactly):
+//   1. Obsidian's built-in daily-notes plugin enabled →
+//      `<dnOpts.folder>/<today filename per dnOpts.format>`
+//   2. Otherwise → `settings.inboxPath` (default "Tasks/Inbox.md")
+//
+// `settings.dailyFolder` is intentionally NOT consulted — it's a legacy
+// setting kept as migration buffer; task #32 (0.3.0 minor) removes it.
 // Exported for unit testing.
 export function computeWriteTarget(
-  _app: App | null | undefined,
+  app: App | null | undefined,
   settings?: TaskCenterSettings,
 ): string {
-  const dailyFolder = settings?.dailyFolder?.trim();
-  if (dailyFolder) return `${dailyFolder}/${todayISO()}.md`;
+  const dnOpts = (app as unknown as {
+    internalPlugins?: {
+      plugins?: Record<
+        string,
+        { instance?: { options?: { folder?: string; format?: string } } }
+      >;
+    };
+  })?.internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
+  if (dnOpts) return formatDailyFilename(dnOpts.folder ?? "", dnOpts.format);
   return settings?.inboxPath ?? "Tasks/Inbox.md";
+}
+
+// Mirror of src/writer.ts:todayFilename — same moment-token subset.
+// Kept inline (5 lines of duplication) rather than extracting a shared
+// module: per AGENTS.md "no abstractions beyond what the task requires"
+// + the test asserts both functions produce the same shape.
+function formatDailyFilename(folder: string, format?: string): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  let name: string;
+  if (format) {
+    name = format
+      .replace(/YYYY/g, d.getFullYear().toString())
+      .replace(/YY/g, String(d.getFullYear()).slice(-2))
+      .replace(/MM/g, pad(d.getMonth() + 1))
+      .replace(/DD/g, pad(d.getDate()))
+      .replace(/D/g, String(d.getDate()))
+      .replace(/ddd/g, ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()])
+      + ".md";
+  } else {
+    name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  }
+  return folder ? `${folder}/${name}` : name;
 }
 
 const ZH_DAYS: Record<string, number> = {

@@ -253,8 +253,8 @@ Notes:
 
 | Setting | Default | Description |
 |---|---|---|
-| Default inbox path | `Tasks/Inbox.md` | Where `add` writes when `to=` omitted AND no daily note |
-| Daily folder | `Daily` | Default `add` target (today's daily note) |
+| Default inbox path | `Tasks/Inbox.md` | Where `add` writes when `to=` omitted AND Obsidian's built-in **Daily Notes** core plugin is disabled. When Daily Notes is enabled, `add` follows its folder/format/template — Task Center never overrides that. |
+| Daily folder | `Daily` | (legacy, unused by the writer; kept for backwards compat — task #32 removes it in 0.3.0) |
 | Default view | Week | Which tab opens first |
 | Week starts on | Monday | ISO vs US-style |
 | Open board on startup | off | Auto-open on vault launch |
@@ -263,6 +263,10 @@ Notes:
 ## Languages
 
 All UI strings (tab names, settings labels, empty states, toasts) follow Obsidian's current locale automatically. Switching languages mid-session re-renders open boards in real time. User content (hashtags, inline-field names, Obsidian Tasks emoji) is **never translated** — your markdown stays byte-stable. IME composition (Chinese / Japanese / Korean input) is properly guarded everywhere — pressing Enter to commit a candidate doesn't accidentally submit a quick-add or rename.
+
+## Daily Notes
+
+Task Center reads Obsidian's built-in **Daily Notes** core plugin configuration for daily-note paths — folder, date format, and template all come from there. Disable that plugin and `add` falls back to the inbox path above. Same add-on principle as everywhere else: we consume what's already configured, we don't introduce a parallel source of truth.
 
 ## Support
 
