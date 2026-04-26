@@ -97,12 +97,19 @@ describe("US-701 dependency health check (Daily Notes)", function () {
       $('[data-dep-warning="daily-notes-no-folder"]'),
     ).toExist();
 
-    // Restore folder setting.
+    // Restore folder setting. Use `in` check because the original value may
+    // be undefined (unset property), which would cause `!== undefined` to
+    // always skip the restore block — the bug Wood caught in the first draft.
     await browser.executeObsidian(async ({ app }) => {
       const dn = (app as any).internalPlugins?.plugins?.["daily-notes"];
-      if (dn?.instance?.options?._savedFolder !== undefined) {
-        dn.instance.options.folder = dn.instance.options._savedFolder;
-        delete dn.instance.options._savedFolder;
+      const opts = dn?.instance?.options;
+      if (opts && "_savedFolder" in opts) {
+        if (opts._savedFolder === undefined) {
+          delete opts.folder;
+        } else {
+          opts.folder = opts._savedFolder;
+        }
+        delete opts._savedFolder;
       }
     });
   });
