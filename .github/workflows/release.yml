@@ -86,6 +86,11 @@ jobs:
       - name: Verify versions.json contains this tag
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          # With `node -e`, argv layout is [node, arg1, arg2, ...] — there
+          # is NO empty script slot. So the first positional arg sits at
+          # argv[1]. Verified locally against node v22:
+          #   node -e "console.log(process.argv)" "0.1.0"
+          #   → ["/.../node","0.1.0"]
           if ! node -e "const v=require('./versions.json'); if(!v[process.argv[1]])process.exit(1);" "$TAG_VERSION"; then
             echo "::error::versions.json missing entry for $TAG_VERSION — version-bump.mjs should add it; check the version script wiring"
             exit 1
