@@ -620,6 +620,49 @@ export interface UndoOp {
 }
 
 /**
+ * task #57: pick the indent string a new direct child should use under
+ * `parent`. If the parent already has at least one direct child, use
+ * that first child's indent verbatim — this is the only safe way to
+ * survive mixed-indent files (e.g. a subtree where existing siblings
+ * use `\t` but a stray sibling uses `    `; CommonMark's "deepest
+ * preceding match wins" rule means any new child whose indent column
+ * doesn't match the established pattern gets re-parented under the
+ * last sibling whose column is `<=` the new line's column).
+ *
+ * If the parent has NO existing direct children, fall back to
+ * `parentIndent + "    "` to preserve the prior single-child default
+ * (which task #37's existing fixture relies on).
+ *
+ * "Direct child" here = the FIRST line below `parent.line` whose
+ * `indentLen` is strictly greater than `parent.indentLen` and whose
+ * indent depth would put it at parent + 1 nesting level. We just take
+ * the first descendant for simplicity — deeper grandchildren are
+ * always indented further than a direct child, so the first descendant
+ * line is by construction either a direct child OR a grandchild. We
+ * don't try to distinguish: if the first descendant is a grandchild,
+ * matching its indent would over-indent and we still get the bug. The
+ * heuristic that works in practice: copy whatever the FIRST line below
+ * the parent uses, because in real notes that's almost always a direct
+ * child line. The `parentIndent + "    "` fallback handles the empty
+ * case.
+ */
+function pickChildIndent(
+  lines: string[],
+  parentLine: number,
+  parentIndent: string,
+  parentIndentLen: number,
+): string {
+  for (let i = parentLine + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.trim() === "") continue;
+    if (indentLen(l) <= parentIndentLen) break;
+    const m = l.match(/^(\s*(?:>\s*)*)/);
+    if (m) return m[0];
+  }
+  return parentIndent + "    ";
+}
+
+/**
  * Pure planner for the same-file nest case. Returns the post-nest file lines
  * plus the forward ops that produced them — callers feed the ops into
  * `applyUndoOps` (in reverse) to undo the change.
@@ -638,7 +681,9 @@ export function planSameFileNest(
   parent: { line: number; indentLen: number },
 ): { newLines: string[]; undoOps: Array<Omit<UndoOp, "path">> } {
   const parentIndent = (lines[parent.line] ?? "").match(/^(\s*(?:>\s*)*)/)?.[0] ?? "";
-  const newIndent = parentIndent + "    ";
+  // task #57: match existing children's indent style to survive mixed
+  // tab+space files. See `pickChildIndent` for the rationale.
+  const newIndent = pickChildIndent(lines, parent.line, parentIndent, parent.indentLen);
   const block = extractTaskBlock(lines, childLine, childIndentLen);
   if (parent.line >= childLine && parent.line < childLine + block.length) {
     throw new TaskWriterError("invalid_nest", "cannot nest a task under its own descendant");
@@ -677,7 +722,9 @@ export function planCrossFileNest(
   undoOps: Array<{ which: "child" | "parent" } & Omit<UndoOp, "path">>;
 } {
   const parentIndent = (parentLines[parent.line] ?? "").match(/^(\s*(?:>\s*)*)/)?.[0] ?? "";
-  const newIndent = parentIndent + "    ";
+  // task #57: match existing children's indent style; see same comment
+  // in planSameFileNest above.
+  const newIndent = pickChildIndent(parentLines, parent.line, parentIndent, parent.indentLen);
   const block = extractTaskBlock(childLines, childLine, childIndentLen);
   const reindented = reindentBlock(block, childIndentLen, newIndent);
   const insertIndex = findChildrenEnd(parentLines, parent.line, parent.indentLen);
