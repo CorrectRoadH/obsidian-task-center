@@ -33,6 +33,7 @@ import { BottomSheet } from "./view/bottom-sheet";
 import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
+import { findGroupingTag, groupingTagForKey, groupingTagIndex, normalizeGroupingTags } from "./grouping";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "week" | "month" | "completed" | "unscheduled";
@@ -1193,27 +1194,21 @@ export class TaskCenterView extends ItemView {
     // UX-mobile §10: shortcut hint is desktop-only.
     hint.setText(tr(Platform.isMobile ? "unscheduled.mobileHint" : "unscheduled.hint"));
 
-    // US-301: Covey 4-quadrant grouping. `#1象限`~`#4象限` is the default
-    // tag convention; per US-108 these are not application knowledge but
-    // user-visible defaults. (Future: read the group-tag set from
-    // settings so users can swap in `#now / #next / #later / #waiting`
-    // without code change — same grouping logic, different literal set.)
+    // US-301: grouping tags are configurable. The legacy `#1象限`~`#4象限`
+    // convention remains the default, while custom sets such as
+    // `#now / #next / #later / #waiting` group the same way.
     // see USER_STORIES.md
+    const groupingTags = this.getGroupingTags();
     const otherLabel = tr("pool.other");
-    const quads: Record<string, ParsedTask[]> = { "#1象限": [], "#2象限": [], "#3象限": [], "#4象限": [], [otherLabel]: [] };
+    const groups: Record<string, ParsedTask[]> = { [otherLabel]: [] };
+    for (const tag of groupingTags) groups[tag] = [];
     for (const task of unscheduled) {
-      let assigned = false;
-      for (const q of ["#1象限", "#2象限", "#3象限", "#4象限"]) {
-        if (task.tags.includes(q)) {
-          quads[q].push(task);
-          assigned = true;
-          break;
-        }
-      }
-      if (!assigned) quads[otherLabel].push(task);
+      const tag = findGroupingTag(task.tags, groupingTags);
+      groups[tag ?? otherLabel].push(task);
     }
     const grid = wrap.createDiv({ cls: "bt-unscheduled-grid" });
-    for (const [label, list] of Object.entries(quads)) {
+    for (const label of [...groupingTags, otherLabel]) {
+      const list = groups[label] ?? [];
       if (list.length === 0) continue;
       const col = grid.createDiv({ cls: "bt-unscheduled-col" });
       col.createDiv({
@@ -1972,11 +1967,12 @@ export class TaskCenterView extends ItemView {
   }
 
   private quadrantClass(tags: string[]): string | null {
-    for (const tag of tags) {
-      const m = tag.match(/^#([1-4])象限$/);
-      if (m) return `q${m[1]}`;
-    }
-    return null;
+    const index = groupingTagIndex(tags, this.getGroupingTags());
+    return index >= 0 && index < 4 ? `q${index + 1}` : null;
+  }
+
+  private getGroupingTags(): string[] {
+    return normalizeGroupingTags(this.plugin.settings.groupingTags);
   }
 
   // ---------- Footer / Add ----------
@@ -2083,7 +2079,9 @@ export class TaskCenterView extends ItemView {
     // Don't interfere when input is focused
     if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
 
-    if (e.key >= "1" && e.key <= "4" && !e.ctrlKey && !e.metaKey) {
+    if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+      const target = groupingTagForKey(e.key, this.getGroupingTags());
+      if (!target) return;
       e.preventDefault();
       await this.changeQuadrant(sel, e.key);
       return;
@@ -2144,10 +2142,12 @@ export class TaskCenterView extends ItemView {
   }
 
   private async changeQuadrant(t: ParsedTask, digit: string) {
-    const target = `#${digit}象限`;
-    // Remove existing #N象限 tags, add target
+    const groupingTags = this.getGroupingTags();
+    const target = groupingTagForKey(digit, groupingTags);
+    if (!target) return;
+    // Remove existing configured grouping tags, add target.
     for (const existing of t.tags) {
-      if (/^#[1-4]象限$/.test(existing) && existing !== target) {
+      if (groupingTags.includes(existing) && existing !== target) {
         await this.api.tag(t.id, existing, true);
       }
     }
@@ -2207,15 +2207,17 @@ export class TaskCenterView extends ItemView {
         }
       }),
     );
-    m.addSeparator();
-    for (let q = 1; q <= 4; q++) {
-      m.addItem((i) =>
-        i.setTitle(tr("ctx.quadrant", { n: q })).onClick(async () => {
-          await this.changeQuadrant(task, q.toString());
+    const groupingTags = this.getGroupingTags();
+    if (groupingTags.length > 0) m.addSeparator();
+    for (let index = 0; index < groupingTags.length && index < 9; index++) {
+      const tag = groupingTags[index];
+      m.addItem((item) =>
+        item.setTitle(tr("ctx.groupingTag", { tag })).onClick(async () => {
+          await this.changeQuadrant(task, String(index + 1));
         }),
       );
     }
-    m.addSeparator();
+    if (groupingTags.length > 0) m.addSeparator();
     m.addItem((i) =>
       i.setTitle(tr("ctx.drop")).onClick(async () => {
         await this.runWithRemoveAnim(task.id, () => this.api.drop(task.id));

@@ -401,12 +401,12 @@ export default class TaskCenterPlugin extends Plugin {
     }
     const desc = describeFilters(filters);
     const header = `${all.length} tasks · ${desc} · ${todayISO()}`;
-    return formatList(all, header);
+    return formatList(all, header, { groupingTags: this.settings.groupingTags });
   }
 
   private async cliShow(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
-    return formatShow(await this.api.show(ref));
+    return formatShow(await this.api.show(ref), { groupingTags: this.settings.groupingTags });
   }
 
   // US-206: `stats days=N` returns the estimate-vs-actual ratio plus the

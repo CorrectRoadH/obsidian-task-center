@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
+import { normalizeGroupingTags, parseGroupingTagsInput } from "./grouping";
 import { t as tr } from "./i18n";
 import type TaskCenterPlugin from "./main";
 
@@ -32,6 +33,24 @@ export class TaskCenterSettingTab extends PluginSettingTab {
     // removed. The daily-note write target now reads exclusively from
     // Obsidian's built-in Daily Notes core plugin's "New file location"
     // config. See README "Breaking changes (0.3.0)" for migration details.
+
+    // US-301: configurable group tag set. Defaults preserve the legacy
+    // `#1象限`~`#4象限` behavior; clearing the field intentionally disables
+    // grouping shortcuts/chips instead of silently re-adding defaults.
+    // see USER_STORIES.md
+    new Setting(containerEl)
+      .setName(tr("settings.groupingTags.name"))
+      .setDesc(tr("settings.groupingTags.desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("#1象限, #2象限, #3象限, #4象限")
+          .setValue(normalizeGroupingTags(this.plugin.settings.groupingTags).join(", "))
+          .onChange(async (v) => {
+            this.plugin.settings.groupingTags = parseGroupingTagsInput(v);
+            await this.plugin.saveSettings();
+            await this.plugin.refreshOpenViews();
+          }),
+      );
 
     // US-111: default-tab setting decides which view first-open lands on
     // (week / month / completed / unscheduled). `lastTab` (US-405)
@@ -136,13 +155,16 @@ export class TaskCenterSettingTab extends PluginSettingTab {
     const cliHelp = containerEl.createEl("div", { cls: "setting-item-description" });
     cliHelp.createEl("p", { text: tr("settings.cliHelp") });
     const pre = cliHelp.createEl("pre");
+    const groupingTags = normalizeGroupingTags(this.plugin.settings.groupingTags);
+    const sampleListTag = groupingTags[1] ?? groupingTags[0] ?? "#tag";
+    const sampleAddTag = groupingTags[2] ?? groupingTags[0] ?? "#tag";
     pre.setText(
       [
         "obsidian task-center:list scheduled=today",
-        "obsidian task-center:list scheduled=unscheduled tag='#2象限'",
+        `obsidian task-center:list scheduled=unscheduled tag='${sampleListTag}'`,
         "obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25",
         "obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23",
-        'obsidian task-center:add text="去营业厅问携号转网" tag="#3象限" scheduled=2026-04-26',
+        `obsidian task-center:add text="去营业厅问携号转网" tag="${sampleAddTag}" scheduled=2026-04-26`,
         "obsidian task-center:stats days=7 group=象限",
       ].join("\n"),
     );

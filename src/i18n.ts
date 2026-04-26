@@ -57,7 +57,7 @@ const EN = {
 
   // Unscheduled big view
   "unscheduled.hint":
-    "Shortcuts: D date · Space done · 1-4 quadrant · Delete drop",
+    "Shortcuts: D date · Space done · 1-9 group · Delete drop",
   "unscheduled.mobileHint":
     "Long-press a card for actions · swipe left = done · swipe right = drop",
 
@@ -92,7 +92,7 @@ const EN = {
   "footer.status": "{todo} todo · {done} done · {overdue} overdue",
   "footer.selected": "selected",
   "footer.hint":
-    "1-4 quadrant · ←/→ day · D date · Space done · E edit · Delete drop · Ctrl+Z undo · / search",
+    "1-9 group · ←/→ day · D date · Space done · E edit · Delete drop · Ctrl+Z undo · / search",
   "footer.mobileHint":
     "long-press for menu · swipe left = done · swipe right = drop · drag to reschedule",
 
@@ -113,7 +113,8 @@ const EN = {
   "ctx.scheduleToday": "Schedule today",
   "ctx.scheduleTomorrow": "Schedule tomorrow",
   "ctx.clearSchedule": "Clear schedule",
-  "ctx.quadrant": "Quadrant {n}",
+  "ctx.quadrant": "Group {n}",
+  "ctx.groupingTag": "Set group: {tag}",
   "ctx.drop": "Drop",
 
   // Inline subtask add (visible on every card)
@@ -148,6 +149,9 @@ const EN = {
   // — the setting is gone, so the i18n keys for its label/description
   // are dead. Daily-note path now reads from Obsidian's built-in Daily
   // Notes core plugin config exclusively (see writer.ts).
+  "settings.groupingTags.name": "Grouping tags",
+  "settings.groupingTags.desc":
+    "Comma-separated tags for Unscheduled grouping, Quick Add chips, 1-9 shortcuts, and CLI group labels.",
   "settings.defaultView.name": "Default view",
   "settings.defaultView.desc": "Which tab to show when the board opens.",
   "settings.defaultView.week": "Week",
@@ -245,7 +249,7 @@ const ZH: Partial<typeof EN> = {
   "pool.other": "其他",
 
   "unscheduled.hint":
-    "快捷键: D 选日期 · Space 完成 · 1-4 改象限 · Delete 放弃",
+    "快捷键: D 选日期 · Space 完成 · 1-9 改分组 · Delete 放弃",
   "unscheduled.mobileHint":
     "长按卡片打开操作 · 左滑 = 完成 · 右滑 = 放弃",
 
@@ -272,7 +276,7 @@ const ZH: Partial<typeof EN> = {
   "footer.status": "{todo} 待办 · {done} 完成 · {overdue} 逾期",
   "footer.selected": "已选",
   "footer.hint":
-    "1-4 象限 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃 · Ctrl+Z 撤销 · / 搜索",
+    "1-9 分组 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃 · Ctrl+Z 撤销 · / 搜索",
   "footer.mobileHint":
     "长按弹菜单 · 左滑 = 完成 · 右滑 = 放弃 · 拖拽改期",
 
@@ -291,7 +295,8 @@ const ZH: Partial<typeof EN> = {
   "ctx.scheduleToday": "排到今天",
   "ctx.scheduleTomorrow": "排到明天",
   "ctx.clearSchedule": "清除排期",
-  "ctx.quadrant": "第{n}象限",
+  "ctx.quadrant": "第{n}组",
+  "ctx.groupingTag": "设为分组：{tag}",
   "ctx.drop": "放弃",
 
   "card.addSubtask": "+ 子任务",
@@ -315,6 +320,9 @@ const ZH: Partial<typeof EN> = {
   "settings.inbox.name": "默认收件箱路径",
   "settings.inbox.desc":
     "`task-center:add` 在没有指定 to= 且没有当日 daily note 时，把任务写到这里。",
+  "settings.groupingTags.name": "分组标签",
+  "settings.groupingTags.desc":
+    "逗号分隔；用于未排期分组、快速新建 chip、1-9 快捷键和 CLI 分组列。",
   "settings.defaultView.name": "默认视图",
   "settings.defaultView.desc": "打开看板时默认展示哪个 tab。",
   "settings.defaultView.week": "本周",

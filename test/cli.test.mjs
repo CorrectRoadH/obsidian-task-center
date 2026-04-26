@@ -191,6 +191,12 @@ test("formatList — header + rows with ids", () => {
   assert.match(out, /\[ \]/);
 });
 
+test("US-301: formatList uses custom grouping tags for the group column", () => {
+  const all = [mkTask({ id: "f.md:L1", title: "a", tags: ["#next"] })];
+  const out = formatList(all, "1 tasks · test", { groupingTags: ["#now", "#next"] });
+  assert.match(out, /f\.md:L1\s+\[ \]\s+#2\s+a/);
+});
+
 test("formatStats — shows ratio + 'within band'", () => {
   const s = {
     periodFrom: "2026-04-17",

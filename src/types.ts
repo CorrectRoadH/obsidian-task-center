@@ -43,6 +43,12 @@ export interface ParsedTask {
 
 export interface TaskCenterSettings {
   inboxPath: string;
+  // US-301: tags used to group the Unscheduled view, Quick Add chips,
+  // context-menu grouping actions, and CLI grouping column. Missing
+  // legacy settings fall back to `#1象限`~`#4象限`; explicit empty disables
+  // grouping actions.
+  // see USER_STORIES.md
+  groupingTags: string[];
   defaultView: "week" | "month" | "completed" | "unscheduled";
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
@@ -69,6 +75,7 @@ export interface TaskCenterSettings {
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
   inboxPath: "Tasks/Inbox.md",
+  groupingTags: ["#1象限", "#2象限", "#3象限", "#4象限"],
   defaultView: "week",
   openOnStartup: false,
   weekStartsOn: 1,

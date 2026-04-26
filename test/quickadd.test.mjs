@@ -36,7 +36,7 @@ function compile() {
 }
 
 compile();
-const { parseQuickAdd, computeWriteTarget } = await import(
+const { parseQuickAdd, computeWriteTarget, quickChips } = await import(
   "../test/.compiled/quickadd.bundle.js"
 );
 const { resolveDateInput } = await import("../test/.compiled/dateprompt.bundle.js");
@@ -53,6 +53,18 @@ test("parseQuickAdd — extracts tags", () => {
   const r = parseQuickAdd("task #2象限 #基建", "2026-04-23");
   assert.equal(r.text, "task");
   assert.deepEqual(r.tag.sort(), ["#2象限", "#基建"]);
+});
+
+test("US-301: quick chips follow custom groupingTags", () => {
+  const chips = quickChips({ groupingTags: ["#now", "#next"] });
+  assert.deepEqual(
+    chips.map((c) => c.token),
+    ["⏳ today", "⏳ tomorrow", "⏳ 周六", "#now", "#next"],
+  );
+  assert.deepEqual(
+    chips.map((c) => c.label),
+    ["Today", "Tomorrow", "周六", "now", "next"],
+  );
 });
 
 test("parseQuickAdd — ⏳ with ISO date", () => {

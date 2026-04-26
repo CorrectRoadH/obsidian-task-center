@@ -20,6 +20,7 @@ import {
 import { TaskCache } from "./cache";
 import { todayISO, resolveWhen, isValidISO } from "./dates";
 import { t as tr } from "./i18n";
+import { cliGroupingLabel, normalizeGroupingTags } from "./grouping";
 
 // REMINDER: this module must NOT call `parseVaultTasks` or
 // `app.vault.getMarkdownFiles()` directly. All parse work goes through
@@ -404,12 +405,12 @@ function statusCheckbox(s: TaskStatus): string {
   return "[ ]";
 }
 
-function extractQuadrant(tags: string[]): string {
-  for (const tag of tags) {
-    const m = tag.match(/^#([1-4])象限$/);
-    if (m) return `#${m[1]}`;
-  }
-  return "  ";
+export interface CliFormatOptions {
+  groupingTags?: string[];
+}
+
+function extractGrouping(tags: string[], opts: CliFormatOptions = {}): string {
+  return cliGroupingLabel(tags, normalizeGroupingTags(opts.groupingTags));
 }
 
 function shortEst(mins: number | null): string {
@@ -421,8 +422,8 @@ function shortEst(mins: number | null): string {
 // into write verbs. Status, quadrant, and title follow — all space-
 // separated so awk-style field extraction stays trivial.
 // see USER_STORIES.md
-function formatTaskHeader(t: ParsedTask): string {
-  return `${t.path}:L${t.line + 1}  ${statusCheckbox(t.status)}  ${extractQuadrant(t.tags)}  ${t.title}`;
+function formatTaskHeader(t: ParsedTask, opts: CliFormatOptions = {}): string {
+  return `${t.path}:L${t.line + 1}  ${statusCheckbox(t.status)}  ${extractGrouping(t.tags, opts)}  ${t.title}`;
 }
 
 function formatTaskMeta(t: ParsedTask, indent = "    "): string {
@@ -435,7 +436,7 @@ function formatTaskMeta(t: ParsedTask, indent = "    "): string {
   return indent + parts.join("  ");
 }
 
-export function formatList(tasks: ParsedTask[], header: string): string {
+export function formatList(tasks: ParsedTask[], header: string, opts: CliFormatOptions = {}): string {
   const out: string[] = [];
   out.push(header);
   out.push("");
@@ -451,7 +452,7 @@ export function formatList(tasks: ParsedTask[], header: string): string {
       const parentId = `${t.path}:L${t.parentLine + 1}`;
       if (byId.has(parentId)) continue;
     }
-    renderTree(t, tasks, out, rendered, 0);
+    renderTree(t, tasks, out, rendered, 0, opts);
   }
   return out.join("\n");
 }
@@ -462,10 +463,11 @@ function renderTree(
   out: string[],
   rendered: Set<string>,
   depth: number,
+  opts: CliFormatOptions = {},
 ) {
   rendered.add(t.id);
   if (depth === 0) {
-    out.push(formatTaskHeader(t));
+    out.push(formatTaskHeader(t, opts));
     if (hasMeta(t)) out.push(formatTaskMeta(t));
   } else {
     const prefix = "    ".repeat(depth - 1);
@@ -475,7 +477,7 @@ function renderTree(
     (c) => c.path === t.path && c.parentLine === t.line,
   );
   for (const c of children) {
-    renderTree(c, all, out, rendered, depth + 1);
+    renderTree(c, all, out, rendered, depth + 1, opts);
   }
 }
 
@@ -491,10 +493,10 @@ function inlineMeta(t: ParsedTask): string {
   return parts.join(" ");
 }
 
-export function formatShow(t: ParsedTask): string {
+export function formatShow(t: ParsedTask, opts: CliFormatOptions = {}): string {
   const lines: string[] = [];
   lines.push(`${t.path}:L${t.line + 1}  (hash ${t.hash})`);
-  lines.push(`${statusCheckbox(t.status)} ${extractQuadrant(t.tags)} ${t.title}`);
+  lines.push(`${statusCheckbox(t.status)} ${extractGrouping(t.tags, opts)} ${t.title}`);
   lines.push(`    scheduled  ${t.scheduled ?? "—"}`);
   lines.push(`    deadline   ${t.deadline ?? "—"}`);
   lines.push(`    estimate   ${shortEst(t.estimate)}`);

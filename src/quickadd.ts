@@ -4,20 +4,28 @@ import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO, fromISO } from "./dates";
 import { isMobileMode } from "./platform";
+import { groupingChipLabel, normalizeGroupingTags } from "./grouping";
 import type { TaskCenterSettings } from "./types";
 
 // US-167-3: prefill chips. Token strings must match parseQuickAdd's
-// existing recognizers (resolveRelativeDate / tagRe). Quadrant tokens
-// follow the established `#N象限` form used in the v1 placeholder.
-const QUICK_CHIPS: ReadonlyArray<{ label: string; token: string }> = [
+// existing recognizers (resolveRelativeDate / tagRe). Grouping tag chips
+// are appended from settings by `quickChips`.
+const BASE_QUICK_CHIPS: ReadonlyArray<{ label: string; token: string }> = [
   { label: "Today", token: "⏳ today" },
   { label: "Tomorrow", token: "⏳ tomorrow" },
   { label: "周六", token: "⏳ 周六" },
-  { label: "Q1", token: "#1象限" },
-  { label: "Q2", token: "#2象限" },
-  { label: "Q3", token: "#3象限" },
-  { label: "Q4", token: "#4象限" },
 ];
+
+export function quickChips(settings?: Pick<TaskCenterSettings, "groupingTags">): ReadonlyArray<{ label: string; token: string }> {
+  const groups = normalizeGroupingTags(settings?.groupingTags);
+  return [
+    ...BASE_QUICK_CHIPS,
+    ...groups.map((tag, index) => ({
+      label: groupingChipLabel(tag, index),
+      token: tag,
+    })),
+  ];
+}
 
 export class QuickAddModal extends Modal {
   private input = "";
@@ -131,11 +139,11 @@ export class QuickAddModal extends Modal {
     if (!Platform.isMobile) {
       // US-167-3: quick chips row replaces the v1 prose hint. Click =
       // append token at cursor (idempotent — already-present tokens are
-      // not duplicated). 7 chips chosen from spec list (Today/Tomorrow/
-      // 周六/Q1~Q4); Inbox + 下周 omitted: Inbox token semantics are not
-      // defined in parser.ts, 下周 is rarer than 周六.
+      // not duplicated). Date chips are fixed; grouping chips come from
+      // settings.groupingTags (US-301). Inbox + 下周 omitted: Inbox token
+      // semantics are not defined in parser.ts, 下周 is rarer than 周六.
       const chipsRow = contentEl.createDiv({ cls: "tc-qa-chips" });
-      for (const c of QUICK_CHIPS) {
+      for (const c of quickChips(this.settings)) {
         const chip = chipsRow.createSpan({ cls: "tc-qa-chip", text: c.label });
         chip.setAttr("role", "button");
         chip.setAttr("tabindex", "0");
