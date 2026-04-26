@@ -181,11 +181,16 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
 
     // Status bar (the Obsidian status-bar item, not inside .task-center-view)
     // must agree with what the board renders: 1 today, no overdue.
+    // Locale-agnostic: task #43 routed the text through tr() so the format
+    // depends on the current Obsidian language (`📋 1 today` in EN,
+    // `📋 今日 1` in ZH). Either form must show the digit 1 and no "·"
+    // separator (which would only appear when the overdue clause is added).
     const text = await browser.execute(
       () =>
         document.querySelector<HTMLElement>(".task-center-status")?.textContent ??
         "",
     );
-    await expect(text).toMatch(/^📋 1 today$/);
+    await expect(text).toMatch(/^📋[^·]*\b1\b[^·]*$/);
+    await expect(text).not.toContain("·");
   });
 });

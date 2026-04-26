@@ -184,6 +184,34 @@ const EN = {
   "err.invalid_date": "invalid date: {ref}",
   "err.invalid_nest": "invalid nest: {ref}",
   "err.ambiguous_slug": "ambiguous slug: {ref}",
+
+  // task #43 (US-402): persistent status bar + mobile mirrored status row.
+  // Same key set is reused by both surfaces so the two stay in lock-step.
+  "status.today": "📋 {n} today",
+  "status.overdue": "⚠ {n} overdue",
+  "status.openTooltip": "Click to open Task Board",
+
+  // task #43: est/act metadata badges on every card.
+  "meta.est": "est {dur}",
+  "meta.act": "act {dur}",
+
+  // task #43: mobile long-press action sheet (view.ts:openCardActionSheet).
+  // `sheet.scheduleAt` formats a single ⏳ button with an explicit ISO date;
+  // the date is opaque to the translator (no language-specific reformatting)
+  // so EN and ZH share the literal template.
+  "sheet.markUndone": "↩ Mark undone",
+  "sheet.done": "✓ Done",
+  "sheet.scheduleAt": "⏳ {date}",
+  "sheet.scheduleClear": "⏳ —",
+  "sheet.openSource": "📂 Open source",
+  "sheet.drop": "🗑 Drop",
+
+  // task #43: date prompt hint line — bilingual EN baseline (the original
+  // hard-coded string already mixed today/tomorrow with 明天/周六; we
+  // preserve that mix here and route through tr() so a CN session gets
+  // a CN-leaning version).
+  "prompt.dateHint":
+    "YYYY-MM-DD · today · tomorrow · 明天 · 周六 · (blank to clear)",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -316,6 +344,27 @@ const ZH: Partial<typeof EN> = {
   "err.invalid_date": "日期无效：{ref}",
   "err.invalid_nest": "嵌套无效：{ref}",
   "err.ambiguous_slug": "前缀歧义：{ref}",
+
+  // task #43: 状态栏 + 移动状态行（共用一组 key）
+  "status.today": "📋 今日 {n}",
+  "status.overdue": "⚠ 逾期 {n}",
+  "status.openTooltip": "点击打开任务中心",
+
+  // task #43: 卡片 est/act 标签
+  "meta.est": "预估 {dur}",
+  "meta.act": "实际 {dur}",
+
+  // task #43: 移动端长按操作面板
+  "sheet.markUndone": "↩ 取消完成",
+  "sheet.done": "✓ 完成",
+  "sheet.scheduleAt": "⏳ {date}",
+  "sheet.scheduleClear": "⏳ —",
+  "sheet.openSource": "📂 打开源文件",
+  "sheet.drop": "🗑 放弃",
+
+  // task #43: 日期弹窗提示
+  "prompt.dateHint":
+    "YYYY-MM-DD · 今天 · 明天 · 后天 · 周六 · 留空清除",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

@@ -13,6 +13,7 @@
 import { ParsedTask } from "./types";
 import { TaskCache } from "./cache";
 import { todayISO } from "./dates";
+import { t as tr } from "./i18n";
 
 const REFRESH_DEBOUNCE_MS = 500;
 
@@ -46,10 +47,12 @@ export class StatusBar {
     const todo = all.filter(activeTodo);
     const todayCount = todo.filter((t) => t.scheduled === today).length;
     const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
-    const parts = [`📋 ${todayCount} today`];
-    if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
+    // task #43: route status text + tooltip through tr() so a Chinese
+    // Obsidian session shows Chinese strings instead of the EN literals.
+    const parts = [tr("status.today", { n: todayCount })];
+    if (overdue > 0) parts.push(tr("status.overdue", { n: overdue }));
     this.el.setText(parts.join(" · "));
-    this.el.title = "Click to open Task Board";
+    this.el.title = tr("status.openTooltip");
   }
 
   /**

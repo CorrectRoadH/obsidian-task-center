@@ -400,8 +400,10 @@ export class TaskCenterView extends ItemView {
     const todo = this.tasks.filter((t) => t.status === "todo" && !t.inheritsTerminal);
     const todayCount = todo.filter((t) => t.scheduled === today).length;
     const overdue = todo.filter((t) => t.deadline && t.deadline < today).length;
-    const parts = [`📋 ${todayCount} today`];
-    if (overdue > 0) parts.push(`⚠ ${overdue} overdue`);
+    // task #43: same i18n keys as the desktop status bar so the two
+    // surfaces stay in lock-step under any locale.
+    const parts = [tr("status.today", { n: todayCount })];
+    if (overdue > 0) parts.push(tr("status.overdue", { n: overdue }));
     row.setText(parts.join(" · "));
   }
 
@@ -871,14 +873,19 @@ export class TaskCenterView extends ItemView {
           });
         };
 
+        // task #43: route every label in the long-press action sheet
+        // through tr() so a Chinese session sees "完成 / 取消完成 / 打开
+        // 源文件 / 放弃" etc. instead of the raw EN literals. The two
+        // ⏳ <date> entries keep the date verbatim — the i18n template
+        // wraps it without reformatting (locale-stable per US-411).
         btn(
-          t.status === "done" ? "↩ Mark undone" : "✓ Done",
+          t.status === "done" ? tr("sheet.markUndone") : tr("sheet.done"),
           () => (t.status === "done" ? this.api.undone(t.id) : this.api.done(t.id)),
         );
-        btn(`⏳ ${today}`, () => this.api.schedule(t.id, today));
-        btn(`⏳ ${tomorrow}`, () => this.api.schedule(t.id, tomorrow));
-        btn("⏳ —", () => this.api.schedule(t.id, null));
-        btn("📂 Open source", async () => {
+        btn(tr("sheet.scheduleAt", { date: today }), () => this.api.schedule(t.id, today));
+        btn(tr("sheet.scheduleAt", { date: tomorrow }), () => this.api.schedule(t.id, tomorrow));
+        btn(tr("sheet.scheduleClear"), () => this.api.schedule(t.id, null));
+        btn(tr("sheet.openSource"), async () => {
           sheet?.close();
           const file = this.app.vault.getAbstractFileByPath(t.path);
           if (file instanceof TFile) {
@@ -886,7 +893,7 @@ export class TaskCenterView extends ItemView {
             await leaf.openFile(file, { eState: { line: t.line } });
           }
         });
-        btn("🗑 Drop", () => this.api.drop(t.id));
+        btn(tr("sheet.drop"), () => this.api.drop(t.id));
       },
     });
     sheet.open();
@@ -1284,9 +1291,11 @@ export class TaskCenterView extends ItemView {
 
     // Meta row
     const meta = card.createDiv({ cls: "bt-card-meta" });
-    if (t.estimate) meta.createSpan({ text: `est ${formatMinutes(t.estimate)}`, cls: "bt-meta-est" });
+    // task #43: route est/act labels through tr() so a CN session reads
+    // "预估 30m / 实际 25m" instead of the raw English literals.
+    if (t.estimate) meta.createSpan({ text: tr("meta.est", { dur: formatMinutes(t.estimate) }), cls: "bt-meta-est" });
     if (t.deadline) meta.createSpan({ text: `📅${t.deadline}`, cls: "bt-meta-deadline" });
-    if (t.actual) meta.createSpan({ text: `act ${formatMinutes(t.actual)}`, cls: "bt-meta-actual" });
+    if (t.actual) meta.createSpan({ text: tr("meta.act", { dur: formatMinutes(t.actual) }), cls: "bt-meta-actual" });
     // US-150: hide the `⏳ {date}` badge when the card is rendered in a
     // column whose day already implies it. Otherwise (unscheduled pool /
     // completed view / etc.) the badge stays — date isn't implied by

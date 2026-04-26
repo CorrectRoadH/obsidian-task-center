@@ -1,5 +1,6 @@
 import { App, Modal, TextComponent } from "obsidian";
 import { todayISO, addDays, isValidISO } from "./dates";
+import { t as tr } from "./i18n";
 
 /**
  * Small modal that accepts a date as YYYY-MM-DD or a natural-language hint
@@ -36,8 +37,12 @@ export class DatePromptModal extends Modal {
     input.setValue(this.initialValue);
     input.onChange((v) => (this.value = v));
 
+    // task #43: route the hint text through tr() so a Chinese session
+    // shows the CN form ("YYYY-MM-DD · 今天 · 明天 · ...") instead of
+    // the bilingual EN baseline. Input parsing in `resolveDateInput`
+    // still accepts both languages either way.
     contentEl.createEl("p", {
-      text: "YYYY-MM-DD · today · tomorrow · 明天 · 周六 · (blank to clear)",
+      text: tr("prompt.dateHint"),
       cls: "task-center-date-hint",
     });
 
