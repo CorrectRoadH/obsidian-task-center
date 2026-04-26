@@ -342,6 +342,15 @@ export class TaskCenterView extends ItemView {
     const oldBody = el.querySelector(".bt-body");
     const savedScrollTop = oldBody ? (oldBody as HTMLElement).scrollTop : 0;
 
+    // task #68: close any open hover popover before tearing the card
+    // tree down. The popover is mounted on `document.body`, so `el.empty()`
+    // here doesn't take it with us — the floating panel survives the
+    // re-render even though its anchor card is gone, and `mouseleave`
+    // never fires (the cursor never moved). Closing explicitly here
+    // covers every render path: tab switches, settings changes,
+    // refreshes from cache events, undo redraws.
+    this.contextPopover.close();
+
     el.empty();
     el.addClass("task-center-view");
     // Settings can change between renders; recomputing the layout attr is
