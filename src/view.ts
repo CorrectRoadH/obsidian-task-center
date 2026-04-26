@@ -156,6 +156,13 @@ export class TaskCenterView extends ItemView {
     // see USER_STORIES.md
     this.applyMobileLayoutAttr();
     this.registerDomEvent(window, "resize", () => this.applyMobileLayoutAttr());
+
+    // US-408: re-render when the user changes Obsidian's UI language.
+    // Obsidian fires `css-change` on every theme/language reload; that's
+    // our cheapest cross-platform signal. `t()` already re-detects the
+    // locale on each call (i18n.ts), so a fresh render alone produces
+    // localized strings — no manual locale-cache invalidation needed.
+    this.registerEvent(this.app.workspace.on("css-change", () => this.render()));
   }
 
   /** Idempotent — recompute and write the data-mobile-layout attribute. */

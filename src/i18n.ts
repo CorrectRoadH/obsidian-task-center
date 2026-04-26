@@ -169,6 +169,15 @@ const EN = {
     "Verbs register to the native Obsidian CLI (requires Obsidian 1.12.2+). Call them from your shell:",
   "settings.cliAiNote":
     "AI (Claude Code etc.) should call these directly — no eval hacks needed.",
+
+  // US-412: error messages — surfaced via formatError(code, message) in
+  // src/cli.ts. The thrown TaskWriterError keeps the English `message`
+  // as a developer-facing detail; the i18n template wraps it in the
+  // user's current locale.
+  "err.task_not_found": "task not found: {ref}",
+  "err.invalid_date": "invalid date: {ref}",
+  "err.invalid_nest": "invalid nest: {ref}",
+  "err.ambiguous_slug": "ambiguous slug: {ref}",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -295,16 +304,30 @@ const ZH: Partial<typeof EN> = {
     "所有命令都注册到 Obsidian 原生 CLI（需要 Obsidian ≥ 1.12.2）。在终端这样调用：",
   "settings.cliAiNote":
     "AI（Claude Code 等）可以直接调用这些命令 — 不需要 eval hack。",
+
+  // US-412: error messages（中文）
+  "err.task_not_found": "找不到任务：{ref}",
+  "err.invalid_date": "日期无效：{ref}",
+  "err.invalid_nest": "嵌套无效：{ref}",
+  "err.ambiguous_slug": "前缀歧义：{ref}",
 };
 
-const locale: Locale = detectLocale();
+// US-408: re-detect locale on every `t()` call so that flipping the
+// Obsidian UI language at runtime (Settings → About → Language, which
+// updates `localStorage.language`) is reflected immediately. The
+// localStorage read is ~100 ns — cheap enough that we don't bother
+// caching. A view that wants its DOM to refresh after a language switch
+// must additionally subscribe to `app.workspace.on("css-change")` and
+// re-render; this function only guarantees the next call returns the
+// current locale's translation.
 
 export function t(key: keyof typeof EN, vars?: Record<string, string | number>): string {
+  const locale = detectLocale();
   const raw = (locale === "zh" ? ZH[key] : undefined) ?? EN[key] ?? key;
   if (!vars) return raw;
   return raw.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
 }
 
 export function getLocale(): Locale {
-  return locale;
+  return detectLocale();
 }

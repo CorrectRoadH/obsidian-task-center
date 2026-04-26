@@ -19,6 +19,7 @@ import {
 } from "./writer";
 import { TaskCache } from "./cache";
 import { todayISO, resolveWhen, isValidISO } from "./dates";
+import { t as tr } from "./i18n";
 
 // REMINDER: this module must NOT call `parseVaultTasks` or
 // `app.vault.getMarkdownFiles()` directly. All parse work goes through
@@ -570,8 +571,21 @@ export function formatOkWrite(
   return out.join("\n");
 }
 
+// US-211 + US-412: error format = English `code` (stable for grep / AI)
+// + localized "一句人话". The English code stays English so scripts /
+// agents can match `error task_not_found` regardless of locale; the
+// human message routes through the i18n table when a key exists.
+//
+// Falls back to the raw `message` when the i18n table doesn't have a
+// matching `err.<code>` entry — keeps unfamiliar codes loud rather than
+// silently swallowing them.
 export function formatError(code: string, message: string): string {
-  return `error  ${code}\n    ${message}`;
+  const key = `err.${code}` as Parameters<typeof tr>[0];
+  const localized = tr(key, { ref: message });
+  // tr() returns the key string verbatim when it has no translation;
+  // detect that and fall back to the raw message.
+  const display = localized === key ? message : localized;
+  return `error  ${code}\n    ${display}`;
 }
 
 export function formatAdd(result: { path: string; line: number; created: string }): string {
