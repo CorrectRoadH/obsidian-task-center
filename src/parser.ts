@@ -11,7 +11,13 @@ const ESTIMATE_RE = /\[estimate::\s*([^\]]+)\]/i;
 const ACTUAL_RE = /\[actual::\s*([^\]]+)\]/i;
 // Accept optional callout prefix (`> ` or `>> ` etc. with interleaved
 // whitespace, used for tasks inside Obsidian callouts).
-const CHECKBOX_RE = /^(\s*(?:>\s*)*)([-+*])\s+\[(.)\]\s?(.*)$/;
+//
+// US-125 task #33: trailing `\r?` before `$` strips the carriage return
+// when the line came from CRLF input (paste from external source, copy
+// from a browser tab, etc.). Without this, the `\r` would land inside
+// the `content` capture group, taint the task's title hash, and the
+// renderer's de-dup / children filter would silently drop the task.
+const CHECKBOX_RE = /^(\s*(?:>\s*)*)([-+*])\s+\[(.)\]\s?(.*?)\r?$/;
 const TAG_RE = /#([^\s#\[\]()]+)/g;
 
 // Strip emoji metadata, inline fields, tags, block anchors, and recurrence
@@ -162,7 +168,12 @@ export async function parseFileTasks(
   const cache: CachedMetadata | null = app.metadataCache.getFileCache(file);
   const listItems = cache?.listItems;
   const raw = content ?? (await app.vault.cachedRead(file));
-  const lines = raw.split("\n");
+  // US-125 task #33: split on `\r?\n` so CRLF-terminated lines don't
+  // carry a trailing `\r` into per-line parsing. Belt-and-suspenders
+  // with CHECKBOX_RE's `\r?$` — either alone catches the bug, both
+  // together survives any future intermediate transformation that
+  // re-introduces CR.
+  const lines = raw.split(/\r?\n/);
   const mtime = file.stat.mtime;
   const tasks: ParsedTask[] = [];
 
