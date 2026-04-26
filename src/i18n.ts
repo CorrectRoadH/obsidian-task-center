@@ -212,6 +212,12 @@ const EN = {
   // a CN-leaning version).
   "prompt.dateHint":
     "YYYY-MM-DD · today · tomorrow · 明天 · 周六 · (blank to clear)",
+
+  // task #43 (Leo PM HOLD msg cbf0489c): Completed tab 7-day stats
+  // header — the third visible Completed surface (alongside the
+  // accuracy/total + week-of labels that already routed through tr()).
+  "stats.sevenDayDone": "7-day · {n} done",
+  "stats.ratio": "ratio {ratio} ({sign}{delta}%)",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -365,6 +371,10 @@ const ZH: Partial<typeof EN> = {
   // task #43: 日期弹窗提示
   "prompt.dateHint":
     "YYYY-MM-DD · 今天 · 明天 · 后天 · 周六 · 留空清除",
+
+  // task #43: Completed 顶部 7 日统计
+  "stats.sevenDayDone": "近 7 日 · 完成 {n} 条",
+  "stats.ratio": "准确率 {ratio} ({sign}{delta}%)",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

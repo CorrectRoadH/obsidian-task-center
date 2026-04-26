@@ -957,8 +957,11 @@ export class TaskCenterView extends ItemView {
     if (stats.doneCount > 0) {
       const header = wrap.createDiv({ cls: "bt-stats-header" });
       const left = header.createDiv({ cls: "bt-stats-left" });
+      // task #43 (Leo HOLD msg cbf0489c): Completed-tab stats header
+      // through tr() so a CN session reads "近 7 日 · 完成 N 条 / 准确率…"
+      // instead of the EN literals.
       left.createSpan({
-        text: `7-day · ${stats.doneCount} done`,
+        text: tr("stats.sevenDayDone", { n: stats.doneCount }),
         cls: "bt-stats-period",
       });
       if (stats.ratio !== null) {
@@ -969,7 +972,7 @@ export class TaskCenterView extends ItemView {
             ? "bt-stats-ok"
             : "bt-stats-off";
         left.createSpan({
-          text: `ratio ${stats.ratio.toFixed(2)} (${sign}${delta}%)`,
+          text: tr("stats.ratio", { ratio: stats.ratio.toFixed(2), sign, delta }),
           cls: "bt-stats-ratio " + cls,
         });
         left.createSpan({
