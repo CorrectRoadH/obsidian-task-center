@@ -215,6 +215,8 @@ ln -s $(pwd) /path/to/vault/.obsidian/plugins/obsidian-task-center
 obsidian plugin:reload id=obsidian-task-center
 ```
 
+PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) (TBA) for branch conventions and TDD requirements.
+
 ## Releasing
 
 Releases are fully automated via `.github/workflows/release.yml` (US-601~605):
@@ -261,6 +263,10 @@ Notes:
 ## Languages
 
 All UI strings (tab names, settings labels, empty states, toasts) follow Obsidian's current locale automatically. Switching languages mid-session re-renders open boards in real time. User content (hashtags, inline-field names, Obsidian Tasks emoji) is **never translated** — your markdown stays byte-stable. IME composition (Chinese / Japanese / Korean input) is properly guarded everywhere — pressing Enter to commit a candidate doesn't accidentally submit a quick-add or rename.
+
+## Support
+
+If Task Center saves you time, [sponsor on GitHub](https://github.com/sponsors/CorrectRoadH).
 
 ## License
 
