@@ -210,10 +210,17 @@ export class MobileDragController<TabKey extends string> {
     if (!raw) return result;
 
     // Walk up to find any tagged ancestor — `closest()` runs in C, fast.
+    //
+    // task #37: skip `.bt-subcard` for the card-target search. Subcards live
+    // inside a parent `.bt-card`'s body; if the pointer happens to land on a
+    // subcard, we want the surrounding parent card as the nest target so the
+    // user's visual aim ("the parent card") matches the result. The user can
+    // still nest under the subcard's task by dropping on its top-level
+    // rendering on its own day (when it has its own ⏳).
     const tabEl = raw.closest<HTMLElement>("[data-tab]");
     const dropZoneEl = raw.closest<HTMLElement>("[data-drop-zone]");
     const dateEl = raw.closest<HTMLElement>("[data-date]");
-    const cardEl = raw.closest<HTMLElement>("[data-task-id]");
+    const cardEl = raw.closest<HTMLElement>("[data-task-id]:not(.bt-subcard)");
 
     // Priority is intentional: trash > date column > card body > tab head.
     // If the user's pointer lands on a card *inside* a day column, we treat
@@ -250,7 +257,7 @@ export class MobileDragController<TabKey extends string> {
     if (hit.dropZone === "trash") {
       candidate = hit.el?.closest<HTMLElement>("[data-drop-zone='trash']") ?? null;
     } else if (hit.cardId) {
-      candidate = hit.el?.closest<HTMLElement>("[data-task-id]") ?? null;
+      candidate = hit.el?.closest<HTMLElement>("[data-task-id]:not(.bt-subcard)") ?? null;
     } else if (hit.date) {
       candidate = hit.el?.closest<HTMLElement>("[data-date]") ?? null;
     }

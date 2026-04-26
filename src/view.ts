@@ -1569,7 +1569,15 @@ export class TaskCenterView extends ItemView {
     //  none of their own; no badge needed in either case.)
     if (c.estimate) subCard.createDiv({ cls: "bt-sub-est", text: formatMinutes(c.estimate) });
     if (c.status === "done") subCard.addClass("done");
-    this.wireCardEvents(subCard, c);
+    // task #37: subcards are drag SOURCES but not nest drop targets. The
+    // browser's hit-test lands on the deepest DOM node under the cursor, so
+    // a drop visually aimed at the parent card's body would otherwise nest
+    // under the subcard the cursor happened to be over. Letting the drop
+    // event bubble up to the enclosing `.bt-card` makes the drop land where
+    // the user expects (the parent). To explicitly nest under a subcard the
+    // user can still drop onto its top-level card rendering on its own day
+    // when it has its own ⏳.
+    this.wireCardEvents(subCard, c, { acceptNestDrop: false });
 
     const grandLines = c.childrenLines;
     if (grandLines.length > 0) {
@@ -1781,7 +1789,12 @@ export class TaskCenterView extends ItemView {
     input.focus();
   }
 
-  private wireCardEvents(el: HTMLElement, t: ParsedTask) {
+  private wireCardEvents(
+    el: HTMLElement,
+    t: ParsedTask,
+    opts: { acceptNestDrop?: boolean } = {},
+  ) {
+    const acceptNestDrop = opts.acceptNestDrop ?? true;
     // Drag source
     el.addEventListener("dragstart", (e) => {
       if (!e.dataTransfer) return;
@@ -1800,58 +1813,66 @@ export class TaskCenterView extends ItemView {
     // Drop target: dropping another card onto this one nests it as a subtask
     // (works cross-file). stopPropagation prevents the underlying day column
     // from also receiving the drop and just rescheduling.
-    el.addEventListener("dragover", (e) => {
-      const dt = e.dataTransfer;
-      if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
-      if (el.classList.contains("dragging")) return; // self
-      e.preventDefault();
-      e.stopPropagation();
-      dt.dropEffect = "move";
-      el.addClass("nest-target");
-    });
-    el.addEventListener("dragleave", (e) => {
-      // dragleave fires for child elements as the cursor moves between them;
-      // only clear the class when the cursor truly leaves this card.
-      const related = e.relatedTarget as Node | null;
-      if (related && el.contains(related)) return;
-      el.removeClass("nest-target");
-    });
-    el.addEventListener("drop", async (e) => {
-      const dt = e.dataTransfer;
-      if (!dt) return;
-      const droppedId = dt.getData("text/task-id");
-      if (!droppedId || droppedId === t.id) return;
-      e.preventDefault();
-      e.stopPropagation();
-      el.removeClass("nest-target");
-      // Nest writes to one or two files (cross-file). Wait for metadataCache to
-      // reparse them before rendering so the new parent shows the new child.
-      const droppedTask = this.tasks.find((x) => x.id === droppedId);
-      const awaitCachePaths = [t.path];
-      if (droppedTask && droppedTask.path !== t.path) awaitCachePaths.push(droppedTask.path);
-      try {
-        await this.runWithRemoveAnim(droppedId, async () => {
-          const r = await this.api.nest(droppedId, t.id);
-          if (!r.unchanged) {
-            if (r.undoOps && r.undoOps.length > 0) {
-              this.undoStack.push({
-                label: `nest under "${t.title.slice(0, 20)}"`,
-                ops: r.undoOps,
-              });
+    //
+    // Skipped for subcards (task #37): subcards live inside a parent card's
+    // visible area, so registering them as drop targets would steal drops
+    // aimed at the parent. Letting the event bubble up to the enclosing
+    // `.bt-card` matches the user's visual intent (they see the parent card,
+    // not the inner sub-row, as the drop target).
+    if (acceptNestDrop) {
+      el.addEventListener("dragover", (e) => {
+        const dt = e.dataTransfer;
+        if (!dt || !Array.from(dt.types).includes("text/task-id")) return;
+        if (el.classList.contains("dragging")) return; // self
+        e.preventDefault();
+        e.stopPropagation();
+        dt.dropEffect = "move";
+        el.addClass("nest-target");
+      });
+      el.addEventListener("dragleave", (e) => {
+        // dragleave fires for child elements as the cursor moves between them;
+        // only clear the class when the cursor truly leaves this card.
+        const related = e.relatedTarget as Node | null;
+        if (related && el.contains(related)) return;
+        el.removeClass("nest-target");
+      });
+      el.addEventListener("drop", async (e) => {
+        const dt = e.dataTransfer;
+        if (!dt) return;
+        const droppedId = dt.getData("text/task-id");
+        if (!droppedId || droppedId === t.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        el.removeClass("nest-target");
+        // Nest writes to one or two files (cross-file). Wait for metadataCache to
+        // reparse them before rendering so the new parent shows the new child.
+        const droppedTask = this.tasks.find((x) => x.id === droppedId);
+        const awaitCachePaths = [t.path];
+        if (droppedTask && droppedTask.path !== t.path) awaitCachePaths.push(droppedTask.path);
+        try {
+          await this.runWithRemoveAnim(droppedId, async () => {
+            const r = await this.api.nest(droppedId, t.id);
+            if (!r.unchanged) {
+              if (r.undoOps && r.undoOps.length > 0) {
+                this.undoStack.push({
+                  label: `nest under "${t.title.slice(0, 20)}"`,
+                  ops: r.undoOps,
+                });
+              }
+              new Notice(
+                tr("notice.nested", {
+                  title: t.title,
+                  where: r.crossFile ? tr("notice.crossFile") : "",
+                }),
+              );
             }
-            new Notice(
-              tr("notice.nested", {
-                title: t.title,
-                where: r.crossFile ? tr("notice.crossFile") : "",
-              }),
-            );
-          }
-        }, { awaitCachePaths });
-      } catch (err) {
-        new Notice(tr("notice.error", { msg: (err as Error).message }), 6000);
-        this.scheduleRefresh();
-      }
-    });
+          }, { awaitCachePaths });
+        } catch (err) {
+          new Notice(tr("notice.error", { msg: (err as Error).message }), 6000);
+          this.scheduleRefresh();
+        }
+      });
+    }
 
     // Click → select
     el.addEventListener("click", (e) => {
