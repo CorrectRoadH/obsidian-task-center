@@ -180,4 +180,56 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     const content = await readFile(path);
     await expect(content).toMatch(/\[-\].*❌/);
   });
+
+  // task #37: drag C onto A's card when A already has child B should nest C as
+  // A's direct child (sibling of B), not as B's subtask.
+  //
+  // Root cause: in real browser DnD the pointer lands on B's bt-subcard element
+  // (the deepest DOM node at the cursor position, because B is rendered inside
+  // A's card). B's wireCardEvents dragover handler fires stopPropagation, so
+  // A's handler never runs. The drop then fires on B, calling api.nest(C, B)
+  // instead of api.nest(C, A).
+  //
+  // This test reproduces the bug by dispatching drop directly to B's subcard
+  // element (simulating the browser's hit-test result).
+  it("task #37: drag-nest onto parent card with existing child nests as direct child, not grandchild", async function () {
+    const today = todayISO();
+    const path = "Tasks/Inbox.md";
+
+    // A (parent, has child B) + C as a top-level sibling of A
+    await writeAndWait(
+      path,
+      `- [ ] A ⏳ ${today}\n    - [ ] B\n- [ ] C ⏳ ${today}\n`,
+    );
+    await openBoardWeekView();
+
+    // A's card and B's subcard (nested inside A)
+    const aCardSel = `.task-center-view [data-task-id="${path}:L1"]`;
+    const bSubcardSel = `.task-center-view [data-task-id="${path}:L2"]`;
+    const cCardSel = `.task-center-view [data-task-id="${path}:L3"]`;
+
+    await $(aCardSel).waitForExist({ timeout: 5000 });
+    await $(bSubcardSel).waitForExist({ timeout: 5000 });
+    await $(cCardSel).waitForExist({ timeout: 5000 });
+
+    // Simulate the browser's real DnD path: the cursor is over B's subcard
+    // (which occupies the lower half of A's visible card area). B's drop handler
+    // fires and currently nests C under B instead of A.
+    await simulateDrag(cCardSel, bSubcardSel);
+
+    await browser.waitUntil(
+      async () => {
+        const c = await readFile(path);
+        // After fix: C must appear at 4-space indent (direct child of A).
+        // Fail-fast: if 8-space indent appears first, the bug is still present.
+        return c.includes("    - [ ] C") || c.includes("        - [ ] C");
+      },
+      { timeout: 5000, timeoutMsg: "C was not nested anywhere after drag" },
+    );
+
+    const content = await readFile(path);
+    // C must be A's direct child (4-space), sibling of B — not B's subtask (8-space)
+    await expect(content).not.toContain("        - [ ] C");
+    await expect(content).toContain("    - [ ] C");
+  });
 });
