@@ -216,6 +216,18 @@ export class TaskCenterView extends ItemView {
    * content until the cache reparses. Pass `awaitCachePaths` so we wait for
    * `metadataCache.on('changed')` on each affected file before the render.
    */
+  // US-125 task #33 observability gate. Set
+  //   localStorage.setItem("task-center-debug","1")
+  // in dev console to enable; reload Obsidian to take effect. Logs are
+  // gated so they cost nothing for non-debug users.
+  private isDebugLogging(): boolean {
+    try {
+      return window.localStorage.getItem("task-center-debug") === "1";
+    } catch {
+      return false;
+    }
+  }
+
   private async runWithRemoveAnim(
     taskId: string,
     action: () => Promise<unknown>,
@@ -1229,10 +1241,38 @@ export class TaskCenterView extends ItemView {
     const childLines = t.childrenLines;
     if (childLines.length > 0) {
       const expander = card.createDiv({ cls: "bt-card-children" });
-      const children = childLines
+      const resolved = childLines
         .map((l) => this.tasks.find((x) => x.path === t.path && x.line === l))
-        .filter((x): x is ParsedTask => !!x)
+        .filter((x): x is ParsedTask => !!x);
+      const children = resolved
         .filter((c) => !(c.scheduled && c.scheduled !== t.scheduled));
+      // US-125 task #33 observability — the "subtask missing from parent
+      // card" repro is hard to capture in synthetic e2e (Wood scanned 6
+      // axes, none reproduced). When a user trips the bug, ask them to
+      // run `localStorage.setItem("task-center-debug","1")` then reload;
+      // the next render dumps which children were resolved vs filtered
+      // and why. Strip this once the bug is closed.
+      if (childLines.length !== children.length && this.isDebugLogging()) {
+        const dropped = childLines
+          .map((l) => {
+            const r = resolved.find((x) => x.line === l);
+            if (!r) return { line: l, reason: "not_found_in_tasks" };
+            if (r.scheduled && r.scheduled !== t.scheduled) {
+              return {
+                line: l,
+                title: r.title,
+                scheduled: r.scheduled,
+                reason: "cross_day_filter",
+              };
+            }
+            return null;
+          })
+          .filter((x) => x !== null);
+        console.log(
+          "[task-center US-125] renderCard children diff",
+          { parent: t.id, childLines, resolvedCount: resolved.length, kept: children.length, dropped },
+        );
+      }
       for (const c of children) this.renderSubcard(expander, c);
     }
 
