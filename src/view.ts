@@ -1280,7 +1280,7 @@ export class TaskCenterView extends ItemView {
           { parent: t.id, childLines, resolvedCount: resolved.length, kept: children.length, dropped },
         );
       }
-      for (const c of children) this.renderSubcard(expander, c);
+      for (const c of children) this.renderSubcard(expander, c, t.scheduled ?? null);
     }
 
     // Inline "+ subtask" affordance — visible on every card so adding a
@@ -1473,8 +1473,19 @@ export class TaskCenterView extends ItemView {
   // US-505: on mobile, deeper-than-1-level subtrees collapse to a `+N`
   // chip that opens a bottom sheet (see Platform.isMobile branch below)
   // rather than rendering inline — keeps card height bounded on phones.
+  //
+  // Task #36: `effectiveScheduled` is the date inherited from the
+  // visible card chain — top card's `⏳` for direct children, propagated
+  // through subcards that don't carry their own `⏳`. The recursive
+  // grandchild filter compares against this inherited value, so a
+  // grandchild whose `⏳` matches the TOP card still renders even if
+  // the middle subcard has no `⏳` of its own.
   // see USER_STORIES.md
-  private renderSubcard(container: HTMLElement, c: ParsedTask) {
+  private renderSubcard(
+    container: HTMLElement,
+    c: ParsedTask,
+    effectiveScheduled: string | null,
+  ) {
     const subCard = container.createDiv({ cls: "bt-subcard" });
     subCard.dataset.taskId = c.id;
     subCard.draggable = true;
@@ -1522,15 +1533,19 @@ export class TaskCenterView extends ItemView {
         });
       } else {
         // US-148 (recursive): a grandchild with its own ⏳ different from the
-        // current subcard's ⏳ should render independently in its own day,
-        // not nested here. Same rule as the top-level card / first-level
-        // subtask filter.
+        // **effective inherited** day should render independently in its
+        // own day, not nested here. Same rule as the top-level card /
+        // first-level subtask filter — but we compare against the
+        // inherited chain (top card → … → c), not just c's raw
+        // `scheduled`, so a grandchild matching top survives even when
+        // middle subcards have no `⏳` of their own (task #36).
+        const inheritedDown = c.scheduled ?? effectiveScheduled;
         const sub = container.createDiv({ cls: "bt-card-children" });
         const grand = grandLines
           .map((l) => this.tasks.find((x) => x.path === c.path && x.line === l))
           .filter((x): x is ParsedTask => !!x)
-          .filter((g) => !(g.scheduled && g.scheduled !== c.scheduled));
-        for (const g of grand) this.renderSubcard(sub, g);
+          .filter((g) => !(g.scheduled && g.scheduled !== inheritedDown));
+        for (const g of grand) this.renderSubcard(sub, g, inheritedDown);
       }
     }
   }
