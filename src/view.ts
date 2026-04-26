@@ -812,11 +812,16 @@ export class TaskCenterView extends ItemView {
       // US-504: mobile month tab is calendar-grid + per-day dot density;
       // tapping a day opens that day's task list as a bottom sheet (the
       // desktop path leaves the click as a no-op — chips inside handle
-      // their own drag / select). Detection is by viewport width, not
-      // Platform — a narrow desktop pane still gets the sheet.
+      // their own drag / select). Detection is "in mobile layout" — the
+      // same predicate `applyMobileLayoutAttr` uses for the data-attr,
+      // so viewport-narrow OR US-502 mobileForceLayout both qualify.
+      // task #42 fixed the case where force-mobile was on but the
+      // viewport was wide — the click previously silently no-op'd.
       // see USER_STORIES.md
       cell.addEventListener("click", (e) => {
-        if (window.innerWidth >= 600) return;
+        const narrow = window.innerWidth < 600;
+        const force = !!this.plugin.settings.mobileForceLayout;
+        if (!narrow && !force) return;
         // Don't fire when the click bubbled from a chip — that's a select
         // intent, not "open the day".
         if ((e.target as HTMLElement).closest(".bt-mini-card")) return;
