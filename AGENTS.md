@@ -42,6 +42,30 @@ SSOT 文档：`USER_STORIES.md`（产品需求） + `UX.md`（视觉规范） + 
 
 理由：bug 不会回归的唯一保证是有一个**能 fail** 的自动测试；先写 fix 再补的测试很容易"测了个寂寞"。
 
+#### 1a. 测试与实现作者分离（2026-04-26 起，分层强制）
+
+ctrdh + Jerry + Tiger + Rally 分歧澄清后落地（见 `#Obsidian任务中心插件:9dea2a95` thread）：
+
+**默认（Wood 自己红绿）适用**：普通 bug fix（单点行为偏差，影响面小，不涉及 breaking / 用户反复报）.
+
+**Rally 先写红测，Wood 只写绿（强制）适用**：
+- 高风险 bug（影响发版 / 数据丢失 / 用户报多次）
+- 用户反复报的同类 bug（说明 implementer 测试 mental model 漏掉了某些 axes）
+- breaking change（schema / settings 移除 / API 改 → 任何会让老用户失败的改动）
+
+**Rally first-test 流程**：
+1. Rally 写 red commit + push → **CI 自验**（不需要 Wood 介入红阶段）.
+   - red commit message 必须写清"**预期失败点**"：断言命中哪个行为 / 当前源码为什么过不了 / CI 应该红在哪个测试名（**Jerry hard requirement #1**）.
+2. CI 红 → Rally ack Wood 接绿. CI 绿 → Rally 自己 iterate（说明测试错或 bug 不存在），不丢给 Wood.
+3. Wood 写 green commit + push → CI 全绿 → 进 in_review.
+4. Rally green review 重点变成"**实现是否绕过/弱化测试**"——选择器是否绑死实现细节、fixture 是否偏离用户路径、断言是否只验证存在不验证行为（**Jerry hard requirement #2**）. 不只是 "实现过了测试" 这层 surface.
+
+**Rally first-test 不要做的事**：
+- "无法自己验证 red 是否真的红" 是 false constraint —— CI 是免费独立验证器，push 即跑.
+- "选择器/vault 路径写错" 是 reviewer 写测试的核心责任，不能 outsource —— grep 源码 + 复用现有 e2e 模板（`writeAndWait` / `forFlush` 等）就能验.
+
+**分层 metric**：每周 retro 统计 `Rally-first task / Wood-self task` 占比. 以"高风险 / 反复报 / breaking" 为漏掉 trigger，回 retroactive 检视分类是否准确.
+
 ### 2. New feature → test-alongside（必须有，commit 顺序不限）
 
 新增 spec 行为（USER_STORIES 里新 US-xxx 或 PRD 新功能）：
