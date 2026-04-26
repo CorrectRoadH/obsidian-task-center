@@ -163,6 +163,52 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
     expect(right).toBe("Esc");
   });
 
+  // US-413 chunk a — IME composition guard on Quick Add input. While the
+  // user is composing (e.g. typing Chinese pinyin "周六" before selecting
+  // a candidate), the Enter key only commits the IME selection — it must
+  // NOT trigger submit. Without the guard the modal would close mid-
+  // composition and write a half-formed task.
+  it("US-413 chunk a — Quick Add Enter during IME composition must not submit", async function () {
+    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
+
+    // Seed the input with a value so submit() would otherwise proceed.
+    await browser.execute(() => {
+      const el = document.querySelector(
+        ".task-center-quick-add-v2 .task-center-quick-add-input",
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.value = "buy milk";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // Simulate IME composition: dispatch compositionstart, then Enter
+    // with `isComposing: true`. The handler must short-circuit and the
+    // modal must remain open.
+    await browser.execute(() => {
+      const el = document.querySelector(
+        ".task-center-quick-add-v2 .task-center-quick-add-input",
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      const evt = new KeyboardEvent("keydown", {
+        key: "Enter",
+        keyCode: 229, // Legacy IME-active marker
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(evt, "isComposing", { value: true });
+      el.dispatchEvent(evt);
+    });
+
+    // Modal must still be visible after the IME-Enter — the submit path
+    // would have closed it. Brief settle so any stray async submit has
+    // a chance to surface.
+    await browser.pause(150);
+    const modalStillOpen = await $(".task-center-quick-add-v2").isExisting();
+    expect(modalStillOpen).toBe(true);
+  });
+
   // US-167 visual evidence — saves a screenshot to /tmp/m20-chunk-4.png
   // for Leo to review. The screenshot hook is intentionally scoped to
   // this single case (per Rally's CI hygiene constraint).
