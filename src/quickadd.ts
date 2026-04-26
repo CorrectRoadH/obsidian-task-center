@@ -107,7 +107,13 @@ export class QuickAddModal extends Modal {
 
     text.inputEl.addEventListener("input", refreshHint);
     text.inputEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      // US-413: ignore Enter while IME composition is active (typing
+      // pinyin / kana / hangul before candidate selection). Without this
+      // guard the user's first Enter to commit the IME candidate would
+      // also fire submit() and close the modal mid-word. `isComposing`
+      // is the modern flag; `keyCode === 229` is the legacy fallback
+      // some Electron / older WebView builds still emit.
+      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
         e.preventDefault();
         this.submit();
       }
