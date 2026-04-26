@@ -42,7 +42,9 @@ export class DatePromptModal extends Modal {
     });
 
     input.inputEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      // US-413: skip the Enter commit while IME composition is active —
+      // see src/quickadd.ts for the same pattern.
+      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
         e.preventDefault();
         const resolved = resolveDateInput(this.value);
         // resolved: string (ISO) | null (blank → clear) | undefined (invalid → reject)
