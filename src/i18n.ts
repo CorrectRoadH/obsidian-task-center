@@ -223,6 +223,15 @@ const EN = {
   // accuracy/total + week-of labels that already routed through tr()).
   "stats.sevenDayDone": "7-day · {n} done",
   "stats.ratio": "ratio {ratio} ({sign}{delta}%)",
+
+  // US-701: dependency-health banner. Surfaced as a status-bar item with
+  // `data-dep-warning="..."` when the built-in Daily Notes plugin is
+  // disabled or has no folder configured.
+  "dep.dailyNotesDisabled":
+    "Daily Notes plugin disabled — tasks will be written to inbox",
+  "dep.dailyNotesNoFolder":
+    "Daily Notes folder not set — tasks will be written to inbox",
+  "dep.openSettings": "Click to open Obsidian settings",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -381,6 +390,13 @@ const ZH: Partial<typeof EN> = {
   // task #43: Completed 顶部 7 日统计
   "stats.sevenDayDone": "近 7 日 · 完成 {n} 条",
   "stats.ratio": "准确率 {ratio} ({sign}{delta}%)",
+
+  // US-701: 依赖健康提示
+  "dep.dailyNotesDisabled":
+    "Daily Notes 插件未启用 — 任务将写入收件箱",
+  "dep.dailyNotesNoFolder":
+    "Daily Notes 未设置文件夹 — 任务将写入收件箱",
+  "dep.openSettings": "点击打开 Obsidian 设置",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

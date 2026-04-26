@@ -12,6 +12,7 @@ import {
 } from "./cli";
 import { TaskCache } from "./cache";
 import { StatusBar } from "./status-bar";
+import { DepHealthBanner } from "./dep-health";
 import { QuickAddModal } from "./quickadd";
 import { t as tr } from "./i18n";
 import { todayISO } from "./dates";
@@ -29,6 +30,7 @@ export default class TaskCenterPlugin extends Plugin {
   api!: TaskCenterApi;
   cache!: TaskCache;
   private statusBar: StatusBar | null = null;
+  private depHealth: DepHealthBanner | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -101,6 +103,25 @@ export default class TaskCenterPlugin extends Plugin {
     });
     this.app.workspace.onLayoutReady(() => this.statusBar?.refresh());
 
+    // US-701: surface dep-health for the built-in Daily Notes plugin.
+    // The banner owns its own status-bar item and `data-dep-warning`
+    // attribute. We refresh on layout-ready (initial paint) and on
+    // every `layout-change` (covers the user toggling the plugin in
+    // settings → next workspace event clears the warning, US-701c).
+    this.depHealth = new DepHealthBanner(this.addStatusBarItem(), this.app, {
+      onClick: () => {
+        // Best-effort jump to Obsidian's plugin settings; if the API
+        // shape isn't there (older builds), fall back to no-op so the
+        // banner is still informative.
+        const setting = (this.app as unknown as { setting?: { open?: () => void } }).setting;
+        try { setting?.open?.(); } catch { /* ignore */ }
+      },
+    });
+    this.app.workspace.onLayoutReady(() => this.depHealth?.refresh());
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => this.depHealth?.refresh()),
+    );
+
     // US-110: "open board on startup" — opt-in toggle in settings.
     // Defers to `onLayoutReady` so we don't fight Obsidian's own
     // workspace restore for the focused leaf.
@@ -113,6 +134,8 @@ export default class TaskCenterPlugin extends Plugin {
   onunload() {
     this.statusBar?.dispose();
     this.statusBar = null;
+    this.depHealth?.dispose();
+    this.depHealth = null;
     this.cache?.dispose();
   }
 
@@ -137,6 +160,10 @@ export default class TaskCenterPlugin extends Plugin {
    */
   async __forFlush(): Promise<void> {
     this.statusBar?.flush();
+    // US-701: refresh the dep-health banner here too so e2e specs that
+    // toggle the Daily Notes plugin and then call `__forFlush()` see a
+    // deterministic post-event state without waiting for a layout event.
+    this.depHealth?.refresh();
     await this.cache.forFlush();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TASK_CENTER)) {
       const view = leaf.view;
