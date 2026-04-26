@@ -1,6 +1,6 @@
 {
   "name": "obsidian-task-center",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Task board + CLI for energy-based task management on top of Obsidian Tasks syntax",
   "main": "main.js",
   "scripts": {

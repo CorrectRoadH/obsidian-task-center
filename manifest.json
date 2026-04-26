@@ -1,7 +1,7 @@
 {
   "id": "obsidian-task-center",
   "name": "Task Center",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "minAppVersion": "1.5.0",
   "description": "Task board + CLI for energy-based task management. Full kanban GUI + shell CLI on top of Obsidian Tasks syntax.",
   "author": "ctrdh",
