@@ -93,6 +93,23 @@ test("parseTaskLine — nested callout", () => {
   assert.equal(r?.content, "nested");
 });
 
+// US-125 task #33 — CRLF root cause. Lines pasted from external sources
+// often carry trailing `\r` on each line (CRLF instead of LF).
+// CHECKBOX_RE's `(.*)$` trailing capture greedily eats the `\r`, putting
+// it into `content`. Downstream metadata parsers don't strip it, the
+// task's hash is computed from a `\r`-tainted title, and the line
+// quietly diverges from its sibling tasks — visually "missing" from the
+// parent's card render.
+test("parseTaskLine — strips trailing CR (CRLF)", () => {
+  const r = parseTaskLine("    - [ ] 买廉价的AI会员(GPT Plus\\Kimi) ➕ 2026-04-26 ⏳ 2026-04-26\r");
+  assert.equal(r?.checkbox, " ");
+  // Critical: content must NOT carry trailing `\r`.
+  assert.equal(
+    r?.content,
+    "买廉价的AI会员(GPT Plus\\Kimi) ➕ 2026-04-26 ⏳ 2026-04-26",
+  );
+});
+
 test("parseTaskLine — non-task returns null", () => {
   assert.equal(parseTaskLine("- plain bullet"), null);
   assert.equal(parseTaskLine("# heading"), null);
