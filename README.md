@@ -105,6 +105,28 @@ Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to re
 
 Task Center is a first-class mobile experience. The board adapts to phone widths (vertical week list with collapsible day rows, simplified month grid with day-tap bottom sheets), long-press for context menus, swipe-left to complete / swipe-right to abandon, and pointer-based drag with 800ms cross-tab dwell. Quick Add becomes a bottom sheet that auto-avoids the soft keyboard. Desktop-only features (CLI, hover popovers, keyboard shortcuts) silently no-op on mobile rather than throwing errors.
 
+There is no separate "enable mobile support" switch. Mobile support is enabled by the plugin manifest (`isDesktopOnly: false`) and the board automatically switches to the mobile layout below 600px viewport width. On tablets or foldables, use **Settings -> Task Center -> Mobile -> Force mobile layout** if you want the phone-style layout even on a wide screen.
+
+### Mobile install and enable checklist
+
+Until Task Center is available from Obsidian's community plugin browser, mobile installation is the same manual three-file install as desktop:
+
+1. Download the `main.js`, `manifest.json`, and `styles.css` assets from the GitHub Release.
+2. Put all three files in your vault at `.obsidian/plugins/obsidian-task-center/`.
+   - With Obsidian Sync, make sure the vault's `.obsidian/plugins/obsidian-task-center/` folder syncs to the phone.
+   - Without Obsidian Sync, copy that folder to the same path in the mobile vault.
+3. On Obsidian Mobile, open **Settings -> Community plugins** and turn on community plugins if Restricted Mode is still enabled.
+4. In **Installed plugins**, enable **Task Center**.
+5. Open **Settings -> Task Center** and confirm the **Mobile** section is visible. The fastest visual check is toggling **Force mobile layout** and reopening the board.
+
+If Task Center is not listed on mobile:
+
+- Confirm the folder name is exactly `.obsidian/plugins/obsidian-task-center/`.
+- Confirm the folder contains `manifest.json`, `main.js`, and `styles.css` at the top level, not inside a nested zip/extracted folder.
+- Confirm Obsidian Mobile is using the same vault copy you installed into.
+- Confirm Restricted Mode / community plugins are enabled on the phone. Obsidian ignores installed community plugins while Restricted Mode is on.
+- Restart Obsidian Mobile after copying the files if the plugin list was already open.
+
 ## Cascade abandon
 
 When you abandon a parent task (`[-]` or `#dropped`), Task Center finds its incomplete subtasks and abandons them too. Already-completed subtasks are preserved as historical record. Same logic for completing a parent: open subtasks cascade to done, completed ones stay timestamped.
@@ -248,6 +270,11 @@ Notes:
 - The workflow refuses to release if the tag does not match `manifest.json`
   or if `versions.json` is missing the entry — both safety guards exist
   to catch a maintainer who tagged manually instead of using `npm version`.
+- Until the plugin is listed in Obsidian's community plugin browser, release
+  notes should remind mobile users to install/sync the three release assets
+  (`main.js`, `manifest.json`, `styles.css`) into
+  `.obsidian/plugins/obsidian-task-center/` before looking for the enable
+  toggle on Obsidian Mobile.
 
 ## Settings
 
