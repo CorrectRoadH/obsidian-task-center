@@ -161,10 +161,12 @@ export class QuickAddModal extends Modal {
       this.errorEl.hide();
 
       // US-167-4 footer: `↵ <write target path>` left, `Esc` right.
-      // Static — write target is determined by settings.dailyFolder +
-      // todayISO at modal open and doesn't change with input. Spec
-      // UX.md §6.6 explicitly: "按 settings.dailyFolder + todayISO 计算；
-      // 无 daily 走 inbox 路径".
+      // Static — write target is computed at modal open via
+      // `computeWriteTarget()` below: it reads Obsidian's built-in
+      // Daily Notes core plugin's "New file location" config when
+      // enabled, else falls back to `settings.inboxPath`. task #32
+      // (0.3.0 breaking) removed the previous `settings.dailyFolder`
+      // setting; the resolver is now the single source of truth.
       const footer = contentEl.createDiv({ cls: "tc-qa-footer" });
       footer.createSpan({
         cls: "tc-qa-footer-left",
@@ -293,8 +295,9 @@ function formatHintDate(iso: string): string {
 //      `<dnOpts.folder>/<today filename per dnOpts.format>`
 //   2. Otherwise → `settings.inboxPath` (default "Tasks/Inbox.md")
 //
-// `settings.dailyFolder` is intentionally NOT consulted — it's a legacy
-// setting kept as migration buffer; task #32 (0.3.0 minor) removes it.
+// task #32 (0.3.0 breaking): the previous `settings.dailyFolder` legacy
+// setting has been removed. Daily-note path now reads exclusively from
+// the Daily Notes core plugin (or falls back to `settings.inboxPath`).
 // Exported for unit testing.
 export function computeWriteTarget(
   app: App | null | undefined,

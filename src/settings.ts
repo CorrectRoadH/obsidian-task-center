@@ -28,18 +28,10 @@ export class TaskCenterSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName(tr("settings.dailyFolder.name"))
-      .setDesc(tr("settings.dailyFolder.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("Daily")
-          .setValue(this.plugin.settings.dailyFolder)
-          .onChange(async (v) => {
-            this.plugin.settings.dailyFolder = v || "Daily";
-            await this.plugin.saveSettings();
-          }),
-      );
+    // task #32 (0.3.0 breaking): the previous "Daily folder" setting was
+    // removed. The daily-note write target now reads exclusively from
+    // Obsidian's built-in Daily Notes core plugin's "New file location"
+    // config. See README "Breaking changes (0.3.0)" for migration details.
 
     // US-111: default-tab setting decides which view first-open lands on
     // (week / month / completed / unscheduled). `lastTab` (US-405)

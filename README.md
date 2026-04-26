@@ -254,7 +254,6 @@ Notes:
 | Setting | Default | Description |
 |---|---|---|
 | Default inbox path | `Tasks/Inbox.md` | Where `add` writes when `to=` omitted AND Obsidian's built-in **Daily Notes** core plugin is disabled. When Daily Notes is enabled, `add` follows its folder/format/template — Task Center never overrides that. |
-| Daily folder | `Daily` | (legacy, unused by the writer; kept for backwards compat — task #32 removes it in 0.3.0) |
 | Default view | Week | Which tab opens first |
 | Week starts on | Monday | ISO vs US-style |
 | Open board on startup | off | Auto-open on vault launch |
@@ -267,6 +266,24 @@ All UI strings (tab names, settings labels, empty states, toasts) follow Obsidia
 ## Daily Notes
 
 Task Center reads Obsidian's built-in **Daily Notes** core plugin configuration for daily-note paths — folder, date format, and template all come from there. Disable that plugin and `add` falls back to the inbox path above. Same add-on principle as everywhere else: we consume what's already configured, we don't introduce a parallel source of truth.
+
+## Breaking Changes
+
+### 0.3.0 — `settings.dailyFolder` removed (Migration required)
+
+The legacy plugin setting `settings.dailyFolder` is **removed in 0.3.0**. The daily-note write target now reads exclusively from Obsidian's built-in **Daily Notes** core plugin's "New file location" config.
+
+**Migration**: enable the **Daily Notes** core plugin (Settings → Core plugins → Daily Notes) and set "New file location" to your preferred folder. The previous default `Daily/` matches the obsidian-task-center 0.2.x default — set the same value if you want zero behavior change. If Daily Notes stays disabled, Quick Add falls back to `settings.inboxPath` (`Tasks/Inbox.md` by default), shown in the Quick Add footer chip.
+
+Why: the previous setting was a parallel source of truth that the writer (`writer.ts:addTask`) already ignored — it consulted the Daily Notes core plugin directly. Keeping the dead setting visible misled users when they edited it and saw no change in behavior. 0.3.0 deletes it cleanly so the path resolver has a single source.
+
+### 0.3.0 — 删除 `settings.dailyFolder`（需要迁移）
+
+旧版插件设置 `settings.dailyFolder` 在 **0.3.0 已移除**。每日笔记的写入目标现在完全由 Obsidian 内置 **Daily Notes** 核心插件的 "New file location" 配置决定。
+
+**迁移**：启用 **Daily Notes** 核心插件（设置 → 核心插件 → Daily Notes），并把 "New file location" 设置为你想要的文件夹。obsidian-task-center 0.2.x 的默认值是 `Daily/`——保持一致即可零行为差。如果 Daily Notes 没启用，Quick Add 会回落到 `settings.inboxPath`（默认 `Tasks/Inbox.md`），写入目标也会显示在 Quick Add 底部的 footer chip 上。
+
+原因：旧设置是与写入路径解析器并行的第二个数据源——但 `writer.ts:addTask` 早就直接读 Daily Notes 核心插件的配置了，根本没读这个设置。把它留在 UI 里只会误导用户。0.3.0 干净删除，让路径解析器只剩一个 SSOT。
 
 ## Support
 

@@ -319,7 +319,7 @@
 
 **Footer**：
 - 单行 12px text-muted
-- 左侧：`↵ <实际写入路径>`——`Daily/2026-04-25.md`（按 settings.dailyFolder + todayISO 计算；无 daily 走 inbox 路径）
+- 左侧：`↵ <实际写入路径>`——`Daily/2026-04-25.md`（由 Obsidian 内置 Daily Notes 核心插件的 folder/format + todayISO 计算；Daily Notes 未启用时回落到 settings.inboxPath。0.3.0 删了 settings.dailyFolder，详见 README "Breaking Changes"）
 - 右侧：`Esc`
 - 不写"取消" / "确认" 等动词——用纯 keystroke 标志（视觉简洁）
 - 误操作恢复：错误态在 footer **上方**插一行红色 `⚠ <一句人话>`，input 不清空让用户重试

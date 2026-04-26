@@ -144,9 +144,10 @@ const EN = {
   "settings.inbox.name": "Default inbox path",
   "settings.inbox.desc":
     "Where `task-center:add` puts tasks when to= is omitted and no daily note exists.",
-  "settings.dailyFolder.name": "Daily folder",
-  "settings.dailyFolder.desc":
-    "Folder where daily notes live — default add target and sub-task move targets.",
+  // task #32 (0.3.0 breaking): `settings.dailyFolder.name/desc` removed
+  // — the setting is gone, so the i18n keys for its label/description
+  // are dead. Daily-note path now reads from Obsidian's built-in Daily
+  // Notes core plugin config exclusively (see writer.ts).
   "settings.defaultView.name": "Default view",
   "settings.defaultView.desc": "Which tab to show when the board opens.",
   "settings.defaultView.week": "Week",
@@ -314,9 +315,6 @@ const ZH: Partial<typeof EN> = {
   "settings.inbox.name": "默认收件箱路径",
   "settings.inbox.desc":
     "`task-center:add` 在没有指定 to= 且没有当日 daily note 时，把任务写到这里。",
-  "settings.dailyFolder.name": "Daily 文件夹",
-  "settings.dailyFolder.desc":
-    "每日笔记所在文件夹 — 默认 add 目标、子任务搬家目标。",
   "settings.defaultView.name": "默认视图",
   "settings.defaultView.desc": "打开看板时默认展示哪个 tab。",
   "settings.defaultView.week": "本周",

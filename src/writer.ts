@@ -876,36 +876,13 @@ export async function nestUnder(
   };
 }
 
-export async function moveSubtaskToDate(
-  app: App,
-  subtask: ParsedTask,
-  targetDate: string,
-  allTasks: ParsedTask[],
-  dailyFolder: string,
-): Promise<{ newPath: string; newLine: number }> {
-  // Find parent
-  const parent = subtask.parentLine !== null
-    ? allTasks.find((t) => t.path === subtask.path && t.line === subtask.parentLine)
-    : null;
-
-  const targetPath = normalizePath(`${dailyFolder}/${targetDate}.md`);
-  // Strike old
-  await mutateLine(app, subtask.path, subtask.line, (raw) => {
-    if (/^\s*(?:>\s*)*[-+*]\s+\[-\]/.test(raw)) return null;
-    return setCheckbox(raw, "-");
-  });
-
-  // Add new in target daily with parent wikilink
-  const newTitle = parent
-    ? `[[${parent.path.replace(/\.md$/, "")}]] > ${subtask.title}`
-    : subtask.title;
-  return addTask(app, {
-    text: newTitle,
-    targetPath,
-    scheduled: targetDate,
-    estimate: subtask.estimate,
-    tags: subtask.tags,
-  }).then((r) => ({ newPath: r.path, newLine: r.line }));
-}
+// task #32 (0.3.0 breaking): the previous `moveSubtaskToDate(app, subtask,
+// targetDate, allTasks, dailyFolder)` helper required a `dailyFolder`
+// string parameter — the only call-site path was the now-removed
+// `settings.dailyFolder`. The helper was already unused (no in-tree
+// caller) by 0.2.x, so 0.3.0 deletes it entirely rather than leaving a
+// deprecated-but-callable export. If a future flow needs the same move,
+// reintroduce it reading the daily-notes folder via the same lookup as
+// `addTask` (see `dailyFolderFromObsidian`-style accessor on `app`).
 
 export { parseDurationToMinutes, formatMinutes } from "./parser";

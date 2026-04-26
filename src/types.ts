@@ -43,7 +43,6 @@ export interface ParsedTask {
 
 export interface TaskCenterSettings {
   inboxPath: string;
-  dailyFolder: string;
   defaultView: "week" | "month" | "completed" | "unscheduled";
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
@@ -70,7 +69,6 @@ export interface TaskCenterSettings {
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
   inboxPath: "Tasks/Inbox.md",
-  dailyFolder: "Daily",
   defaultView: "week",
   openOnStartup: false,
   weekStartsOn: 1,

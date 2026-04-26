@@ -142,8 +142,10 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   });
 
   // US-167 chunk 4: footer renders with `↵ <path>` left and `Esc` right.
-  // Path comes from settings.dailyFolder + todayISO; default settings
-  // give "Daily/<today>.md".
+  // Path comes from `computeWriteTarget()` — Obsidian's built-in Daily
+  // Notes core plugin folder when enabled, else `settings.inboxPath`
+  // (default `Tasks/Inbox.md`). task #32 (0.3.0) removed the legacy
+  // `settings.dailyFolder` setting; resolver is now the single source.
   it("US-167 chunk 4 — footer shows write target path and Esc marker", async function () {
     await browser.executeObsidianCommand("obsidian-task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });

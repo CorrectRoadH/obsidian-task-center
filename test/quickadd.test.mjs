@@ -10,8 +10,10 @@ import { spawnSync } from "node:child_process";
 // computeWriteTarget must mirror writer.ts addTask's target resolution:
 //   - Obsidian's built-in daily-notes plugin enabled → its folder/format
 //   - Otherwise → settings.inboxPath
-// Currently it uses settings.dailyFolder unconditionally → footer lies
-// when the user has daily-notes plugin disabled.
+//
+// task #32 (0.3.0 breaking) removed the legacy `settings.dailyFolder`;
+// the old "footer lies" scenario it produced is now structurally
+// impossible because the field no longer exists.
 
 function compile() {
   for (const entry of ["src/quickadd.ts", "src/dateprompt.ts"]) {
@@ -112,7 +114,7 @@ test("computeWriteTarget — daily-notes plugin enabled → uses its folder/form
       },
     },
   };
-  const settings = { inboxPath: "Tasks/Inbox.md", dailyFolder: "Daily" };
+  const settings = { inboxPath: "Tasks/Inbox.md" };
   const r = computeWriteTarget(app, settings);
   assert.match(r, /^Journal\/\d{4}-\d{2}-\d{2}\.md$/);
 });
@@ -120,11 +122,10 @@ test("computeWriteTarget — daily-notes plugin enabled → uses its folder/form
 test("computeWriteTarget — daily-notes plugin DISABLED → falls back to inboxPath (footer must not lie)", () => {
   // No internalPlugins.plugins["daily-notes"] → daily-notes is disabled.
   const app = { internalPlugins: { plugins: {} } };
-  const settings = { inboxPath: "Tasks/Inbox.md", dailyFolder: "Daily" };
+  const settings = { inboxPath: "Tasks/Inbox.md" };
   const r = computeWriteTarget(app, settings);
-  // Currently fails: returns "Daily/today.md" because impl reads
-  // settings.dailyFolder. After fix: returns "Tasks/Inbox.md" matching
-  // writer.ts's actual write target.
+  // task #32 (0.3.0): no `dailyFolder` setting exists; the resolver
+  // returns the inbox path when daily-notes is disabled.
   assert.equal(r, "Tasks/Inbox.md");
 });
 
