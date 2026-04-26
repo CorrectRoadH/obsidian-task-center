@@ -21,7 +21,7 @@
  *
  * All tests currently FAIL — none of these elements exist yet.
  */
-import { browser, expect, $ } from "@wdio/globals";
+import { browser, expect, $, $$ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
@@ -108,8 +108,8 @@ describe("US-721 today planning mode (task #64)", function () {
     await openPlanTodayView();
 
     // Both unscheduled tasks must appear as candidates.
-    const candidates = $$('[data-plan-candidate]');
-    await expect(await candidates.length).toBeGreaterThanOrEqual(2);
+    const candidates = await $$('[data-plan-candidate]');
+    await expect(candidates.length).toBeGreaterThanOrEqual(2);
   });
 
   // US-721c: estimated total time shown (no overload for small total).

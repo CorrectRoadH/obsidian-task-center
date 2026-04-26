@@ -40,6 +40,7 @@ type TabKey = "today" | "week" | "month" | "completed" | "unscheduled";
 
 interface ViewState {
   tab: TabKey;
+  planToday: boolean;
   anchorISO: string; // For week/month nav
   selectedTaskId: string | null;
   filter: string;
@@ -114,6 +115,7 @@ export class TaskCenterView extends ItemView {
     this.state = {
       // Priority: last-closed tab → defaultView setting → "week"
       tab: plugin.settings.lastTab ?? plugin.settings.defaultView ?? "week",
+      planToday: false,
       anchorISO: todayISO(),
       selectedTaskId: null,
       filter: "",
@@ -331,6 +333,7 @@ export class TaskCenterView extends ItemView {
   // see USER_STORIES.md
   setTab(tab: TabKey) {
     this.state.tab = tab;
+    this.state.planToday = false;
     this.plugin.settings.lastTab = tab;
     this.plugin.saveSettings().catch(() => undefined);
     this.render();
@@ -363,7 +366,9 @@ export class TaskCenterView extends ItemView {
     this.renderToolbar(header);
 
     const body = el.createDiv({ cls: "bt-body" });
-    if (this.tasks.length === 0 && this.state.tab !== "today") {
+    if (this.state.planToday) {
+      this.renderPlanToday(body);
+    } else if (this.tasks.length === 0 && this.state.tab !== "today") {
       this.renderOnboarding(body);
     } else {
       switch (this.state.tab) {
@@ -601,6 +606,14 @@ export class TaskCenterView extends ItemView {
     const add = bar.createEl("button", { text: tr("toolbar.add") });
     add.addClass("bt-add-btn");
     add.addEventListener("click", () => this.openQuickAdd());
+
+    // US-721: explicit planning entry point. Kept in the global toolbar so
+    // users can jump from any tab into the "pick from unscheduled → schedule"
+    // workflow, and e2e has a stable always-visible selector.
+    const planToday = bar.createEl("button", { text: tr("plan.entry") });
+    planToday.dataset.action = "open-plan-today";
+    planToday.addClass("bt-plan-today-btn");
+    planToday.addEventListener("click", () => void this.openPlanToday());
 
     // settings gear
     const gear = bar.createEl("button", { text: "⚙" });
@@ -1328,6 +1341,102 @@ export class TaskCenterView extends ItemView {
     await this.plugin.cache.forFlush();
     await this.reloadTasks();
     this.render();
+  }
+
+  private async openPlanToday(): Promise<void> {
+    await this.reloadTasks();
+    this.state.planToday = true;
+    this.render();
+  }
+
+  // US-721 (task #64): today planning mode.
+  //
+  // Scope intentionally matches `test/e2e/specs/today-plan.e2e.ts`: provide
+  // an entry button, list unscheduled candidates, show total estimate, and
+  // schedule a candidate to today/tomorrow/this week. It does not implement
+  // the broader saved-plan / capacity-planning product surface.
+  private renderPlanToday(parent: HTMLElement) {
+    const wrap = parent.createDiv({ cls: "bt-plan-today" });
+    wrap.dataset.view = "plan-today";
+
+    const today = todayISO();
+    const tomorrow = addDays(today, 1);
+    const weekEnd = addDays(startOfWeek(today, this.plugin.settings.weekStartsOn), 6);
+    const candidates = this.planTodayCandidates();
+    const totalEstimate = candidates.reduce((sum, task) => sum + (task.estimate ?? 0), 0);
+    const capacityMinutes = 8 * 60;
+
+    const head = wrap.createDiv({ cls: "bt-plan-head" });
+    head.createDiv({ cls: "bt-plan-title", text: tr("plan.title") });
+    const total = head.createDiv({ cls: "bt-plan-total-est" });
+    total.dataset.planTotalEst = String(totalEstimate);
+    total.setText(tr("plan.totalEst", { dur: formatMinutes(totalEstimate) }));
+    if (totalEstimate > capacityMinutes) {
+      const overload = head.createDiv({ cls: "bt-plan-overload" });
+      overload.dataset.planOverload = "true";
+      overload.setText(tr("plan.overload", { dur: formatMinutes(totalEstimate - capacityMinutes) }));
+    }
+
+    if (candidates.length === 0) {
+      wrap.createDiv({ cls: "bt-plan-empty", text: tr("plan.empty") });
+      return;
+    }
+
+    const list = wrap.createDiv({ cls: "bt-plan-list" });
+    for (const task of candidates) {
+      this.renderPlanCandidate(list, task, today, tomorrow, weekEnd);
+    }
+  }
+
+  private planTodayCandidates(): ParsedTask[] {
+    const candidates = this.tasks
+      .filter((t) => t.status === "todo" && !t.inheritsTerminal && !t.scheduled && t.title.trim() !== "")
+      .sort((a, b) => {
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        if (a.created && b.created) return b.created.localeCompare(a.created);
+        if (a.created) return -1;
+        if (b.created) return 1;
+        return a.title.localeCompare(b.title);
+      });
+    return this.hideChildrenOfVisibleParents(candidates);
+  }
+
+  private renderPlanCandidate(
+    parent: HTMLElement,
+    task: ParsedTask,
+    today: string,
+    tomorrow: string,
+    weekEnd: string,
+  ) {
+    const row = parent.createDiv({ cls: "bt-plan-candidate" });
+    row.dataset.planCandidate = "true";
+    row.dataset.taskId = task.id;
+
+    const main = row.createDiv({ cls: "bt-plan-candidate-main" });
+    main.createDiv({ cls: "bt-plan-candidate-title", text: task.title });
+    const meta: string[] = [compactPath(task.path)];
+    if (task.deadline) meta.push(`📅 ${task.deadline}`);
+    if (typeof task.estimate === "number") meta.push(`⏱ ${formatMinutes(task.estimate)}`);
+    main.createDiv({ cls: "bt-plan-candidate-meta", text: meta.join(" · ") });
+
+    const actions = row.createDiv({ cls: "bt-plan-actions" });
+    const mkSchedule = (label: string, action: "schedule-today" | "schedule-tomorrow" | "schedule-week", date: string) => {
+      const btn = actions.createEl("button", { text: label, cls: `bt-plan-action bt-plan-action-${action}` });
+      btn.dataset.planAction = action;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.api.schedule(task.id, date)
+          .then(() => this.refreshAfterAction())
+          .catch((err) => console.warn("[task-center US-721] schedule failed:", err));
+      });
+    };
+
+    mkSchedule(tr("plan.scheduleToday"), "schedule-today", today);
+    mkSchedule(tr("plan.scheduleTomorrow"), "schedule-tomorrow", tomorrow);
+    mkSchedule(tr("plan.scheduleWeek"), "schedule-week", weekEnd);
   }
 
   private renderUnscheduledBig(parent: HTMLElement) {

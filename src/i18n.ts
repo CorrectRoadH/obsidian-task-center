@@ -250,6 +250,16 @@ const EN = {
   "today.actionReschedule": "↷ Tomorrow",
   "today.actionDrop": "🗑 Drop",
   "today.actionOpenSource": "📂 Source",
+
+  // US-721 (task #64): today planning mode.
+  "plan.entry": "Plan today",
+  "plan.title": "Plan today",
+  "plan.totalEst": "Total estimate {dur}",
+  "plan.overload": "Over capacity by {dur}",
+  "plan.empty": "No unscheduled candidates.",
+  "plan.scheduleToday": "Today",
+  "plan.scheduleTomorrow": "Tomorrow",
+  "plan.scheduleWeek": "This week",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -432,6 +442,16 @@ const ZH: Partial<typeof EN> = {
   "today.actionReschedule": "↷ 明天",
   "today.actionDrop": "🗑 放弃",
   "today.actionOpenSource": "📂 来源",
+
+  // US-721: 今日计划模式
+  "plan.entry": "计划今天",
+  "plan.title": "今日计划",
+  "plan.totalEst": "总预估 {dur}",
+  "plan.overload": "超出容量 {dur}",
+  "plan.empty": "没有未排期候选任务。",
+  "plan.scheduleToday": "今天",
+  "plan.scheduleTomorrow": "明天",
+  "plan.scheduleWeek": "本周",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the
