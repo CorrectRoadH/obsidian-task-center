@@ -49,6 +49,10 @@ export interface TaskCenterSettings {
   // grouping actions.
   // see USER_STORIES.md
   groupingTags: string[];
+  // US-724: user-saved board filters ("Work", "Life", "Waiting", etc.).
+  // These are lightweight presets over the existing board surface; they do
+  // not create a separate data model.
+  savedViews: SavedTaskView[];
   defaultView: "today" | "week" | "month" | "completed" | "unscheduled";
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
@@ -73,9 +77,22 @@ export interface TaskCenterSettings {
   mobileForceLayout: boolean; // default false (auto = follow viewport width)
 }
 
+export type SavedViewStatus = "all" | TaskStatus;
+
+export interface SavedTaskView {
+  id: string;
+  name: string;
+  search: string;
+  tag: string;
+  date: string;
+  status: SavedViewStatus;
+  grouping: string;
+}
+
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
   inboxPath: "Tasks/Inbox.md",
   groupingTags: ["#1象限", "#2象限", "#3象限", "#4象限"],
+  savedViews: [],
   defaultView: "week",
   openOnStartup: false,
   weekStartsOn: 1,

@@ -34,6 +34,7 @@ import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
 import { findGroupingTag, groupingTagForKey, groupingTagIndex, normalizeGroupingTags } from "./grouping";
+import type { SavedTaskView, SavedViewStatus } from "./types";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "today" | "week" | "month" | "completed" | "unscheduled";
@@ -44,6 +45,11 @@ interface ViewState {
   anchorISO: string; // For week/month nav
   selectedTaskId: string | null;
   filter: string;
+  savedViewId: string | null;
+  savedViewTag: string;
+  savedViewDate: string;
+  savedViewStatus: SavedViewStatus;
+  savedViewGrouping: string;
   showUnscheduledPool: boolean;
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
   // Mobile week view: each day-row collapses by default; today is open and
@@ -69,6 +75,27 @@ const WEEKDAY_KEYS = [
 function weekdayLabel(dow: number): string {
   const label = tr(WEEKDAY_KEYS[dow]);
   return getLocale() === "zh" ? `周${label}` : label;
+}
+
+function normalizeFilterTag(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("#") ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`;
+}
+
+function taskHasTag(t: ParsedTask, tag: string): boolean {
+  const wanted = normalizeFilterTag(tag);
+  return t.tags.some((existing) => existing.toLowerCase() === wanted);
+}
+
+function taskMatchesText(t: ParsedTask, q: string): boolean {
+  if (t.title.toLowerCase().includes(q)) return true;
+  for (const tag of t.tags) if (tag.toLowerCase().includes(q)) return true;
+  return false;
+}
+
+function taskMatchesDate(t: ParsedTask, date: string): boolean {
+  return t.scheduled === date || t.deadline === date || t.completed === date || t.created === date;
 }
 
 export class TaskCenterView extends ItemView {
@@ -119,6 +146,11 @@ export class TaskCenterView extends ItemView {
       anchorISO: todayISO(),
       selectedTaskId: null,
       filter: "",
+      savedViewId: null,
+      savedViewTag: "",
+      savedViewDate: "",
+      savedViewStatus: "all",
+      savedViewGrouping: "",
       showUnscheduledPool: true,
       collapsedWeeks: new Set(),
       expandedDays: new Set(),
@@ -588,6 +620,7 @@ export class TaskCenterView extends ItemView {
     search.value = this.state.filter;
     search.addEventListener("input", () => {
       this.state.filter = search.value;
+      this.state.savedViewId = null;
       const caret = search.selectionStart;
       this.render();
       const el = this.contentEl.querySelector(".bt-search") as HTMLInputElement | null;
@@ -597,6 +630,8 @@ export class TaskCenterView extends ItemView {
         el.selectionStart = el.selectionEnd = pos;
       }
     });
+
+    this.renderSavedViewsToolbar(bar);
 
     // US-163: toolbar `+` opens Quick Add, which writes the new line to
     // today's daily-note tail (the only entry point — see writer.addTask
@@ -621,6 +656,88 @@ export class TaskCenterView extends ItemView {
     gear.addEventListener("click", () => {
       (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
       (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.openTabById("obsidian-task-center");
+    });
+  }
+
+  private renderSavedViewsToolbar(parent: HTMLElement) {
+    const wrap = parent.createDiv({ cls: "bt-saved-views" });
+    wrap.dataset.savedViews = "true";
+
+    const select = wrap.createEl("select", { cls: "bt-saved-view-select" });
+    select.dataset.savedViewSelect = "true";
+    select.createEl("option", { value: "", text: tr("savedViews.current") });
+    for (const view of this.plugin.settings.savedViews) {
+      select.createEl("option", { value: view.id, text: view.name });
+    }
+    select.value = this.state.savedViewId ?? "";
+    select.addEventListener("change", () => {
+      const view = this.plugin.settings.savedViews.find((v) => v.id === select.value);
+      if (!view) {
+        this.clearSavedViewFilters();
+      } else {
+        this.applySavedView(view);
+      }
+      this.render();
+    });
+
+    const tag = wrap.createEl("input", { type: "text", placeholder: tr("savedViews.tag") });
+    tag.addClass("bt-saved-view-filter");
+    tag.dataset.savedViewFilter = "tag";
+    tag.value = this.state.savedViewTag;
+    tag.addEventListener("change", () => {
+      this.state.savedViewTag = tag.value.trim();
+      this.state.savedViewId = null;
+      this.render();
+    });
+
+    const date = wrap.createEl("input", { type: "text", placeholder: tr("savedViews.date") });
+    date.addClass("bt-saved-view-filter");
+    date.dataset.savedViewFilter = "date";
+    date.value = this.state.savedViewDate;
+    date.addEventListener("change", () => {
+      this.state.savedViewDate = date.value.trim();
+      this.state.savedViewId = null;
+      this.render();
+    });
+
+    const status = wrap.createEl("select", { cls: "bt-saved-view-filter" });
+    status.dataset.savedViewFilter = "status";
+    const statusOptions: Array<{ value: SavedViewStatus; label: string }> = [
+      { value: "all", label: tr("savedViews.statusAll") },
+      { value: "todo", label: tr("savedViews.statusTodo") },
+      { value: "done", label: tr("savedViews.statusDone") },
+      { value: "dropped", label: tr("savedViews.statusDropped") },
+    ];
+    for (const option of statusOptions) {
+      status.createEl("option", { value: option.value, text: option.label });
+    }
+    status.value = this.state.savedViewStatus;
+    status.addEventListener("change", () => {
+      this.state.savedViewStatus = status.value as SavedViewStatus;
+      this.state.savedViewId = null;
+      this.render();
+    });
+
+    const grouping = wrap.createEl("select", { cls: "bt-saved-view-filter" });
+    grouping.dataset.savedViewFilter = "grouping";
+    grouping.createEl("option", { value: "", text: tr("savedViews.groupingAll") });
+    for (const tagName of this.getGroupingTags()) {
+      grouping.createEl("option", { value: tagName, text: tagName });
+    }
+    grouping.value = this.state.savedViewGrouping;
+    grouping.addEventListener("change", () => {
+      this.state.savedViewGrouping = grouping.value;
+      this.state.savedViewId = null;
+      this.render();
+    });
+
+    const save = wrap.createEl("button", { text: tr("savedViews.save"), cls: "bt-saved-view-save" });
+    save.dataset.action = "save-current-view";
+    save.addEventListener("click", async () => {
+      const name = window.prompt(tr("savedViews.promptName"), this.suggestSavedViewName());
+      if (!name || !name.trim()) return;
+      await this.saveCurrentView(name.trim());
+      this.render();
     });
   }
 
@@ -2229,11 +2346,18 @@ export class TaskCenterView extends ItemView {
 
   private getTextFilter(): (t: ParsedTask) => boolean {
     const q = this.state.filter.trim().toLowerCase();
-    if (!q) return () => true;
+    const tag = normalizeFilterTag(this.state.savedViewTag);
+    const grouping = normalizeFilterTag(this.state.savedViewGrouping);
+    const date = this.state.savedViewDate.trim();
+    const status = this.state.savedViewStatus;
+    if (!q && !tag && !grouping && !date && status === "all") return () => true;
     return (t) => {
-      if (t.title.toLowerCase().includes(q)) return true;
-      for (const tag of t.tags) if (tag.toLowerCase().includes(q)) return true;
-      return false;
+      if (q && !taskMatchesText(t, q)) return false;
+      if (tag && !taskHasTag(t, tag)) return false;
+      if (grouping && !taskHasTag(t, grouping)) return false;
+      if (date && !taskMatchesDate(t, date)) return false;
+      if (status !== "all" && t.status !== status) return false;
+      return true;
     };
   }
 
@@ -2244,6 +2368,49 @@ export class TaskCenterView extends ItemView {
 
   private getGroupingTags(): string[] {
     return normalizeGroupingTags(this.plugin.settings.groupingTags);
+  }
+
+  private clearSavedViewFilters(): void {
+    this.state.savedViewId = null;
+    this.state.savedViewTag = "";
+    this.state.savedViewDate = "";
+    this.state.savedViewStatus = "all";
+    this.state.savedViewGrouping = "";
+  }
+
+  private applySavedView(view: SavedTaskView): void {
+    this.state.savedViewId = view.id;
+    this.state.filter = view.search;
+    this.state.savedViewTag = view.tag;
+    this.state.savedViewDate = view.date;
+    this.state.savedViewStatus = view.status;
+    this.state.savedViewGrouping = view.grouping;
+  }
+
+  private suggestSavedViewName(): string {
+    if (this.state.savedViewTag) return this.state.savedViewTag.replace(/^#/, "");
+    if (this.state.savedViewGrouping) return this.state.savedViewGrouping.replace(/^#/, "");
+    if (this.state.savedViewStatus !== "all") return this.state.savedViewStatus;
+    return tr("savedViews.defaultName");
+  }
+
+  private async saveCurrentView(name: string): Promise<void> {
+    const id = `sv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const view: SavedTaskView = {
+      id,
+      name,
+      search: this.state.filter.trim(),
+      tag: this.state.savedViewTag.trim(),
+      date: this.state.savedViewDate.trim(),
+      status: this.state.savedViewStatus,
+      grouping: this.state.savedViewGrouping.trim(),
+    };
+    this.plugin.settings.savedViews = [
+      ...this.plugin.settings.savedViews.filter((v) => v.name !== name),
+      view,
+    ];
+    this.applySavedView(view);
+    await this.plugin.saveSettings();
   }
 
   // ---------- Footer / Add ----------

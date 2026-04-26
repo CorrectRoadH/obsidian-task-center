@@ -260,6 +260,19 @@ const EN = {
   "plan.scheduleToday": "Today",
   "plan.scheduleTomorrow": "Tomorrow",
   "plan.scheduleWeek": "This week",
+
+  // US-724 (task #67): saved views / custom filters.
+  "savedViews.current": "Current filters",
+  "savedViews.tag": "#tag",
+  "savedViews.date": "YYYY-MM-DD",
+  "savedViews.statusAll": "Any status",
+  "savedViews.statusTodo": "Todo",
+  "savedViews.statusDone": "Done",
+  "savedViews.statusDropped": "Dropped",
+  "savedViews.groupingAll": "Any group",
+  "savedViews.save": "Save view",
+  "savedViews.promptName": "Saved view name",
+  "savedViews.defaultName": "Saved view",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -452,6 +465,19 @@ const ZH: Partial<typeof EN> = {
   "plan.scheduleToday": "今天",
   "plan.scheduleTomorrow": "明天",
   "plan.scheduleWeek": "本周",
+
+  // US-724: 保存视图 / 自定义过滤
+  "savedViews.current": "当前过滤",
+  "savedViews.tag": "#标签",
+  "savedViews.date": "YYYY-MM-DD",
+  "savedViews.statusAll": "任意状态",
+  "savedViews.statusTodo": "待办",
+  "savedViews.statusDone": "完成",
+  "savedViews.statusDropped": "放弃",
+  "savedViews.groupingAll": "任意分组",
+  "savedViews.save": "保存视图",
+  "savedViews.promptName": "保存视图名称",
+  "savedViews.defaultName": "保存视图",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the
