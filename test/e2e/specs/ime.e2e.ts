@@ -197,4 +197,75 @@ describe("Task Center — IME composition guard (US-413)", function () {
     }, parentSel);
     await browser.pause(100);
   });
+
+  // US-413 chunk d — DatePromptModal text input. Found during the
+  // vault-wide grep audit (src/dateprompt.ts:45). Opening via the 'd'
+  // hotkey on a selected card, dispatching IME composition + Enter
+  // must keep the modal open and not change the task's ⏳ date.
+  it("US-413 chunk d — DatePrompt Enter during IME composition must not commit", async function () {
+    const today = todayISO();
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Date prompt task ⏳ ${today}\n`);
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
+    await $(cardSel).waitForExist({ timeout: 5000 });
+
+    // Select the card and press 'd' to open the date prompt — that's
+    // the path the view-level handleKey reaches `openDatePrompt`.
+    await browser.execute((sel: string) => {
+      const card = document.querySelector(sel) as HTMLElement | null;
+      card?.click();
+      // Synth a 'd' keydown on contentEl to fire the view-level handler.
+      const view = document.querySelector(".task-center-view") as HTMLElement | null;
+      view?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "d", bubbles: true, cancelable: true }),
+      );
+    }, cardSel);
+
+    const promptInput = $(".task-center-date-prompt input");
+    await promptInput.waitForExist({ timeout: 3000 });
+
+    await browser.execute(() => {
+      const el = document.querySelector(
+        ".task-center-date-prompt input",
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.value = "tomorrow";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      const evt = new KeyboardEvent("keydown", {
+        key: "Enter",
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(evt, "isComposing", { value: true });
+      el.dispatchEvent(evt);
+    });
+
+    // Assert: modal is still visible (Enter was guarded). Read the file
+    // too — ⏳ date must be unchanged.
+    await browser.pause(200);
+    const stillOpen = await $(".task-center-date-prompt").isExisting();
+    expect(stillOpen).toBe(true);
+
+    const content = await readFile("Tasks/Inbox.md");
+    expect(content).toContain(`⏳ ${today}`);
+
+    // Cleanup: dismiss the modal so the next test isn't blocked by a
+    // lingering modal stack.
+    await browser.execute(() => {
+      const el = document.querySelector(
+        ".task-center-date-prompt input",
+      ) as HTMLInputElement | null;
+      if (!el) return;
+      el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      el.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    await browser.pause(100);
+  });
 });
