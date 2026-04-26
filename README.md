@@ -27,6 +27,12 @@ Obsidian Tasks owns the data model. Task Center adds presentation layers and a p
 | Mobile board (iOS / iPad / Android) | — | New (full feature parity) |
 | i18n (中 / EN auto-switch) | — | New |
 
+## Energy quadrants
+
+Default tag convention: `#1象限 / #2象限 / #3象限 / #4象限` map to Covey's 4-quadrant prioritization (Important × Urgent). The "unscheduled" tab groups by quadrant by default, so the next-action picker honors Important-Not-Urgent ahead of Urgent-Not-Important.
+
+*Custom grouping tag sets (e.g. `#now / #next / #later / #waiting`) planned for 0.3.x.*
+
 ## Syntax
 
 ```markdown
@@ -83,15 +89,25 @@ Select a card (click), then:
 
 Click the title text to rename in place (Enter commits, Escape reverts). All metadata (tags, emojis, inline fields) is preserved.
 
-### Quick add
+## Quick Add
 
-`⌘/Ctrl+T` in the board, or the `+ Add` button, opens a one-line input:
+`⌘/Ctrl+T` in the board, or the `+ Add` button, opens a Spotlight-style command palette anchored at the top-30% of the viewport — a single transparent input, an inline parse hint that previews the resolved `⏳` / `📅` date as you type, a row of one-click prefill chips (`Today` / `Tomorrow` / `周六` / `Q1` ~ `Q4`), and a footer that shows the exact write-target file before you press Enter.
 
 ```
-去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]
+去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]    →  ⏳ 04-26 (Sat)
+[Today]  [Tomorrow]  [周六]  [Q1]  [Q2]  [Q3]  [Q4]
+↵ Daily/2026-04-26.md                                  Esc
 ```
 
-Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to real ISO dates. No date = goes to "unscheduled".
+Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to real ISO dates. No date = goes to your inbox.
+
+## Mobile
+
+Task Center is a first-class mobile experience. The board adapts to phone widths (vertical week list with collapsible day rows, simplified month grid with day-tap bottom sheets), long-press for context menus, swipe-left to complete / swipe-right to abandon, and pointer-based drag with 800ms cross-tab dwell. Quick Add becomes a bottom sheet that auto-avoids the soft keyboard. Desktop-only features (CLI, hover popovers, keyboard shortcuts) silently no-op on mobile rather than throwing errors.
+
+## Cascade abandon
+
+When you abandon a parent task (`[-]` or `#dropped`), Task Center finds its incomplete subtasks and abandons them too. Already-completed subtasks are preserved as historical record. Same logic for completing a parent: open subtasks cascade to done, completed ones stay timestamped.
 
 ## CLI
 
@@ -241,6 +257,10 @@ Notes:
 | Week starts on | Monday | ISO vs US-style |
 | Open board on startup | off | Auto-open on vault launch |
 | Stamp ➕ created date | on | Add `➕ YYYY-MM-DD` to every new task |
+
+## Languages
+
+All UI strings (tab names, settings labels, empty states, toasts) follow Obsidian's current locale automatically. Switching languages mid-session re-renders open boards in real time. User content (hashtags, inline-field names, Obsidian Tasks emoji) is **never translated** — your markdown stays byte-stable. IME composition (Chinese / Japanese / Korean input) is properly guarded everywhere — pressing Enter to commit a candidate doesn't accidentally submit a quick-add or rename.
 
 ## License
 
