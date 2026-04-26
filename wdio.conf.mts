@@ -20,7 +20,16 @@ export const config: WebdriverIO.Config = {
 
   specs: ["./test/e2e/specs/**/*.e2e.ts"],
 
-  maxInstances: Number(env.WDIO_MAX_INSTANCES || 2),
+  // task #48 (0.3.x): default to 1 worker. Two parallel workers share the
+  // same vault directory (`test/e2e/vaults/simple`), so race conditions
+  // surface in `obsidianPage.resetVault` + concurrent `metadataCache.changed`
+  // — the subtask and mobile-coverage specs were the canaries Wood saw
+  // intermittently fail in `pnpm test:e2e`. Stable serial runs are worth
+  // the ~2s wall-clock loss vs flakey parallel. Maintainers wanting the
+  // old behavior can opt back in with `WDIO_MAX_INSTANCES=2 pnpm test:e2e`,
+  // which is exactly the setting CI release.yml inherits today (see also
+  // task #52 Xvfb POC, which depends on this serial baseline).
+  maxInstances: Number(env.WDIO_MAX_INSTANCES || 1),
 
   capabilities: desktopVersions.map<WebdriverIO.Capabilities>(
     ([appVersion, installerVersion]) => ({
