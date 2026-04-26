@@ -25,7 +25,15 @@ function compile() {
 }
 
 compile();
-const { filterTasks, computeStats, formatList, formatStats, formatError } =
+const {
+  filterTasks,
+  computeStats,
+  buildAgentBrief,
+  formatList,
+  formatStats,
+  formatAgentBrief,
+  formatError,
+} =
   await import("../test/.compiled/cli.bundle.js");
 
 // Use production `todayISO()` (local-time based) instead of `toISOString().slice(0,10)`
@@ -215,6 +223,75 @@ test("formatStats — shows ratio + 'within band'", () => {
   assert.match(out, /Tasks done: 2/);
   assert.match(out, /sum actual\s+120m/);
   assert.match(out, /within band\s+1\/2/);
+});
+
+test("US-723: buildAgentBrief partitions overdue/today/unscheduled and emits writeback commands", () => {
+  const all = [
+    mkTask({
+      id: "Daily/2026-04-26.md:L5",
+      path: "Daily/2026-04-26.md",
+      title: "overdue blocker",
+      deadline: "2026-04-25",
+      tags: ["#now"],
+      estimate: 30,
+    }),
+    mkTask({
+      id: "Daily/2026-04-26.md:L9",
+      path: "Daily/2026-04-26.md",
+      title: "today task",
+      scheduled: "2026-04-26",
+    }),
+    mkTask({
+      id: "Tasks/Inbox.md:L2",
+      path: "Tasks/Inbox.md",
+      title: "candidate",
+      scheduled: null,
+    }),
+    mkTask({
+      id: "Tasks/Archive.md:L1",
+      path: "Tasks/Archive.md",
+      title: "hidden completed child",
+      inheritsTerminal: true,
+    }),
+  ];
+  const brief = buildAgentBrief(all, { today: "2026-04-26", limit: 3 });
+  assert.deepEqual(brief.counts, { overdue: 1, today: 1, unscheduled: 1 });
+  assert.deepEqual(brief.sections.overdue.map((t) => t.id), ["Daily/2026-04-26.md:L5"]);
+  assert.deepEqual(brief.sections.today.map((t) => t.id), ["Daily/2026-04-26.md:L9"]);
+  assert.deepEqual(brief.sections.unscheduled.map((t) => t.id), ["Tasks/Inbox.md:L2"]);
+  assert.match(
+    brief.sections.overdue[0].actions.find((a) => a.label === "done").command,
+    /^obsidian task-center:done ref='Daily\/2026-04-26\.md:L5'$/,
+  );
+  assert.match(
+    brief.sections.unscheduled[0].actions.find((a) => a.label === "schedule_today").command,
+    /task-center:schedule ref='Tasks\/Inbox\.md:L2' date=2026-04-26/,
+  );
+  assert.match(
+    brief.sections.unscheduled[0].actions.find((a) => a.label === "schedule_tomorrow").command,
+    /task-center:schedule ref='Tasks\/Inbox\.md:L2' date=2026-04-27/,
+  );
+});
+
+test("US-723: formatAgentBrief is grep-friendly and starts from stable task ids", () => {
+  const brief = buildAgentBrief(
+    [
+      mkTask({
+        id: "Tasks/Inbox.md:L42",
+        path: "Tasks/Inbox.md",
+        title: "pick next task",
+        scheduled: "2026-04-26",
+        estimate: 45,
+      }),
+    ],
+    { today: "2026-04-26" },
+  );
+  const out = formatAgentBrief(brief);
+  assert.match(out, /^Agent brief · 2026-04-26/);
+  assert.match(out, /counts overdue=0 today=1 unscheduled=0/);
+  assert.match(out, /1\. Tasks\/Inbox\.md:L42  pick next task/);
+  assert.match(out, /done: obsidian task-center:done ref='Tasks\/Inbox\.md:L42'/);
+  assert.match(out, /Sections\n    overdue: —\n    today: Tasks\/Inbox\.md:L42/);
 });
 
 test("formatError — greppable code + message shape", () => {

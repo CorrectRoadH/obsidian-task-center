@@ -46,6 +46,42 @@ export interface StatsOpts {
   to?: string;
 }
 
+export interface AgentBriefOpts {
+  today?: string;
+  limit?: number;
+}
+
+export interface AgentBriefAction {
+  label: string;
+  command: string;
+}
+
+export interface AgentBriefTask {
+  id: string;
+  title: string;
+  reason: string;
+  scheduled: string | null;
+  deadline: string | null;
+  estimate: number | null;
+  tags: string[];
+  actions: AgentBriefAction[];
+}
+
+export interface AgentBriefResult {
+  today: string;
+  counts: {
+    overdue: number;
+    today: number;
+    unscheduled: number;
+  };
+  sections: {
+    overdue: AgentBriefTask[];
+    today: AgentBriefTask[];
+    unscheduled: AgentBriefTask[];
+  };
+  nextActions: AgentBriefTask[];
+}
+
 export class TaskCenterApi {
   constructor(private readonly app: App, private readonly cache: TaskCache) {}
 
@@ -72,6 +108,11 @@ export class TaskCenterApi {
   async stats(opts: StatsOpts = {}): Promise<StatsResult> {
     const all = await this.cache.ensureAll();
     return computeStats(all, opts);
+  }
+
+  async agentBrief(opts: AgentBriefOpts = {}): Promise<AgentBriefResult> {
+    const all = await this.cache.ensureAll();
+    return buildAgentBrief(all, opts);
   }
 
   async schedule(id: string, date: string | null) {
@@ -395,6 +436,91 @@ export function computeStats(all: ParsedTask[], opts: StatsOpts): StatsResult {
   };
 }
 
+// US-723: agent brief. This is the compact machine-readable-enough summary
+// an AI needs before proposing action: what is overdue, what is scheduled
+// today, what is available to pull in, and which stable CLI write commands
+// can execute the next step without screen scraping.
+// see USER_STORIES.md
+export function buildAgentBrief(all: ParsedTask[], opts: AgentBriefOpts = {}): AgentBriefResult {
+  const today = opts.today ?? todayISO();
+  const limit = opts.limit && opts.limit > 0 ? opts.limit : 5;
+  const tomorrow = addDaysISO(today, 1);
+  const actionable = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+  const overdueRaw = actionable.filter(
+    (t) => !!t.deadline && t.deadline! < today,
+  );
+  const overdueIds = new Set(overdueRaw.map((t) => t.id));
+  const todayRaw = actionable.filter(
+    (t) => !overdueIds.has(t.id) && (t.scheduled === today || t.deadline === today),
+  );
+  const todayIds = new Set(todayRaw.map((t) => t.id));
+  const unscheduledRaw = actionable.filter(
+    (t) => !overdueIds.has(t.id) && !todayIds.has(t.id) && !t.scheduled,
+  );
+
+  const overdue = overdueRaw.slice(0, limit).map((t) => briefTask(t, `overdue deadline ${t.deadline}`, today, tomorrow));
+  const todayTasks = todayRaw.slice(0, limit).map((t) => {
+    const reason =
+      t.scheduled === today && t.deadline === today
+        ? "scheduled and due today"
+        : t.scheduled === today
+          ? "scheduled today"
+          : "deadline today";
+    return briefTask(t, reason, today, tomorrow);
+  });
+  const unscheduled = unscheduledRaw.slice(0, limit).map((t) => briefTask(t, "unscheduled candidate", today, tomorrow));
+  const nextActions = [...overdue, ...todayTasks, ...unscheduled].slice(0, limit);
+
+  return {
+    today,
+    counts: {
+      overdue: overdueRaw.length,
+      today: todayRaw.length,
+      unscheduled: unscheduledRaw.length,
+    },
+    sections: { overdue, today: todayTasks, unscheduled },
+    nextActions,
+  };
+}
+
+function briefTask(t: ParsedTask, reason: string, today: string, tomorrow: string): AgentBriefTask {
+  return {
+    id: t.id,
+    title: t.title,
+    reason,
+    scheduled: t.scheduled,
+    deadline: t.deadline,
+    estimate: t.estimate,
+    tags: t.tags,
+    actions: briefActions(t, today, tomorrow),
+  };
+}
+
+function briefActions(t: ParsedTask, today: string, tomorrow: string): AgentBriefAction[] {
+  const ref = quoteCli(t.id);
+  const actions: AgentBriefAction[] = [
+    { label: "done", command: `obsidian task-center:done ref=${ref}` },
+    { label: "abandon", command: `obsidian task-center:abandon ref=${ref}` },
+  ];
+  if (t.scheduled !== today) {
+    actions.push({ label: "schedule_today", command: `obsidian task-center:schedule ref=${ref} date=${today}` });
+  }
+  actions.push({ label: "schedule_tomorrow", command: `obsidian task-center:schedule ref=${ref} date=${tomorrow}` });
+  actions.push({ label: "add_actual_15m", command: `obsidian task-center:actual ref=${ref} minutes=+15m` });
+  return actions;
+}
+
+function quoteCli(v: string): string {
+  return `'${v.replace(/'/g, "'\\''")}'`;
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const [year, month, day] = iso.split("-").map((part) => parseInt(part, 10));
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+}
+
 // ---------- Formatters (human-readable) ----------
 
 function statusCheckbox(s: TaskStatus): string {
@@ -558,6 +684,32 @@ export function formatStats(s: StatsResult): string {
       lines.push(`    ${row.tag.padEnd(12)} ${String(row.minutes).padStart(4)}m  ${String(row.pct).padStart(2)}%  ${bar(row.pct)}`);
     }
   }
+  return lines.join("\n");
+}
+
+export function formatAgentBrief(b: AgentBriefResult): string {
+  const lines: string[] = [];
+  lines.push(`Agent brief · ${b.today}`);
+  lines.push(`counts overdue=${b.counts.overdue} today=${b.counts.today} unscheduled=${b.counts.unscheduled}`);
+  lines.push("");
+  lines.push("Next actions");
+  if (b.nextActions.length === 0) {
+    lines.push("    none");
+  } else {
+    b.nextActions.forEach((t, idx) => {
+      lines.push(`${idx + 1}. ${t.id}  ${t.title}`);
+      lines.push(`    why: ${t.reason}`);
+      lines.push(`    meta: scheduled=${t.scheduled ?? "—"} deadline=${t.deadline ?? "—"} estimate=${shortEst(t.estimate)} tags=${t.tags.join(" ") || "—"}`);
+      for (const action of t.actions.slice(0, 3)) {
+        lines.push(`    ${action.label}: ${action.command}`);
+      }
+    });
+  }
+  lines.push("");
+  lines.push("Sections");
+  lines.push(`    overdue: ${b.sections.overdue.map((t) => t.id).join(", ") || "—"}`);
+  lines.push(`    today: ${b.sections.today.map((t) => t.id).join(", ") || "—"}`);
+  lines.push(`    unscheduled: ${b.sections.unscheduled.map((t) => t.id).join(", ") || "—"}`);
   return lines.join("\n");
 }
 

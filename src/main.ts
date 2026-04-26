@@ -7,6 +7,7 @@ import {
   formatList,
   formatShow,
   formatStats,
+  formatAgentBrief,
   formatOkWrite,
   formatAdd,
 } from "./cli";
@@ -259,6 +260,17 @@ export default class TaskCenterPlugin extends Plugin {
     );
 
     this.registerCliHandler(
+      "task-center:brief",
+      "Agent brief: today status + executable next actions",
+      {
+        today: { value: "<YYYY-MM-DD>", description: "Override today's date" },
+        limit: { value: "<n>", description: "Max tasks per section (default 5)" },
+        format: { value: "text|json", description: "Output format (default: text)" },
+      },
+      (args) => this.cliBrief(args),
+    );
+
+    this.registerCliHandler(
       "task-center:schedule",
       "Set or clear ⏳ scheduled date on a task",
       {
@@ -454,6 +466,15 @@ export default class TaskCenterPlugin extends Plugin {
     });
     if (args.format === "json") return JSON.stringify(stats, null, 2);
     return formatStats(stats);
+  }
+
+  private async cliBrief(args: CliArgs): Promise<string> {
+    const brief = await this.api.agentBrief({
+      today: args.today,
+      limit: args.limit ? parseInt(args.limit, 10) : undefined,
+    });
+    if (args.format === "json") return JSON.stringify(brief, null, 2);
+    return formatAgentBrief(brief);
   }
 
   private async cliSchedule(args: CliArgs): Promise<string> {
