@@ -167,6 +167,13 @@
 - `US-410` Quick Add / CLI 的自然语言日期至少同时支持中英两套：`今天 / 明天 / 昨天 / 周一~周日 / 本周 / 下周 / 本月 / 下月` 与 `today / tomorrow / yesterday / Mon~Sun / week / next-week / month / next-month`。无法识别**绝不假设日期**——任务落入未排期。
 - `US-411` 日期显示跟随 Obsidian / 系统 locale（月份、星期、月日顺序），但**写回文件的日期永远是 ISO `YYYY-MM-DD`**——数据兼容硬约束（呼应 US-401 / US-407）。
 - `US-412` CLI 错误形态 `error <code>  <一句人话>` 中：`<code>` 部分恒为英文短码（稳定标识符，AI / 脚本依赖，不能因语言而变）；后接的"一句人话"部分跟随当前语言（呼应 US-211）。
+- `US-413` **输入法（IME）composition 守卫——所有支持 Enter 提交的输入框统一规则**。中文 / 日文 / 韩文等 IME 在拼音 / 假名选字过程中按 Enter 是"选词"，不是"提交"——所有 keydown 处理 Enter 的 input 必须**先判 composition 状态**：`e.isComposing === true` 或 `e.keyCode === 229` 时**忽略 Enter，不触发提交动作**（不调 submit、不关闭 modal、不写文件）。覆盖范围（穷举且**面向未来**——任何新增带 Enter 提交的 input 自动落入此规则）：
+  - Quick Add input（US-167，桌面 + 移动）
+  - 卡片标题 inline 改名 input（US-119 / US-161）
+  - 子任务添加 input（US-141 / US-162）
+  - 任何设置项里要按 Enter 提交的输入
+  - 未来新增的所有 text input / textarea
+  反例：用户输入"周六" 拼音过程中按 Enter 选字，被当成 submit 触发——**这是 bug 不是 feature**。Esc 不在此规则内（IME 期间 Esc 是"取消候选词"还是"关 modal"由浏览器 / Electron 决定，不强制覆盖）。
 
 ### 移动端独有（Obsidian Mobile / iOS / iPadOS / Android）
 
@@ -182,6 +189,16 @@
 - `US-508` 左滑卡 = 标完成、右滑卡 = 放弃；阈值 30% 卡宽，触发后 1 秒 toast 内 undo 可撤销。
 - `US-509` Quick Add 在移动端是 bottom sheet，软键盘弹出时自动避让，sheet 上移到键盘上方 + 8px。
 - `US-510` UI 文案中桌面特定的快捷键 / 鼠标操作描述要平台条件分支；不在 i18n 字符串里翻译 `Ctrl+T` 这类描述——移动端写 `点 ➕ 按钮`。
+
+### 发版与分发（GitHub Release / Obsidian Plugin Store）
+
+插件需要被装、被更新。下面这些故事讲"插件作者 / 维护者 / 用户" 想从发版机制里得到什么——不讲 yaml 语法 / pnpm 命令 / GitHub Action runner 细节（那些是实现，留给 `.github/workflows/release.yml` + ARCHITECTURE）。两个参考样板：[obsidian-hidden-text](https://github.com/CorrectRoadH/obsidian-hidden-text/blob/main/.github/workflows/release.yml)（MVP 形态）+ [dynamic-views](https://github.com/churnish/dynamic-views/blob/main/.github/workflows/release.yml)（含 release-notes 自动生成）。
+
+- `US-601` **作为插件维护者，我打 semver tag 就自动出版本**。`git tag 1.5.0 && git push --tags` 触发 GitHub Action 跑构建 + 创建对应 GitHub Release，**不再手动 build / 手动上传 main.js**。tag 必须严格匹配 `[0-9]+\.[0-9]+\.[0-9]+`（不允许 `v` 前缀、不允许 pre-release 后缀进 stable channel——Obsidian community plugin store 只认严格 semver）。半自动而非全自动：版本号由我手动 `pnpm version patch/minor/major` 决定，**不接 release-please 之类靠 commit message 自动 bump 的工具**——每次发版的语义边界由 PM 判断，不交给工具。
+- `US-602` **作为维护者，发版前我希望工程纪律自动兜底**。tag 触发后必须先跑完 pre-flight gate：`pnpm typecheck && pnpm lint && pnpm test:unit && pnpm test:e2e` 全过才进入 build + release 步骤；任何一项失败 → fail fast，**不发**、tag 留着但 GitHub Release 不创建。"build 通过" 不等于 "可发版"——这是今晚（2026-04-25）刚立的工程纪律在发版环节的延伸（呼应 §AGENTS.md TDD / multi-angle review）。
+- `US-603` **作为 Obsidian 用户（P1），我升级插件时不希望踩兼容性炸弹**。每次发版必须同步更新 `versions.json`（key = 插件版本，value = 该版本所需的 Obsidian min version，例 `"1.5.0": "1.4.0"`）。Obsidian community plugin store 用这个文件决定要不要把新版本推给用户——如果用户的 Obsidian 比 min version 老，store 会留旧插件版本而不是强升后崩溃。**这不是可选项**，是 Obsidian plugin 标准（参 [Obsidian docs - Submit your plugin](https://docs.obsidian.md/Plugins/Releasing/Submit+your+plugin)）。
+- `US-604` **作为用户，我点开 Release 页能一眼看到这个版本变了什么**。Release body 自动从"上次 tag 到这次 tag" 之间的 PR 标题 + 已 closed issue 标题生成，按 conventional commit 前缀分组（feat / fix / chore / refactor）。不要求人工写 changelog——但维护者保留**手动覆写** Release body 的余地（GitHub Release UI 改即可，不影响下次发版）。手动覆写是例外不是常态。
+- `US-605` **作为用户，我装插件 / 自动更新拿到的 zip 必须是 Obsidian 标准三件套**。每个 GitHub Release 必须挂 `main.js` + `manifest.json` + `styles.css` 三个 asset（不是打包进 zip，是三个独立文件）——这是 Obsidian community plugin store 拉取约定。**禁止把 build 产物 commit 回 main**（dynamic-views 那条样板**反例**——main.js 进 main 会污染 PR diff、和工程纪律冲突，artifact 上 GitHub Release 一处即可，store 自己拉）。
 
 ## 故事变更怎么走
 
