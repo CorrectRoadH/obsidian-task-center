@@ -59,6 +59,31 @@ test("task #45 — OBSIDIAN_USE_BETA=1 but beta not cached → still no beta (av
   assert.equal(v, "latest/latest");
 });
 
+// Leo PM HOLD on first review (msg 28a18aa9): the original truthy check
+// `if (env.OBSIDIAN_USE_BETA && betaCached)` accidentally enabled beta
+// for `OBSIDIAN_USE_BETA="0"` (and "false", and any non-empty string)
+// because every non-empty JS string is truthy. The README and helper
+// comment promise opt-in only on `="1"`, so semantics must match the
+// docs: only the literal "1" enables beta.
+test("task #45 followup — OBSIDIAN_USE_BETA=0 keeps beta off even when cached", async () => {
+  const { pickWdioVersions } = await import(
+    `../test/.compiled/wdio-versions.js?cachebust=${Date.now()}_optout_zero`
+  );
+  const v = pickWdioVersions({ OBSIDIAN_USE_BETA: "0" }, /* betaCached */ true);
+  assert.equal(v, "latest/latest");
+});
+
+test("task #45 followup — OBSIDIAN_USE_BETA=false keeps beta off even when cached", async () => {
+  const { pickWdioVersions } = await import(
+    `../test/.compiled/wdio-versions.js?cachebust=${Date.now()}_optout_false`
+  );
+  const v = pickWdioVersions(
+    { OBSIDIAN_USE_BETA: "false" },
+    /* betaCached */ true,
+  );
+  assert.equal(v, "latest/latest");
+});
+
 // Manual `OBSIDIAN_VERSIONS=...` override always wins (CI uses this to
 // pin a specific Obsidian version).
 test("task #45 — explicit OBSIDIAN_VERSIONS env overrides everything", async () => {
