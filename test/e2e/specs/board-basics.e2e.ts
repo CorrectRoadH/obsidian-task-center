@@ -155,4 +155,37 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     await browser.executeObsidianCommand("obsidian-task-center:quick-add");
     await expect($(".task-center-quick-add")).toExist();
   });
+
+  // task #41 (US-106 + US-107): the persistent status bar's today/overdue
+  // counters must apply the same blank-title filter the board uses. A line
+  // like `- [ ] ⏳ today` is a blank-title task that the board silently
+  // drops (US-107); the status bar previously counted it anyway, so its
+  // number disagreed with the visible card count. Fixture has 1 blank
+  // and 1 real task ⏳ today: status bar must read `📋 1 today`, not 2.
+  it("task #41: status bar excludes blank-title tasks from today count", async function () {
+    const today = todayISO();
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      `- [ ] ⏳ ${today}\n- [ ] Real task ⏳ ${today}\n`,
+    );
+
+    // Open the board to prime the cache and ensure the status bar is mounted,
+    // then __forFlush() also flushes the status bar's debounce.
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    // The board confirms the cache saw both lines and applied US-107 to L1.
+    await $(`.task-center-view [data-task-id="Tasks/Inbox.md:L2"]`).waitForExist({
+      timeout: 5000,
+    });
+
+    // Status bar (the Obsidian status-bar item, not inside .task-center-view)
+    // must agree with what the board renders: 1 today, no overdue.
+    const text = await browser.execute(
+      () =>
+        document.querySelector<HTMLElement>(".task-center-status")?.textContent ??
+        "",
+    );
+    await expect(text).toMatch(/^📋 1 today$/);
+  });
 });
