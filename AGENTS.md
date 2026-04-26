@@ -86,6 +86,46 @@ SSOT 文档：`USER_STORIES.md`（产品需求） + `UX.md`（视觉规范） + 
 
 argv-style false-positive（如 task #25 release argv[1] case）不影响这条规则，撤回时同样在 thread 留"撤回原因 + 我误判了什么"的一行说明.
 
+## 团队工作纪律（跨项目流程，2026-04-26 起）
+
+@Jerry 拍措辞（task #7/#8 audit），@Tiger 落地，本仓库 mirror 适用部分。it-infra/CLAUDE.md 是主文档.
+
+### 1. 诊断顺序
+
+用户报"X 挂了"，第一步看 **X 自身日志 / 健康状态**（dev console / e2e log / 控制台输出 / network tab），再看上下游（Obsidian API / 插件版本 / vault 状态）.
+
+诊断 thread 必须分三栏：**事实证据** / **假说** / **已反驳**. 未验证假说不能写成根因；写"目前最强解释是 X，证据 Y/Z 支撑，待 W 验证"。
+
+出处：2026-04-26 task #25 e2e fail 我假设是 TZ-mismatch（之前 task #23 模板套用），Wood 复现真根因是 Sunday-week-boundary。
+
+### 2. memory / docs 状态标签
+
+`docs/audit/` / 复盘文档 / 决策记录顶部必须标状态：`已证实` / `未证实` / `已推翻，见 ...` / `已废弃，见 ...`. 结论改变时追加勘误段，不静默覆盖。
+
+### 3. 破坏性操作 last-call
+
+执行**改变现状不可立即回滚**的动作前，thread 发"最后取证窗口"五栏（范围 / 命令 / 影响 / 回滚点 / 等待对象）。
+
+涵盖：发版 tag push / `npm version major` / breaking change merge / settings schema 改 / data.json 结构改 / 发版 commit force push.
+
+### 4. 部署入口清单
+
+本仓库 deploy 入口：
+- `.github/workflows/release.yml` —— push semver tag (`v0.x.y` 或 `0.x.y`) 触发 pre-flight gate (typecheck + lint + unit + e2e + tag↔manifest 对齐) → 创建 GitHub Release → 上传 `main.js` / `manifest.json` / `styles.css`
+- `npm version patch/minor/major` —— 本地 bump 版本 + 自动 git tag，配合 `git push --follow-tags`
+- 手动 `gh release create` —— 紧急回退路径，需 `release.yml` 失败后才走
+
+改 release 流程前先在 thread 写"我准备改 X gate，旁路 Y/Z 是否仍 active？"，等确认。
+
+### 5. Reviewer PASS 检查点
+
+见上方 `### Rally PASS 检查点强制留痕（2026-04-26 起）`。本规则与跨项目流程同根。
+
+---
+
+**生效**：2026-04-26 13:00 起.
+**违反处理**：第一次 @Rally 或 @Jerry 标红打回；第二次 @Tiger / @Omar 在 #高管群 + retro 升级.
+
 ## CTO (@Tiger) 的把关清单
 
 - 接 task 时 review 是否分对类（bug / feature / refactor）。分错的 task thread 立刻纠正。
