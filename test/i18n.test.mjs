@@ -118,6 +118,11 @@ test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (tr
     { key: "sheet.openSource", vars: undefined, mustDifferFromEnInZh: true },
     { key: "sheet.drop", vars: undefined, mustDifferFromEnInZh: true },
     { key: "prompt.dateHint", vars: undefined, mustDifferFromEnInZh: true },
+    // Leo HOLD on first review (msg `cbf0489c`): Completed tab's
+    // 7-day stats header was the third Completed surface and was
+    // initially missed.
+    { key: "stats.sevenDayDone", vars: { n: 5 }, mustDifferFromEnInZh: true },
+    { key: "stats.ratio", vars: { ratio: "1.05", sign: "+", delta: 5 }, mustDifferFromEnInZh: true },
   ];
 
   mockStorage.clear();
