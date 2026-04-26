@@ -195,6 +195,38 @@ ln -s $(pwd) /path/to/vault/.obsidian/plugins/obsidian-task-center
 obsidian plugin:reload id=obsidian-task-center
 ```
 
+## Releasing
+
+Releases are fully automated via `.github/workflows/release.yml` (US-601~605):
+push a strict-semver tag → CI runs the pre-flight gate (typecheck / lint /
+unit / e2e) → if green, builds + uploads `main.js` / `manifest.json` /
+`styles.css` to a fresh GitHub Release with conventional-commit-grouped
+notes.
+
+Maintainer flow:
+
+```bash
+# 1. Bump the version. The npm `version` lifecycle script (`version-bump.mjs`)
+#    syncs manifest.json + versions.json and git-adds them, so the bump
+#    commit + tag both contain the full version triple in one shot.
+npm version patch    # 0.2.0 → 0.2.1 (bug fixes only)
+npm version minor    # 0.2.0 → 0.3.0 (new features, back-compat)
+npm version major    # 0.2.0 → 1.0.0 (breaking)
+
+# 2. Push main + the new tag together.
+git push origin main --follow-tags
+```
+
+Notes:
+- Tags must match `[0-9]+.[0-9]+.[0-9]+` exactly — no `v` prefix, no
+  pre-release suffix. The repo `.npmrc` sets `tag-version-prefix=` so
+  `npm version` produces tags in the correct shape automatically.
+- Build artifacts (`main.js`) are NEVER committed back to `main`. They
+  live only on the GitHub Release.
+- The workflow refuses to release if the tag does not match `manifest.json`
+  or if `versions.json` is missing the entry — both safety guards exist
+  to catch a maintainer who tagged manually instead of using `npm version`.
+
 ## Settings
 
 | Setting | Default | Description |
