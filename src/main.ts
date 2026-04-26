@@ -8,6 +8,7 @@ import {
   formatShow,
   formatStats,
   formatAgentBrief,
+  formatReviewSummary,
   formatOkWrite,
   formatAdd,
 } from "./cli";
@@ -271,6 +272,18 @@ export default class TaskCenterPlugin extends Plugin {
     );
 
     this.registerCliHandler(
+      "task-center:review",
+      "Review mode: today/week completion, abandonment, delay, estimate accuracy, grouping",
+      {
+        today: { value: "<YYYY-MM-DD>", description: "Override today's date" },
+        days: { value: "<n>", description: "Rolling week window in days (default 7)" },
+        limit: { value: "<n>", description: "Sample tasks per bucket (default 5)" },
+        format: { value: "text|json", description: "Output format (default: text)" },
+      },
+      (args) => this.cliReview(args),
+    );
+
+    this.registerCliHandler(
       "task-center:schedule",
       "Set or clear ⏳ scheduled date on a task",
       {
@@ -475,6 +488,17 @@ export default class TaskCenterPlugin extends Plugin {
     });
     if (args.format === "json") return JSON.stringify(brief, null, 2);
     return formatAgentBrief(brief);
+  }
+
+  private async cliReview(args: CliArgs): Promise<string> {
+    const review = await this.api.review({
+      today: args.today,
+      days: args.days ? parseInt(args.days, 10) : undefined,
+      limit: args.limit ? parseInt(args.limit, 10) : undefined,
+      groupingTags: this.settings.groupingTags,
+    });
+    if (args.format === "json") return JSON.stringify(review, null, 2);
+    return formatReviewSummary(review);
   }
 
   private async cliSchedule(args: CliArgs): Promise<string> {

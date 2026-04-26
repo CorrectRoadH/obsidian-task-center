@@ -140,6 +140,8 @@ obsidian task-center:list scheduled=today
 obsidian task-center:list scheduled=unscheduled tag='#2象限'
 obsidian task-center:show ref=Tasks/Inbox.md:L42
 obsidian task-center:stats days=7 group=象限
+obsidian task-center:review days=7
+obsidian task-center:review days=7 format=json
 
 obsidian task-center:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26
 obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
@@ -151,6 +153,36 @@ obsidian task-center:estimate ref=Tasks/Inbox.md:L42 minutes=90m
 obsidian task-center:tag ref=Tasks/Inbox.md:L42 tag='#基建'
 obsidian task-center:deadline ref=Tasks/Inbox.md:L42 date=2026-05-15
 obsidian task-center:undone ref=Tasks/Inbox.md:L42
+```
+
+`task-center:review` is the retrospective view for the CLI: it reports **today**
+and the rolling **week** in one call, including completed tasks, abandoned tasks,
+open delayed tasks, estimate-vs-actual drift, and grouping-tag rollups.
+
+Example text output:
+
+```
+$ obsidian task-center:review days=7
+Review · 2026-04-26
+periods today=2026-04-26 week=2026-04-20..2026-04-26 (7 days)
+
+Today · 2026-04-26
+    done=3 dropped=1 delayed_open=2
+    estimate actual=150m estimate=120m delta=+30m ratio=1.25 within_band=2/3
+    by_group
+        #1象限  done=2 dropped=0 delayed_open=1 actual=90m estimate=60m delta=+30m
+        #3象限  done=1 dropped=1 delayed_open=1 actual=60m estimate=60m delta=0m
+    samples
+        done: Daily/2026-04-26.md:L5 发版 #1象限 done=2026-04-26 est=1h actual=1h 30m
+        dropped: Tasks/Inbox.md:L12 不做低价值任务 #3象限
+        delayed_open: Tasks/Inbox.md:L18 逾期电话 #1象限 deadline=2026-04-25
+```
+
+Use `format=json` for agents or scripts that need the same review as structured
+data:
+
+```bash
+obsidian task-center:review today=2026-04-26 days=7 format=json
 ```
 
 Full list with `obsidian help task-center`.
@@ -206,6 +238,7 @@ The CLI output is designed for Claude Code / other agents:
 1. First column of every list row is a pipe-friendly id — `grep`, `awk`, `cut` work.
 2. Write verbs are idempotent, so the AI can re-run without side-effect explosion.
 3. `stats days=N` gives the estimate-accuracy ratio + per-tag minutes so the AI can calibrate its future estimates (planning fallacy correction).
+4. `review days=N format=json` gives a retrospective snapshot (done / abandoned / delayed / estimate drift / grouping) for end-of-day or weekly summaries.
 
 Recommended AI workflow:
 
@@ -216,6 +249,10 @@ obsidian task-center:list scheduled=tomorrow
 
 # Estimate calibration
 obsidian task-center:stats days=7
+
+# End-of-day / weekly retrospective
+obsidian task-center:review days=7
+obsidian task-center:review days=7 format=json
 
 # Schedule picks
 obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-24

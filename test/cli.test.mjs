@@ -29,9 +29,11 @@ const {
   filterTasks,
   computeStats,
   buildAgentBrief,
+  buildReviewSummary,
   formatList,
   formatStats,
   formatAgentBrief,
+  formatReviewSummary,
   formatError,
 } =
   await import("../test/.compiled/cli.bundle.js");
@@ -292,6 +294,129 @@ test("US-723: formatAgentBrief is grep-friendly and starts from stable task ids"
   assert.match(out, /1\. Tasks\/Inbox\.md:L42  pick next task/);
   assert.match(out, /done: obsidian task-center:done ref='Tasks\/Inbox\.md:L42'/);
   assert.match(out, /Sections\n    overdue: —\n    today: Tasks\/Inbox\.md:L42/);
+});
+
+test("US-722: buildReviewSummary covers today/week done, dropped, delayed, estimate, and grouping", () => {
+  const all = [
+    mkTask({
+      id: "Daily/2026-04-26.md:L1",
+      path: "Daily/2026-04-26.md",
+      status: "done",
+      checkbox: "x",
+      title: "ship feature",
+      completed: "2026-04-26",
+      estimate: 60,
+      actual: 90,
+      tags: ["#1象限"],
+    }),
+    mkTask({
+      id: "Daily/2026-04-26.md:L2",
+      path: "Daily/2026-04-26.md",
+      status: "dropped",
+      checkbox: "-",
+      title: "abandon low value",
+      rawLine: "- [-] abandon low value #2象限 ❌ 2026-04-26 [estimate:: 30m]",
+      estimate: 30,
+      tags: ["#2象限"],
+    }),
+    mkTask({
+      id: "Daily/2026-04-20.md:L3",
+      path: "Daily/2026-04-20.md",
+      status: "done",
+      checkbox: "x",
+      title: "earlier win",
+      completed: "2026-04-20",
+      estimate: 30,
+      actual: 20,
+      tags: ["#1象限"],
+    }),
+    mkTask({
+      id: "Tasks/Inbox.md:L4",
+      path: "Tasks/Inbox.md",
+      title: "late blocker",
+      deadline: "2026-04-25",
+      tags: ["#1象限"],
+    }),
+    mkTask({
+      id: "Tasks/Inbox.md:L5",
+      path: "Tasks/Inbox.md",
+      title: "old scheduled",
+      scheduled: "2026-04-19",
+      tags: ["#2象限"],
+    }),
+    mkTask({
+      id: "Tasks/Hidden.md:L6",
+      path: "Tasks/Hidden.md",
+      title: "terminal child",
+      deadline: "2026-04-25",
+      inheritsTerminal: true,
+      tags: ["#1象限"],
+    }),
+  ];
+  const review = buildReviewSummary(all, {
+    today: "2026-04-26",
+    days: 7,
+    groupingTags: ["#1象限", "#2象限"],
+  });
+
+  assert.equal(review.today.done, 1);
+  assert.equal(review.today.dropped, 1);
+  assert.equal(review.today.delayedOpen, 2);
+  assert.equal(review.today.estimate.actual, 90);
+  assert.equal(review.today.estimate.estimate, 60);
+  assert.equal(review.today.estimate.delta, 30);
+  assert.equal(review.week.done, 2);
+  assert.equal(review.week.estimate.actual, 110);
+  assert.equal(review.week.estimate.estimate, 90);
+  const q1 = review.week.byGroup.find((row) => row.group === "#1象限");
+  assert.equal(q1.done, 2);
+  assert.equal(q1.delayedOpen, 1);
+  const q2 = review.today.byGroup.find((row) => row.group === "#2象限");
+  assert.equal(q2.dropped, 1);
+  assert.equal(q2.delayedOpen, 1);
+});
+
+test("US-722: formatReviewSummary is readable and grep-friendly", () => {
+  const review = buildReviewSummary(
+    [
+      mkTask({
+        id: "Tasks/Done.md:L9",
+        path: "Tasks/Done.md",
+        status: "done",
+        checkbox: "x",
+        title: "finish report",
+        completed: "2026-04-26",
+        estimate: 45,
+        actual: 30,
+        tags: ["#work"],
+      }),
+      mkTask({
+        id: "Tasks/Drop.md:L10",
+        path: "Tasks/Drop.md",
+        status: "dropped",
+        checkbox: "-",
+        title: "skip optional",
+        rawLine: "- [-] skip optional #life ❌ 2026-04-26",
+        tags: ["#life"],
+      }),
+      mkTask({
+        id: "Tasks/Late.md:L11",
+        path: "Tasks/Late.md",
+        title: "overdue call",
+        deadline: "2026-04-25",
+        tags: ["#work"],
+      }),
+    ],
+    { today: "2026-04-26", groupingTags: ["#work", "#life"] },
+  );
+  const out = formatReviewSummary(review);
+  assert.match(out, /^Review · 2026-04-26/);
+  assert.match(out, /Today · 2026-04-26/);
+  assert.match(out, /Week · 2026-04-20 → 2026-04-26/);
+  assert.match(out, /done=1 dropped=1 delayed_open=1/);
+  assert.match(out, /estimate actual=30m estimate=45m delta=-15m/);
+  assert.match(out, /#work\s+done=1 dropped=0 delayed_open=1/);
+  assert.match(out, /dropped: Tasks\/Drop\.md:L10 skip optional #life/);
 });
 
 test("formatError — greppable code + message shape", () => {

@@ -51,6 +51,13 @@ export interface AgentBriefOpts {
   limit?: number;
 }
 
+export interface ReviewOpts {
+  today?: string;
+  days?: number;
+  limit?: number;
+  groupingTags?: string[];
+}
+
 export interface AgentBriefAction {
   label: string;
   command: string;
@@ -80,6 +87,58 @@ export interface AgentBriefResult {
     unscheduled: AgentBriefTask[];
   };
   nextActions: AgentBriefTask[];
+}
+
+export interface ReviewTask {
+  id: string;
+  title: string;
+  group: string;
+  status: TaskStatus;
+  completed: string | null;
+  cancelled: string | null;
+  scheduled: string | null;
+  deadline: string | null;
+  estimate: number | null;
+  actual: number | null;
+}
+
+export interface ReviewGroupSummary {
+  group: string;
+  done: number;
+  dropped: number;
+  delayedOpen: number;
+  estimate: number;
+  actual: number;
+  delta: number;
+}
+
+export interface ReviewRangeSummary {
+  from: string;
+  to: string;
+  done: number;
+  dropped: number;
+  delayedOpen: number;
+  estimate: {
+    actual: number;
+    estimate: number;
+    delta: number;
+    ratio: number | null;
+    withBoth: number;
+    withinBand: { count: number; total: number; pct: number };
+  };
+  byGroup: ReviewGroupSummary[];
+  samples: {
+    done: ReviewTask[];
+    dropped: ReviewTask[];
+    delayedOpen: ReviewTask[];
+  };
+}
+
+export interface ReviewResult {
+  asOf: string;
+  days: number;
+  today: ReviewRangeSummary;
+  week: ReviewRangeSummary;
 }
 
 export class TaskCenterApi {
@@ -113,6 +172,11 @@ export class TaskCenterApi {
   async agentBrief(opts: AgentBriefOpts = {}): Promise<AgentBriefResult> {
     const all = await this.cache.ensureAll();
     return buildAgentBrief(all, opts);
+  }
+
+  async review(opts: ReviewOpts = {}): Promise<ReviewResult> {
+    const all = await this.cache.ensureAll();
+    return buildReviewSummary(all, opts);
   }
 
   async schedule(id: string, date: string | null) {
@@ -483,6 +547,145 @@ export function buildAgentBrief(all: ParsedTask[], opts: AgentBriefOpts = {}): A
   };
 }
 
+// US-722: review mode. This is the evening / weekly retrospective slice:
+// users and agents can ask "what actually happened?" without scraping the
+// visual board. It deliberately reports both a same-day view and a rolling
+// week window so the output is useful at shutdown and during weekly retro.
+// see USER_STORIES.md
+export function buildReviewSummary(all: ParsedTask[], opts: ReviewOpts = {}): ReviewResult {
+  const today = opts.today ?? todayISO();
+  const days = opts.days && opts.days > 0 ? opts.days : 7;
+  const limit = opts.limit && opts.limit > 0 ? opts.limit : 5;
+  const groupingTags = normalizeGroupingTags(opts.groupingTags);
+  return {
+    asOf: today,
+    days,
+    today: summarizeReviewRange(all, today, today, groupingTags, limit),
+    week: summarizeReviewRange(all, addDaysISO(today, -(days - 1)), today, groupingTags, limit),
+  };
+}
+
+function summarizeReviewRange(
+  all: ParsedTask[],
+  from: string,
+  to: string,
+  groupingTags: string[],
+  limit: number,
+): ReviewRangeSummary {
+  const visible = all.filter((t) => !t.inheritsTerminal);
+  const done = visible.filter(
+    (t) => t.status === "done" && !!t.completed && t.completed >= from && t.completed <= to,
+  );
+  const dropped = visible.filter(
+    (t) =>
+      t.status === "dropped" &&
+      !!terminalDate(t) &&
+      terminalDate(t)! >= from &&
+      terminalDate(t)! <= to,
+  );
+  const delayedOpen = visible.filter(
+    (t) => t.status === "todo" && ((!!t.deadline && t.deadline < to) || (!!t.scheduled && t.scheduled < to)),
+  );
+
+  const estimate = estimateReview(done);
+  const groupMap = new Map<string, ReviewGroupSummary>();
+  const ensureGroup = (group: string): ReviewGroupSummary => {
+    let row = groupMap.get(group);
+    if (!row) {
+      row = { group, done: 0, dropped: 0, delayedOpen: 0, estimate: 0, actual: 0, delta: 0 };
+      groupMap.set(group, row);
+    }
+    return row;
+  };
+
+  for (const task of done) {
+    const row = ensureGroup(reviewGroup(task, groupingTags));
+    row.done += 1;
+    row.estimate += task.estimate ?? 0;
+    row.actual += task.actual ?? 0;
+    row.delta = row.actual - row.estimate;
+  }
+  for (const task of dropped) {
+    ensureGroup(reviewGroup(task, groupingTags)).dropped += 1;
+  }
+  for (const task of delayedOpen) {
+    ensureGroup(reviewGroup(task, groupingTags)).delayedOpen += 1;
+  }
+
+  return {
+    from,
+    to,
+    done: done.length,
+    dropped: dropped.length,
+    delayedOpen: delayedOpen.length,
+    estimate,
+    byGroup: Array.from(groupMap.values()).sort(reviewGroupSort),
+    samples: {
+      done: done.slice(0, limit).map((t) => reviewTask(t, groupingTags)),
+      dropped: dropped.slice(0, limit).map((t) => reviewTask(t, groupingTags)),
+      delayedOpen: delayedOpen.slice(0, limit).map((t) => reviewTask(t, groupingTags)),
+    },
+  };
+}
+
+function terminalDate(t: ParsedTask): string | null {
+  return t.completed ?? t.cancelled ?? extractEmojiDate(t.rawLine, "❌");
+}
+
+function extractEmojiDate(raw: string, emoji: string): string | null {
+  const escaped = emoji.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return raw.match(new RegExp(`${escaped}\\s*(\\d{4}-\\d{2}-\\d{2})`))?.[1] ?? null;
+}
+
+function estimateReview(done: ParsedTask[]): ReviewRangeSummary["estimate"] {
+  const actual = done.reduce((sum, task) => sum + (task.actual ?? 0), 0);
+  const estimate = done.reduce((sum, task) => sum + (task.estimate ?? 0), 0);
+  const withBoth = done.filter((task) => (task.estimate ?? 0) > 0 && (task.actual ?? 0) > 0);
+  const ratios = withBoth.map((task) => (task.actual ?? 0) / (task.estimate ?? 1));
+  const within = ratios.filter((ratio) => ratio >= 0.8 && ratio <= 1.25);
+  return {
+    actual,
+    estimate,
+    delta: actual - estimate,
+    ratio: estimate > 0 ? actual / estimate : null,
+    withBoth: withBoth.length,
+    withinBand: {
+      count: within.length,
+      total: ratios.length,
+      pct: ratios.length > 0 ? Math.round((within.length / ratios.length) * 100) : 0,
+    },
+  };
+}
+
+function reviewGroup(task: ParsedTask, groupingTags: string[]): string {
+  for (const tag of groupingTags) {
+    if (task.tags.includes(tag)) return tag;
+  }
+  return "unclassified";
+}
+
+function reviewGroupSort(a: ReviewGroupSummary, b: ReviewGroupSummary): number {
+  const scoreA = a.done + a.dropped + a.delayedOpen;
+  const scoreB = b.done + b.dropped + b.delayedOpen;
+  if (scoreA !== scoreB) return scoreB - scoreA;
+  return a.group.localeCompare(b.group);
+}
+
+function reviewTask(t: ParsedTask, groupingTags: string[]): ReviewTask {
+  return {
+    id: t.id,
+    title: t.title,
+    group: reviewGroup(t, groupingTags),
+    status: t.status,
+    completed: t.completed,
+    cancelled: t.cancelled,
+    scheduled: t.scheduled,
+    deadline: t.deadline,
+    estimate: t.estimate,
+    actual: t.actual,
+  };
+}
+
 function briefTask(t: ParsedTask, reason: string, today: string, tomorrow: string): AgentBriefTask {
   return {
     id: t.id,
@@ -711,6 +914,55 @@ export function formatAgentBrief(b: AgentBriefResult): string {
   lines.push(`    today: ${b.sections.today.map((t) => t.id).join(", ") || "—"}`);
   lines.push(`    unscheduled: ${b.sections.unscheduled.map((t) => t.id).join(", ") || "—"}`);
   return lines.join("\n");
+}
+
+export function formatReviewSummary(r: ReviewResult): string {
+  const lines: string[] = [];
+  lines.push(`Review · ${r.asOf}`);
+  lines.push(`periods today=${r.today.from} week=${r.week.from}..${r.week.to} (${r.days} days)`);
+  lines.push("");
+  renderReviewRange(lines, "Today", r.today);
+  lines.push("");
+  renderReviewRange(lines, "Week", r.week);
+  return lines.join("\n");
+}
+
+function renderReviewRange(lines: string[], label: string, range: ReviewRangeSummary): void {
+  lines.push(`${label} · ${range.from}${range.from === range.to ? "" : ` → ${range.to}`}`);
+  lines.push(`    done=${range.done} dropped=${range.dropped} delayed_open=${range.delayedOpen}`);
+  lines.push(
+    `    estimate actual=${range.estimate.actual}m estimate=${range.estimate.estimate}m delta=${signedMinutes(range.estimate.delta)} ratio=${range.estimate.ratio === null ? "—" : range.estimate.ratio.toFixed(2)} within_band=${range.estimate.withinBand.count}/${range.estimate.withinBand.total}`,
+  );
+  lines.push("    by_group");
+  if (range.byGroup.length === 0) {
+    lines.push("        —");
+  } else {
+    for (const group of range.byGroup.slice(0, 8)) {
+      lines.push(
+        `        ${group.group}  done=${group.done} dropped=${group.dropped} delayed_open=${group.delayedOpen} actual=${group.actual}m estimate=${group.estimate}m delta=${signedMinutes(group.delta)}`,
+      );
+    }
+  }
+  lines.push("    samples");
+  lines.push(`        done: ${range.samples.done.map(sampleReviewTask).join(" | ") || "—"}`);
+  lines.push(`        dropped: ${range.samples.dropped.map(sampleReviewTask).join(" | ") || "—"}`);
+  lines.push(`        delayed_open: ${range.samples.delayedOpen.map(sampleReviewTask).join(" | ") || "—"}`);
+}
+
+function sampleReviewTask(task: ReviewTask): string {
+  const parts = [task.id, task.title, task.group];
+  if (task.completed) parts.push(`done=${task.completed}`);
+  if (task.cancelled) parts.push(`cancelled=${task.cancelled}`);
+  if (task.scheduled) parts.push(`scheduled=${task.scheduled}`);
+  if (task.deadline) parts.push(`deadline=${task.deadline}`);
+  if (task.estimate) parts.push(`est=${shortEst(task.estimate)}`);
+  if (task.actual) parts.push(`actual=${shortEst(task.actual)}`);
+  return parts.join(" ");
+}
+
+function signedMinutes(minutes: number): string {
+  if (minutes === 0) return "0m";
+  return `${minutes > 0 ? "+" : ""}${minutes}m`;
 }
 
 // US-204: every CLI write verb returns `before / after` two-line diff so
