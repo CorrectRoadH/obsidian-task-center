@@ -1,4 +1,5 @@
 // Mobile pointer-based drag controller (US-507 / UX-mobile §5.2 / §13 #2 #4 #6).
+// see USER_STORIES.md
 //
 // Why a separate controller from desktop's HTML5 DnD: mobile browsers don't
 // reliably synthesize the dragstart/dragover/drop event chain from touch

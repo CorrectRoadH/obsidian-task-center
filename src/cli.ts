@@ -135,6 +135,9 @@ export class TaskCenterApi {
     return await markUndone(this.app, task);
   }
 
+  // US-124: dropping a parent cascades to its `todo` descendants — already
+  // completed children are preserved so history isn't overwritten with `[-]`.
+  // see USER_STORIES.md
   async drop(id: string, cascade = true) {
     const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("task_not_found", id);
@@ -539,6 +542,10 @@ export function formatStats(s: StatsResult): string {
   return lines.join("\n");
 }
 
+// US-204: every CLI write verb returns `before / after` two-line diff so
+// the caller can verify exactly what byte-level edit happened. Unchanged
+// writes collapse the diff to a single `unchanged` note (US-203).
+// see USER_STORIES.md
 export function formatOkWrite(
   task: ParsedTask | null,
   path: string | null,

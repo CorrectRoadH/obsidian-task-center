@@ -83,9 +83,12 @@ export class TaskCenterSettingTab extends PluginSettingTab {
         }),
       );
 
-    // Mobile-specific settings (US-510). Always rendered so cross-device
+    // US-510: mobile-specific settings. Always rendered so cross-device
     // syncs (desktop user configuring their phone behaviour) work; the
     // values are no-ops on desktop. Heading is shown unconditionally.
+    // The mobileForceLayout toggle below also implements US-502 (force
+    // narrow layout regardless of viewport width).
+    // see USER_STORIES.md
     {
       containerEl.createEl("h3", { text: tr("settings.mobileHeader") });
 

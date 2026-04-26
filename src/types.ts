@@ -41,12 +41,17 @@ export interface TaskCenterSettings {
   // Last tab the user was on when they closed the board. Persists across
   // Obsidian restarts so morning-open lands where evening-close left off.
   lastTab: "week" | "month" | "completed" | "unscheduled" | null;
-  // Mobile-specific (US-510). Safe defaults so desktop users see no change.
+  // US-510: platform-conditional UI strings — shortcut hints / mouse
+  // descriptions are branched per platform (desktop hint vs mobile hint),
+  // not localized; these tunables also live mobile-only. Safe defaults so
+  // desktop users see no change.
+  // see USER_STORIES.md
   mobileLongPressMs: number; // 200..1000, default 500
   mobileSwipeEnabled: boolean; // default true (left=done, right=drop)
-  // UX-mobile §7 / US-502 layout escape hatch: when true, the board uses
-  // the mobile (narrow) layout regardless of viewport width — for users
-  // on iPad / split-screen / large foldables who prefer the column layout.
+  // US-502: viewport-based mobile layout switch + force-mobile escape
+  // hatch for iPad / split-screen / large foldables that want column
+  // layout regardless of width. UX-mobile §7.
+  // see USER_STORIES.md
   mobileForceLayout: boolean; // default false (auto = follow viewport width)
 }
 

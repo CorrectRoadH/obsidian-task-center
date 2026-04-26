@@ -4,6 +4,12 @@
 // based "hover a card over a tab for 600ms to switch to it" behaviour required
 // by UX.md §6.1 and ARCHITECTURE.md §11 (hard constraint #8).
 //
+// US-114: cross-tab dwell-to-switch is the desktop variant; US-507 mobile uses
+// the same tracker with an 800ms threshold. US-121 (drag-to-reschedule)
+// itself lives at `makeDropZone` callsites in src/view.ts; this dwell logic
+// is the shared piece that lets the gesture cross tab boundaries.
+// see USER_STORIES.md
+//
 // `setTimeout(fn, 600)` was the previous implementation. It drifts when the
 // main thread stalls (e.g. while the cache reparses a freshly-modified file
 // during a drag), which is exactly when the dwell needs to be precise. rAF

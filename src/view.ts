@@ -147,13 +147,13 @@ export class TaskCenterView extends ItemView {
     this.contentEl.tabIndex = 0;
     this.registerDomEvent(this.contentEl, "keydown", (e) => this.handleKey(e));
 
-    // UX-mobile §7 / US-502 mobile layout gating. The board reads viewport
-    // width (< 600px) OR the user setting `mobileForceLayout`, and writes
-    // `data-mobile-layout="true|false"` on contentEl. styles.css attaches
-    // every mobile-only rule under `[data-mobile-layout="true"]`, so the
-    // attribute is the single source of truth for "should I render the
-    // narrow / mobile layout?". Driven by JS rather than @media so the
-    // setting can override the viewport.
+    // US-502: mobile layout gating. Reads viewport width (< 600px) OR
+    // user setting `mobileForceLayout` (escape hatch for iPad / split-
+    // screen) and writes `data-mobile-layout="true|false"` on contentEl;
+    // styles.css attaches every mobile-only rule under
+    // `[data-mobile-layout="true"]`. Driven by JS rather than @media so
+    // the setting can override the viewport. UX-mobile §7.
+    // see USER_STORIES.md
     this.applyMobileLayoutAttr();
     this.registerDomEvent(window, "resize", () => this.applyMobileLayoutAttr());
   }
@@ -563,6 +563,12 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Week ----------
 
+  // US-101: 7-day Mon–Sun (or Sun–Sat per settings) week view, today
+  // highlighted, prev/next-week navigation. Each day column is a
+  // makeDropZone target so cards dragged across columns rewrite ⏳
+  // (US-121). On mobile this delegates to a vertical collapsible list
+  // (US-503), see expandedDays state above.
+  // see USER_STORIES.md
   private renderWeek(parent: HTMLElement) {
     const today = todayISO();
     const weekStart = startOfWeek(this.state.anchorISO, this.plugin.settings.weekStartsOn);
@@ -747,10 +753,12 @@ export class TaskCenterView extends ItemView {
       if (dayTasks.length > 6) {
         list.createDiv({ text: `+${dayTasks.length - 6} more`, cls: "bt-mini-more" });
       }
-      // Mobile (US-504): tap a cell opens that day's task list as a
-      // bottom sheet. The desktop path leaves the click as a no-op (chips
-      // inside handle their own drag / select). Detection is by viewport
-      // width, not Platform — a narrow desktop pane still gets the sheet.
+      // US-504: mobile month tab is calendar-grid + per-day dot density;
+      // tapping a day opens that day's task list as a bottom sheet (the
+      // desktop path leaves the click as a no-op — chips inside handle
+      // their own drag / select). Detection is by viewport width, not
+      // Platform — a narrow desktop pane still gets the sheet.
+      // see USER_STORIES.md
       cell.addEventListener("click", (e) => {
         if (window.innerWidth >= 600) return;
         // Don't fire when the click bubbled from a chip — that's a select
@@ -1020,6 +1028,10 @@ export class TaskCenterView extends ItemView {
     this.renderTrashZone(wrap);
   }
 
+  // US-123: bottom trash drop zone — dragging a card here marks it
+  // `[-] ❌ today` (abandoned), and by US-124 cascades to its `todo`
+  // descendants while preserving already-done children as history.
+  // see USER_STORIES.md
   private renderTrashZone(parent: HTMLElement) {
     const trash = parent.createDiv({ cls: "bt-trash" });
     // e2e drop-zone selector: `[data-drop-zone="trash"]`. Stable across the
@@ -1150,9 +1162,11 @@ export class TaskCenterView extends ItemView {
     const quad = this.quadrantClass(t.tags);
     if (quad) card.addClass(quad);
 
-    // Deadline signals — both a CSS hook (`bt-overdue` / `bt-near-deadline`)
-    // and a data attribute. e2e selectors live on the data attrs per
+    // US-115: deadline 已过 → red (`bt-overdue`); 3 days or fewer → yellow
+    // (`bt-near-deadline`). Both a CSS hook AND a data attribute so e2e
+    // selectors can read `[data-overdue]` / `[data-near-deadline]` per
     // ARCHITECTURE.md §8.6 (CSS class names are not part of the contract).
+    // see USER_STORIES.md
     //
     // Only annotate active (todo) tasks. A done / dropped task that happens
     // to have a past deadline shouldn't render with the urgency styling — its
@@ -1236,12 +1250,14 @@ export class TaskCenterView extends ItemView {
       this.contextPopover.attach(card, t);
     } else {
       // Unified mobile gesture controller (UX-mobile §13 #6: long-press +
-      // drag + swipe must share one state machine). attachCardGestures
-      // routes:
-      //   - hold N ms still      → openCardActionSheet (US-506)
-      //   - swipe ≥ 30% left     → done (US-508; settings can disable)
-      //   - swipe ≥ 30% right    → drop (US-508; settings can disable)
-      //   - hold 250ms then move → enter pointer-drag (US-507)
+      // drag + swipe must share one state machine).
+      //   US-506: hold N ms still → openCardActionSheet (action menu)
+      //   US-507: hold 250ms then move → pointer-drag (with 800ms cross-
+      //           tab dwell + 60px auto-scroll, see view/drag-mobile.ts)
+      //   US-508: swipe ≥ 30% left → done; ≥ 30% right → drop; both with
+      //           1s undo toast (settings.mobileSwipeEnabled gates).
+      //   US-510: swipe is opt-out via settings (platform-conditional UI).
+      // see USER_STORIES.md
       const settings = this.plugin.settings;
       attachCardGestures(card, {
         longPressMs: settings.mobileLongPressMs,
@@ -1400,6 +1416,17 @@ export class TaskCenterView extends ItemView {
   // cards on their own day (US-148), so by the time we reach this
   // function the subtask either rides with its parent's `⏳` or has none
   // — no `parent` comparison needed.
+  //
+  // US-142: subcards render recursively (this fn calls itself for each
+  // grandchild that's still in scope), so nested subtasks display all
+  // levels under their visible parent on desktop.
+  // US-149: subtask `⏳` badge rules — child sharing parent's date never
+  // shows a badge here (parent's column already implies it); cross-day
+  // children are filtered out before reaching this function (US-148).
+  // US-505: on mobile, deeper-than-1-level subtrees collapse to a `+N`
+  // chip that opens a bottom sheet (see Platform.isMobile branch below)
+  // rather than rendering inline — keeps card height bounded on phones.
+  // see USER_STORIES.md
   private renderSubcard(container: HTMLElement, c: ParsedTask) {
     const subCard = container.createDiv({ cls: "bt-subcard" });
     subCard.dataset.taskId = c.id;
@@ -1604,8 +1631,11 @@ export class TaskCenterView extends ItemView {
     input.addEventListener("keydown", (e) => {
       // Stop view-wide hotkeys (1-4, Space, D, E, Delete, arrows) firing while typing
       e.stopPropagation();
+      // US-162: Enter commits the new subtask line (US-141 then auto-
+      //         inherits ⏳ from the parent in writer.addTask).
       // US-413: skip the Enter commit while IME composition is active —
-      // see src/quickadd.ts for the same pattern.
+      //         see src/quickadd.ts for the same pattern.
+      // see USER_STORIES.md
       if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
         e.preventDefault();
         finish(true);
@@ -1832,12 +1862,13 @@ export class TaskCenterView extends ItemView {
   // ---------- Keyboard ----------
 
   async handleKey(e: KeyboardEvent) {
-    // US-501: keyboard shortcuts silent no-op on Obsidian Mobile (no
-    // physical keyboard expected; virtual-keyboard `keydown` we drop on
-    // purpose so the board never claims to handle a key the user can't
-    // produce). Layout switching is screen-width based (CSS @media), but
-    // *capability* gating like this is a Platform check — allowed at the
-    // UI layer per UX-mobile §13 #7.
+    // US-501: desktop-only features silently no-op on Obsidian Mobile —
+    // here the keyboard shortcut handler returns early so the board never
+    // claims to handle a key the user can't produce. CLI / hover popovers
+    // do the same in their respective sites. Layout switching is
+    // screen-width based (CSS @media); *capability* gating like this is
+    // a Platform check, allowed at the UI layer per UX-mobile §13 #7.
+    // see USER_STORIES.md
     if (Platform.isMobile) return;
 
     // Global tab switching

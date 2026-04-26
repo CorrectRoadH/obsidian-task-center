@@ -306,6 +306,11 @@ export class TaskCache {
    *
    * Throws `TaskWriterError("ambiguous_slug")` for hash collisions and
    * `TaskWriterError("task_not_found")` when the path:line target is gone.
+   *
+   * US-208: when `path:Lnnn` no longer points at the original task (file
+   * shifted), the title-hash fallback in `parseTaskId` keeps the ref
+   * resolvable so callers don't need to chase line drift themselves.
+   * see USER_STORIES.md
    */
   async resolveRef(id: string): Promise<ParsedTask | null> {
     const parsed = parseTaskId(id);

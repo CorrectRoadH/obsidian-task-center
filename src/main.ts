@@ -161,6 +161,10 @@ export default class TaskCenterPlugin extends Plugin {
 
   // ---------- CLI registration ----------
 
+  // US-201: register every Task Center verb to Obsidian's native CLI
+  // (`registerCliHandler`, requires Obsidian 1.12.2+) — no shell wrapper,
+  // no `eval` hacks, the CLI is the same surface Obsidian itself ships.
+  // see USER_STORIES.md
   private registerAllCliHandlers() {
     this.registerCliHandler(
       "task-center:list",
@@ -437,6 +441,11 @@ export default class TaskCenterPlugin extends Plugin {
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "estimate cleared" : `estimate ${minutes}m`);
   }
 
+  // US-203: write idempotency — running `done` on an already-done task
+  // returns `ok ... unchanged (already done ✅ <date>)` instead of erroring.
+  // The unchanged signal is computed in the writer and surfaced by
+  // formatOkWrite below.
+  // see USER_STORIES.md
   private async cliDone(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const at = args.at ?? null;

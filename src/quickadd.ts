@@ -43,7 +43,10 @@ export class QuickAddModal extends Modal {
     contentEl.empty();
     contentEl.addClass("task-center-quick-add");
     if (Platform.isMobile) {
-      // US-509: mobile Quick Add is a bottom sheet, not a centered modal.
+      // US-509: mobile Quick Add is a bottom sheet (not centered modal),
+      // and the visualViewport-based keyboard avoidance below shifts the
+      // sheet above the soft keyboard when it pops up.
+      // see USER_STORIES.md
       // Reuse the BottomSheet visual class so styling stays in one place
       // (styles.css `.task-center-bottom-sheet`).
       modalEl.addClass("task-center-bottom-sheet");

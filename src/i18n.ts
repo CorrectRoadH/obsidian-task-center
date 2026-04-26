@@ -60,7 +60,10 @@ const EN = {
   "trash.hint": "Drop here → [-] ❌",
   "trash.dropped": "🗑 dropped",
 
-  // Mobile bottom sheet (US-504)
+  // US-504: mobile month tab uses calendar-grid + dot density + tap-day
+  // bottom sheet listing the day's tasks. This empty-state string powers
+  // the sheet body when a day has no scheduled tasks.
+  // see USER_STORIES.md
   "sheet.empty": "No tasks scheduled this day.",
 
   // Completed

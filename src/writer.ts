@@ -33,6 +33,11 @@ export function parseTaskId(id: string): { path: string; line?: number; hash?: s
   return { path: id };
 }
 
+// US-208: resolve `path:Lnnn` first, fall back to title-hash lookup so a
+//          ref keeps working after the file's lines shift.
+// US-214: ambiguous hash → throw `ambiguous_slug` with the candidate list
+//          so the caller can disambiguate; never silently pick one.
+// see USER_STORIES.md
 export async function resolveTaskRef(
   app: App,
   id: string,
@@ -271,6 +276,12 @@ export async function markDropped(
  * (tags, Obsidian-Tasks emoji fields, priorities, recurrence, Dataview inline
  * fields, block anchors). Returns null if `raw` isn't a task line.
  * Exported for unit testing.
+ *
+ * US-407: byte-level preserve of Obsidian-Tasks extension fields (🛫 start,
+ * 🔁 recurrence, ⏫ priority, [id::], block anchors `^id`) on rename and
+ * reschedule. Tasks-plugin-only metadata must round-trip unchanged so its
+ * queries keep working after Task Center rewrites.
+ * see USER_STORIES.md
  */
 export function rebuildTaskLineWithNewTitle(
   raw: string,
