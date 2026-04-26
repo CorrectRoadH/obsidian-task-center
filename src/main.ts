@@ -100,7 +100,10 @@ export default class TaskCenterPlugin extends Plugin {
     });
     this.app.workspace.onLayoutReady(() => this.statusBar?.refresh());
 
-    // Open on startup
+    // US-110: "open board on startup" — opt-in toggle in settings.
+    // Defers to `onLayoutReady` so we don't fight Obsidian's own
+    // workspace restore for the focused leaf.
+    // see USER_STORIES.md
     if (this.settings.openOnStartup) {
       this.app.workspace.onLayoutReady(() => this.activateView());
     }
@@ -338,6 +341,13 @@ export default class TaskCenterPlugin extends Plugin {
   // Each handler converts native Obsidian CLI args → TaskCenterApi call →
   // returns human-readable text (greppable, first column always an id).
 
+  // US-205: `list` defaults to human-readable text — `format=json` is opt-in,
+  //          never the default. Same convention applies to `stats` below.
+  // US-202: text rows always start with the stable id (`path:Lnnn`) at
+  //          column 0 so `grep`, `awk`, `cut` work without parsing further.
+  // US-212: `parent=<id>` filter surfaces the children of one parent
+  //          (filterTasks branch in cli.ts handles the actual narrowing).
+  // see USER_STORIES.md
   private async cliList(args: CliArgs): Promise<string> {
     const filters: Parameters<TaskCenterApi["list"]>[0] = {};
     if (args.scheduled) filters.scheduled = args.scheduled;
@@ -384,6 +394,14 @@ export default class TaskCenterPlugin extends Plugin {
     return formatShow(await this.api.show(ref));
   }
 
+  // US-206: `stats days=N` returns the estimate-vs-actual ratio plus the
+  //          top tag-minute contributors so an AI can give the user
+  //          calibration feedback. `group=<prefix>` (e.g. `象限`) bucket-
+  //          sums tags with that substring — Covey 4-quadrant rollup, and
+  //          works for any user-defined group convention (US-108).
+  // US-205: text format default; `format=json` is opt-in for downstream
+  //          machine consumers.
+  // see USER_STORIES.md
   private async cliStats(args: CliArgs): Promise<string> {
     const days = args.days ? parseInt(args.days, 10) : 7;
     const stats = await this.api.stats({
@@ -416,6 +434,10 @@ export default class TaskCenterPlugin extends Plugin {
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "deadline cleared" : `deadline ${date}`);
   }
 
+  // US-209: incremental `actual minutes=+30m` — the leading `+` switches
+  // to additive mode so the agent doesn't have to read the current value
+  // before writing. Plain `minutes=Nm` still does a `set` overwrite.
+  // see USER_STORIES.md
   private async cliActual(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const spec = requireArg(args.minutes, "minutes");
@@ -476,6 +498,11 @@ export default class TaskCenterPlugin extends Plugin {
     return formatOkWrite(t, null, null, r.before, r.after, false, label);
   }
 
+  // US-213: `add stamp-created=true|false` lets the caller override the
+  // global stampCreated setting for one write. Agents back-filling
+  // historical tasks set it to `false` so the auto `➕ today` stamp
+  // doesn't pollute the timeline with bulk-import "creation" dates.
+  // see USER_STORIES.md
   private async cliAdd(args: CliArgs): Promise<string> {
     const text = requireArg(args.text, "text");
     const estimateSpec = args.estimate;
@@ -512,6 +539,11 @@ export default class TaskCenterPlugin extends Plugin {
     return formatOkWrite(t, null, null, r.before, r.after, false, remove ? "tag removed" : "tag added");
   }
 
+  // US-228: `nest ref=A under=B` — the CLI sibling of the GUI drag-card-
+  // onto-card gesture. Works cross-file; cycles are rejected by
+  // writer.nestUnder (US-126). On success returns the parent ref so
+  // chained scripts can keep working with a stable id.
+  // see USER_STORIES.md
   private async cliNest(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const under = requireArg(args.under, "under");

@@ -7,22 +7,43 @@ const START_RE = /🛫\s*(\d{4}-\d{2}-\d{2})/;
 const DONE_RE = /✅\s*(\d{4}-\d{2}-\d{2})/;
 const CANCELLED_RE = /❌\s*(\d{4}-\d{2}-\d{2})/;
 const CREATED_RE = /➕\s*(\d{4}-\d{2}-\d{2})/;
+// US-302: `[estimate:: 90m]` / `[actual:: 75m]` are the default convention
+// for time-budgeting (1h / 1h30m / Nm units). The parser pulls them as
+// inline-field tokens; the renderer / stats sum them. Renaming the fields
+// in user docs (e.g. `[planned::]` / `[spent::]`) is a `summary` config
+// concern, not a code change — see US-108.
+// see USER_STORIES.md
 const ESTIMATE_RE = /\[estimate::\s*([^\]]+)\]/i;
 const ACTUAL_RE = /\[actual::\s*([^\]]+)\]/i;
-// Accept optional callout prefix (`> ` or `>> ` etc. with interleaved
-// whitespace, used for tasks inside Obsidian callouts).
+// US-406: accept optional callout prefix (`> ` or `>> ` etc. with
+// interleaved whitespace) so tasks living inside Obsidian callouts are
+// first-class citizens — parsed, rendered on the board, and written
+// back correctly. Multi-level (`>>`) callout nesting is supported by
+// the `(?:>\s*)*` repetition. Writer-side callout awareness lives in
+// `src/writer.ts:setCheckbox` (callout-prefix-tolerant checkbox swap).
 //
 // US-125 task #33: trailing `\r?` before `$` strips the carriage return
 // when the line came from CRLF input (paste from external source, copy
 // from a browser tab, etc.). Without this, the `\r` would land inside
 // the `content` capture group, taint the task's title hash, and the
 // renderer's de-dup / children filter would silently drop the task.
+// see USER_STORIES.md
 const CHECKBOX_RE = /^(\s*(?:>\s*)*)([-+*])\s+\[(.)\]\s?(.*?)\r?$/;
 const TAG_RE = /#([^\s#\[\]()]+)/g;
 
 // Strip emoji metadata, inline fields, tags, block anchors, and recurrence
 // (`🔁 every week` style — consumed greedily to the next metadata boundary).
 const META_STRIP_RE = /🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|(⏳|📅|🛫|✅|❌|⌛|🔺|⏫|🔼|🔽|⏬|➕)\s*(\d{4}-\d{2}-\d{2})?/gu;
+// US-108: inline-field syntax is `[fieldname:: value]` (Dataview-
+// compatible). The strip pattern below intentionally lists only the
+// known meta names we want hidden from the rendered title — user-
+// defined inline fields (anything beyond this allow-list) survive into
+// the title cleanup so users can extend metadata without code changes.
+// The application layer never hard-codes user tag / field literals
+// (`#1象限`, `[estimate::]` are defaults / examples only); grouping,
+// stats, and quadrant logic all read user configuration / current
+// markdown rather than baked-in literals.
+// see USER_STORIES.md
 const INLINE_FIELD_STRIP_RE = /\[(estimate|actual|priority|id|recurrence)::\s*[^\]]+\]/gi;
 const TAG_STRIP_RE = /(?:^|\s)#[^\s#\[\]()]+/g;
 // Obsidian block reference anchors: `^blockid` at a word boundary

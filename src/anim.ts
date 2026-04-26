@@ -6,6 +6,11 @@
  * neighbouring cards slide up smoothly instead of snapping after a re-render.
  * Resolves when the animation finishes (or immediately if the element is
  * already detached / interrupted mid-flight).
+ *
+ * US-127: every card removal flows through this helper so the eye sees
+ * a fade + neighbours sliding up rather than a snap-disappearance. In-
+ * place mutations don't animate (no element to remove).
+ * see USER_STORIES.md
  */
 export async function animateOut(el: HTMLElement, durationMs = 180): Promise<void> {
   if (!el.isConnected) return;

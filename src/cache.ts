@@ -242,6 +242,12 @@ export class TaskCache {
     this.__stats.ensureCount++;
     const files = this.app.vault.getMarkdownFiles();
     const candidates: TFile[] = [];
+    // US-404: skip files whose metadataCache confirms zero task list items.
+    // Big vaults (6589-file regression in BUG.md #1) parse-flooded the
+    // main thread; this cheap filter keeps board-open snappy. Files with
+    // metadata not yet indexed must still be parsed (we cannot prove
+    // empty without bytes), so the skip is conservative.
+    // see USER_STORIES.md
     for (const f of files) {
       const meta = this.app.metadataCache.getFileCache(f);
       const hasTask =

@@ -41,6 +41,11 @@ export class TaskCenterSettingTab extends PluginSettingTab {
           }),
       );
 
+    // US-111: default-tab setting decides which view first-open lands on
+    // (week / month / completed / unscheduled). `lastTab` (US-405)
+    // overrides this once the user has actually opened the board at
+    // least once; this setting is the cold-start fallback.
+    // see USER_STORIES.md
     new Setting(containerEl)
       .setName(tr("settings.defaultView.name"))
       .setDesc(tr("settings.defaultView.desc"))
@@ -73,6 +78,11 @@ export class TaskCenterSettingTab extends PluginSettingTab {
           }),
       );
 
+    // US-110: "open board on startup" toggle. Default off — the board
+    // costs a vault scan on first open and we don't want to slow Obsidian
+    // launch unless the user opted in. Wired in main.ts:onload via the
+    // `app.workspace.onLayoutReady → activateView` callback.
+    // see USER_STORIES.md
     new Setting(containerEl)
       .setName(tr("settings.openOnStartup.name"))
       .setDesc(tr("settings.openOnStartup.desc"))

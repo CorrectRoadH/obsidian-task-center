@@ -35,6 +35,10 @@ export class StatusBar {
     this.cacheUnsub = this.cache.on("changed", () => this.scheduleRefresh());
   }
 
+  // US-106: persistent status bar shows `📋 N today · ⚠ M overdue`,
+  // click opens the board. Always-on so the user knows their day's
+  // load without opening the tab.
+  // see USER_STORIES.md
   /** Force an immediate render. */
   refresh(): void {
     const all = this.cache.flatten();

@@ -1,3 +1,8 @@
+// US-305: `[-] ❌` is "abandoned" and is its own checkbox-status semantic
+// (`dropped`), separate from `done`. Keeping abandonment distinct lets
+// users see what they walked away from — not lumped into "completed"
+// counts and not pretending it never existed (vs. file deletion).
+// see USER_STORIES.md
 export type TaskStatus = "todo" | "done" | "dropped" | "in_progress" | "cancelled" | "custom";
 
 export interface ParsedTask {
@@ -24,10 +29,15 @@ export interface ParsedTask {
   childrenLines: number[];
   hash: string;
   mtime: number;
-  // True if any ancestor list item (task OR bullet) is in a terminal state —
-  // `[x]` done, `[-]` dropped, or tagged `#dropped`. A terminated ancestor
-  // suppresses its descendants from todo/unscheduled views (finishing or
-  // abandoning a section implicitly finishes everything below it).
+  // US-144: child inherits parent's terminal status (and via parent-side
+  // emoji-date inspection in the renderer, parent's ⏳ / 📅 too) — so
+  // children don't have to redundantly carry their parent's metadata.
+  // Concretely this flag is "any ancestor list item (task OR bullet) is
+  // `[x]` done, `[-]` dropped, or tagged `#dropped`". A terminated
+  // ancestor suppresses its descendants from todo / unscheduled views
+  // (finishing or abandoning a section implicitly finishes everything
+  // below it — the cascade complement of US-145).
+  // see USER_STORIES.md
   inheritsTerminal: boolean;
 }
 
@@ -38,8 +48,11 @@ export interface TaskCenterSettings {
   openOnStartup: boolean;
   weekStartsOn: 0 | 1;
   stampCreated: boolean;
-  // Last tab the user was on when they closed the board. Persists across
-  // Obsidian restarts so morning-open lands where evening-close left off.
+  // US-405: last tab the user was on when they closed the board. Persists
+  // across Obsidian restarts so morning-open lands where evening-close
+  // left off. Read in `TaskCenterView.constructor`'s ViewState init,
+  // written in `setTab`.
+  // see USER_STORIES.md
   lastTab: "week" | "month" | "completed" | "unscheduled" | null;
   // US-510: platform-conditional UI strings — shortcut hints / mouse
   // descriptions are branched per platform (desktop hint vs mobile hint),

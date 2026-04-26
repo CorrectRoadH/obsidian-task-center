@@ -6,6 +6,12 @@ export function todayISO(): string {
   return toISO(new Date());
 }
 
+// US-411: ISO write side — every persisted date emits `YYYY-MM-DD`
+// regardless of the user's display locale. Display-side localization
+// happens in src/view.ts:weekdayLabel; the file representation must
+// stay locale-stable so other Obsidian plugins (Tasks, Dataview) keep
+// reading the same byte shape.
+// see USER_STORIES.md
 export function toISO(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -37,6 +43,11 @@ export function shiftMonth(iso: string, months: number): string {
   return toISO(d);
 }
 
+// US-112: weekStart 0 = Sunday-first (US style), 1 = Monday-first (ISO,
+// default). Threaded through all week-aware logic (renderWeek column
+// order, week dwell, "this week" filter etc.) — settings.weekStartsOn
+// is the single source of truth.
+// see USER_STORIES.md
 export function startOfWeek(iso: string, weekStart: 0 | 1 = 1): string {
   const d = fromISO(iso);
   const day = d.getDay(); // 0 Sun .. 6 Sat
@@ -79,6 +90,10 @@ export function isoWeekNumber(iso: string): number {
   );
 }
 
+// US-207: CLI / API natural-language date keywords. Accepts:
+//   today / tomorrow / yesterday / week / next-week / month / next-month
+//   / unscheduled / YYYY-MM-DD / FROM..TO range
+// see USER_STORIES.md
 export function resolveWhen(
   when: string,
   today: string = todayISO(),

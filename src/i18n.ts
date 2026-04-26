@@ -6,6 +6,12 @@
 
 type Locale = "zh" | "en";
 
+// US-402: language auto-detection from Obsidian's UI language setting
+// (`localStorage.language`). No separate plugin language toggle —
+// Task Center follows whatever the user already configured in Obsidian.
+// US-408 calls this on every `t()` so live language switches take effect
+// without restart.
+// see USER_STORIES.md
 function detectLocale(): Locale {
   try {
     const stored = window.localStorage.getItem("language");

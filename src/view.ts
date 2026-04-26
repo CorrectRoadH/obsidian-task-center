@@ -85,8 +85,11 @@ export class TaskCenterView extends ItemView {
   });
   // Card hover popover — implementation in src/view/popover.ts.
   private contextPopover: ContextPopoverController;
-  // Undo stack — only records writes initiated from this view (drag / keyboard).
-  // CLI writes are not captured. Max 20 entries (UndoStack.MAX).
+  // US-128: Ctrl/Cmd+Z undo stack. Only records writes initiated from this
+  // view (drag / keyboard / quick-add). CLI writes are not captured —
+  // they're scriptable and idempotent enough that auto-undo would be more
+  // confusing than helpful (UX.md §6.7). Capped at 20 entries (UndoStack.MAX).
+  // see USER_STORIES.md
   private undoStack: UndoStack;
   // Mobile drag controller (US-507) — pointer-based replacement for HTML5
   // DnD that doesn't fire from touch. Lazily created on first mobile drag.
@@ -320,9 +323,12 @@ export class TaskCenterView extends ItemView {
     await this.plugin.cache.forFlush();
   }
 
+  // US-405: persist the last-active tab so the next Obsidian open lands on
+  // the same view the user closed on. Read back in the constructor's
+  // ViewState init (priority: lastTab → defaultView → "week").
+  // see USER_STORIES.md
   setTab(tab: TabKey) {
     this.state.tab = tab;
-    // Persist so next Obsidian open lands on the same tab.
     this.plugin.settings.lastTab = tab;
     this.plugin.saveSettings().catch(() => undefined);
     this.render();
@@ -420,6 +426,10 @@ export class TaskCenterView extends ItemView {
     add.addEventListener("click", () => this.openQuickAdd());
   }
 
+  // US-113: empty-state onboarding card — "no tasks yet, press + to add" —
+  // shown when the vault has zero parsed tasks. Beats a blank board: the
+  // CTA also opens Quick Add so the first task is one click away.
+  // see USER_STORIES.md
   private renderOnboarding(parent: HTMLElement) {
     const wrap = parent.createDiv({ cls: "bt-onboarding" });
     wrap.createEl("h2", { text: tr("onboarding.title") });
@@ -538,7 +548,11 @@ export class TaskCenterView extends ItemView {
       });
     }
 
-    // Search box
+    // US-109: title / tag search box. The matching impl in `getTextFilter`
+    // also searches across tags so users can type `#3象限` or part of a
+    // tag to narrow the board; CLI exposes the same filter via
+    // `task-center:list search=…`.
+    // see USER_STORIES.md
     const search = bar.createEl("input", { type: "text", placeholder: tr("toolbar.filter") });
     search.addClass("bt-search");
     search.value = this.state.filter;
@@ -554,7 +568,11 @@ export class TaskCenterView extends ItemView {
       }
     });
 
-    // + button
+    // US-163: toolbar `+` opens Quick Add, which writes the new line to
+    // today's daily-note tail (the only entry point — see writer.addTask
+    // resolution order). Default scheduled = unset; user adds ⏳ inline
+    // via Quick Add tokens or schedules later via drag.
+    // see USER_STORIES.md
     const add = bar.createEl("button", { text: tr("toolbar.add") });
     add.addClass("bt-add-btn");
     add.addEventListener("click", () => this.openQuickAdd());
@@ -657,6 +675,11 @@ export class TaskCenterView extends ItemView {
     }
   }
 
+  // US-116: per-column header line `N tasks · XhYm` — task count plus
+  // summed `[estimate::]` minutes. Lets the user see at a glance whether
+  // a day is overbooked before they drop a new card on it. Sum collapses
+  // to plain count when no card on the day carries an estimate.
+  // see USER_STORIES.md
   private columnStats(tasks: ParsedTask[]): string {
     const sum = tasks.reduce((s, t) => s + (t.estimate ?? 0), 0);
     if (sum === 0) return `${tasks.length}`;
@@ -667,12 +690,17 @@ export class TaskCenterView extends ItemView {
    * If a task's parent is also in the visible set, hide the child at the top
    * level — it will still render inside the parent's children block.
    *
+   * US-143: parent-visible cards never duplicate the same child as a
+   *  standalone top-level card; the child rides inside the parent's
+   *  children block. This is the implementation of "child not duplicated
+   *  as top-level when parent is visible".
    * US-148 carve-out: a child that has its OWN `⏳` different from the
    * parent's must NOT be hidden by the "parent has scheduled" branch — it
    * needs to surface in its own day column as a top-level card. Only hide
    * children that lack an independent schedule (so they ride with the
    * parent) or that share the parent's day (already represented by the
    * parent card).
+   * see USER_STORIES.md
    */
   private hideChildrenOfVisibleParents(visible: ParsedTask[]): ParsedTask[] {
     const ids = new Set(visible.map((t) => t.id));
@@ -711,6 +739,15 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Month ----------
 
+  // US-102: month calendar grid (6 weeks × 7 days, anchored to month-start
+  // week). Prev / next-month navigation lives on the toolbar buttons in
+  // `renderToolbar`. Each day cell renders up to 6 mini-cards plus a
+  // `+N more` overflow chip; tapping the cell on mobile opens the day's
+  // task list as a bottom sheet (US-504).
+  // US-122: every cell is a `makeDropZone` target so dragging a card onto
+  // a date in the month grid rewrites its ⏳ to that day — same write
+  // semantics as the week-view day columns (US-121).
+  // see USER_STORIES.md
   private renderMonth(parent: HTMLElement) {
     const today = todayISO();
     const weekStart = this.plugin.settings.weekStartsOn;
@@ -899,8 +936,11 @@ export class TaskCenterView extends ItemView {
 
     const wrap = parent.createDiv({ cls: "bt-completed" });
 
-    // 7-day headline: estimate ratio + top 4 tags. Gives the GUI user the same
-    // calibration signal the CLI `stats` verb surfaces to an AI.
+    // US-303: 7-day estimate-accuracy headline + top-tag minutes preset.
+    // Mirrors the CLI `stats days=7` summary so the GUI user gets the same
+    // calibration signal an AI agent would. Implementation lives in
+    // `computeStats` (cli.ts) — view just renders the StatsResult.
+    // see USER_STORIES.md
     const stats = computeStats(this.tasks, { days: 7 });
     if (stats.doneCount > 0) {
       const header = wrap.createDiv({ cls: "bt-stats-header" });
@@ -950,8 +990,11 @@ export class TaskCenterView extends ItemView {
 
     const currentWeek = startOfWeek(todayISO(), this.plugin.settings.weekStartsOn);
     for (const wk of weekKeys) {
-      // Default: collapse weeks older than the current week on first render.
-      // User's explicit expand/collapse lives in collapsedWeeks and overrides.
+      // US-304: history weeks default-collapsed, current week expanded —
+      // keeps the past from pushing this week below the fold. The user's
+      // explicit expand / collapse choice lives in collapsedWeeks (with an
+      // `EXPANDED:` marker for the inverse) and overrides the default.
+      // see USER_STORIES.md
       const hasUserPreference =
         this.state.collapsedWeeks.has(wk) || this.state.collapsedWeeks.has("EXPANDED:" + wk);
       const collapsed = hasUserPreference
@@ -1005,6 +1048,12 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Unscheduled ----------
 
+  // US-104: unscheduled pool sorted "what should I pick next" — deadline
+  // ascending first (nearest 📅 wins), tasks with no deadline fall to the
+  // end, and ties are broken by created date desc (newest on top). Same
+  // sort runs in `renderUnscheduledBig` below; if you change one, change
+  // both — they're the two surfaces that show the pool.
+  // see USER_STORIES.md
   private renderUnscheduledPool(parent: HTMLElement) {
     const filter = this.getTextFilter();
     const unscheduledAll = this.tasks
@@ -1128,7 +1177,12 @@ export class TaskCenterView extends ItemView {
     // UX-mobile §10: shortcut hint is desktop-only.
     hint.setText(tr(Platform.isMobile ? "unscheduled.mobileHint" : "unscheduled.hint"));
 
-    // Group by quadrant
+    // US-301: Covey 4-quadrant grouping. `#1象限`~`#4象限` is the default
+    // tag convention; per US-108 these are not application knowledge but
+    // user-visible defaults. (Future: read the group-tag set from
+    // settings so users can swap in `#now / #next / #later / #waiting`
+    // without code change — same grouping logic, different literal set.)
+    // see USER_STORIES.md
     const otherLabel = tr("pool.other");
     const quads: Record<string, ParsedTask[]> = { "#1象限": [], "#2象限": [], "#3象限": [], "#4象限": [], [otherLabel]: [] };
     for (const task of unscheduled) {
@@ -1923,14 +1977,19 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Keyboard ----------
 
+  // US-166: global desktop hotkeys live here — Ctrl+1~4 switch tabs,
+  // `/` focuses the search input, Ctrl/Cmd+Z pops the undo stack,
+  // Ctrl/Cmd+T opens Quick Add. Per-card shortcuts (1~4 quadrant,
+  // arrows reschedule, Space toggle, D date prompt, E open source,
+  // Delete drop, Enter open) follow once a card is selected.
+  // US-501: desktop-only features silently no-op on Obsidian Mobile —
+  // returning early here means the board never claims to handle a key
+  // the user can't produce. CLI / hover popovers do the same at their
+  // respective sites. Layout switching is screen-width based (CSS
+  // @media); *capability* gating like this is a Platform check, allowed
+  // at the UI layer per UX-mobile §13 #7.
+  // see USER_STORIES.md
   async handleKey(e: KeyboardEvent) {
-    // US-501: desktop-only features silently no-op on Obsidian Mobile —
-    // here the keyboard shortcut handler returns early so the board never
-    // claims to handle a key the user can't produce. CLI / hover popovers
-    // do the same in their respective sites. Layout switching is
-    // screen-width based (CSS @media); *capability* gating like this is
-    // a Platform check, allowed at the UI layer per UX-mobile §13 #7.
-    // see USER_STORIES.md
     if (Platform.isMobile) return;
 
     // Global tab switching
@@ -2056,6 +2115,12 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Context menu / source ----------
 
+  // US-164: right-click a card to get the same actions the keyboard /
+  // drag flows expose — open source, toggle done, schedule today /
+  // tomorrow / clear, switch quadrant 1~4, drop. Mouse users don't
+  // need to memorize hotkeys (the keyboard map mirrors this in
+  // `handleKey`). Wired from `wireCardEvents`'s `contextmenu` listener.
+  // see USER_STORIES.md
   openContextMenu(e: MouseEvent, task: ParsedTask) {
     const m = new Menu();
     m.addItem((i) =>
@@ -2162,6 +2227,13 @@ export class TaskCenterView extends ItemView {
     new QuickAddModal(this.app, this.api, () => this.scheduleRefresh(), this.plugin.settings).open();
   }
 
+  // US-161: click a card title to inline-rename. Enter commits, Esc
+  // cancels, blur commits (treated as Enter to avoid losing typing on
+  // accidental focus loss). Metadata preservation — emoji dates, tags,
+  // [estimate::] / [actual::], block anchors, priority symbols — happens
+  // in writer.rebuildTaskLineWithNewTitle (US-407 / US-409 byte-level
+  // round-trip), not here.
+  // see USER_STORIES.md
   enterTitleEdit(el: HTMLElement, task: ParsedTask) {
     const oldText = task.title;
     el.empty();

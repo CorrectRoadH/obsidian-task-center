@@ -1,10 +1,14 @@
 // Board-view undo stack.
 //
-// Records byte-level write operations issued from the view (drag, complete,
-// drop, nest, quick-add, rename) so the user can roll one back with Ctrl+Z.
-// CLI-issued writes are intentionally NOT captured (UX.md §6.7) — the CLI is
-// scriptable and idempotent enough that auto-undo would be more confusing
-// than helpful.
+// US-128: Ctrl/Cmd+Z rolls back the most recent drag / change-date /
+// rename / quick-add / drop / nest mutation. Capacity is `MAX = 20`
+// entries — enough that a finger-slip recovery doesn't have to chase
+// `git`. Records byte-level write operations issued from the view so
+// the user can undo without leaving Obsidian. CLI-issued writes are
+// intentionally NOT captured (UX.md §6.7) — the CLI is scriptable and
+// idempotent enough that auto-undo would be more confusing than
+// helpful.
+// see USER_STORIES.md
 //
 // Each entry's `ops` are in forward order; we apply them in reverse on undo.
 // For cross-file moves (nested across files), the entry holds one op per

@@ -4,6 +4,12 @@
 // doesn't thrash the vault read + markdown render pipeline. Only one
 // popover lives at a time. Suppressed entirely while a drag is in progress
 // so it doesn't fight the drop-target highlight.
+//
+// US-165: hover a card to see its parent chain + a few lines of the source
+// file's surrounding markdown — gives the "which project does this task
+// live under" context without leaving the board. Mobile substitutes a
+// long-press action sheet (US-506); the popover never opens on touch.
+// see USER_STORIES.md
 
 import { App, Component, MarkdownRenderer, TFile } from "obsidian";
 import { ParsedTask } from "../types";

@@ -335,6 +335,13 @@ const ZH_DAYS: Record<string, number> = {
   星期一: 1, 星期二: 2, 星期三: 3, 星期四: 4, 星期五: 5, 星期六: 6, 星期日: 0, 星期天: 0,
 };
 
+// US-410: bilingual natural-language date resolution. Accepts the EN set
+// (`today / tomorrow / yesterday / next-week / Mon~Sun via ISO`) and the
+// ZH set (`今天 / 明天 / 昨天 / 后天 / 下周 / 周一~周日 / 星期一~日`).
+// Unknown input → `null` and the caller leaves the task unscheduled — we
+// never silently guess a date. The mirror set in `src/dateprompt.ts`
+// (D-key prompt) recognises the same words.
+// see USER_STORIES.md
 function resolveRelativeDate(word: string, today: string): string | null {
   const w = word.toLowerCase();
   if (w === "today" || w === "今天" || w === "今日") return today;

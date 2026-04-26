@@ -1,3 +1,12 @@
+// US-401: markdown-only — no DB, no custom on-disk format. Every write in
+//          this module flows through `app.vault.process` against the same
+//          `- [ ] …` text that Obsidian Tasks / Dataview / any plain-text
+//          tool reads. There is no parallel store to fall out of sync.
+// US-403: writes are atomic — `app.vault.process` serializes per-file
+//          mutations and either commits the full new buffer or none of it.
+//          A crash mid-mutation cannot leave the file in a half-written
+//          state at the API layer.
+// see USER_STORIES.md
 import { App, TFile, normalizePath } from "obsidian";
 import { ParsedTask } from "./types";
 import { parseTaskLine, formatMinutes } from "./parser";
@@ -112,6 +121,13 @@ export function addTagIfMissing(line: string, tag: string): string {
   return line.trimEnd() + ` #${bare}`;
 }
 
+// US-147: every mutation is line-scoped — `mutate(raw)` only sees and
+//          rewrites ONE line; siblings, children, and parent lines are
+//          untouched. Editing a parent therefore can't accidentally
+//          mutate a child's tags / [estimate::] / [actual::] / emoji.
+// US-403: the surrounding `app.vault.process` is atomic at the Obsidian
+//          API level — the whole file commits or nothing does.
+// see USER_STORIES.md
 async function mutateLine(
   app: App,
   path: string,
@@ -249,6 +265,12 @@ export async function markUndone(
   return { before, after, unchanged: before === after };
 }
 
+// US-305: "abandon" writes `[-] ❌ <today>` — distinct from `done` so
+// retros can see what the user walked away from rather than lumping it
+// into a single completion bucket. Strips legacy `#dropped` tags from a
+// previous convention as a side effect (one-way migration; not added
+// back on undone).
+// see USER_STORIES.md
 export async function markDropped(
   app: App,
   task: ParsedTask,
@@ -281,6 +303,11 @@ export async function markDropped(
  * 🔁 recurrence, ⏫ priority, [id::], block anchors `^id`) on rename and
  * reschedule. Tasks-plugin-only metadata must round-trip unchanged so its
  * queries keep working after Task Center rewrites.
+ * US-409: same byte-level guarantee covers everything the user typed —
+ * `#hashtags`, `[xxx::]` inline-field NAMES, and the Obsidian Tasks
+ * emoji markers (`⏳ 📅 ✅ ❌ ➕ 🛫 🔁 🔺⏫🔼🔽⏬`). The META_TOKEN_RE
+ * below is the allow-list of suffix tokens reattached after the new
+ * title — anything matched is preserved verbatim, never normalized.
  * see USER_STORIES.md
  */
 export function rebuildTaskLineWithNewTitle(
@@ -398,9 +425,11 @@ function buildTaskLine(opts: AddTaskOpts, indent: string): string {
   }
   if (opts.stampCreated) {
     const stamp = today();
-    // Skip the ➕ stamp when the parent already carries the same date — the
-    // parent's stamp implies the child was created the same day, so repeating
-    // it on every subtask is just noise.
+    // US-146: skip the ➕ stamp when the parent already carries the same
+    // date — the parent's stamp implies the child was created the same
+    // day, so repeating it on every subtask is just noise. Cross-day
+    // children still get their own ➕ for accurate retros.
+    // see USER_STORIES.md
     if (opts.parent?.created !== stamp) parts.push(`➕ ${stamp}`);
   }
   if (opts.deadline) parts.push(`📅 ${opts.deadline}`);
@@ -594,6 +623,13 @@ export interface UndoOp {
  * Pure planner for the same-file nest case. Returns the post-nest file lines
  * plus the forward ops that produced them — callers feed the ops into
  * `applyUndoOps` (in reverse) to undo the change.
+ *
+ * US-126: rejects nests that would create a cycle — if the chosen
+ * `parent.line` falls inside the child's own subtree window, throw
+ * `invalid_nest` rather than reorder bytes into a self-referencing
+ * tree. The `nestUnder` entry point also guards against the trivial
+ * self-nest (child === parent) before reaching here.
+ * see USER_STORIES.md
  */
 export function planSameFileNest(
   lines: string[],

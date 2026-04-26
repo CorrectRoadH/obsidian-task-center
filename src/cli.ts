@@ -278,8 +278,13 @@ export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask
       });
     });
   }
+  // US-212: `list parent=<id>` — children of one parent task. Compared
+  // against the canonical `path:Lnnn` id so agents can pipe `list ...`
+  // output's first column straight back into a follow-up `list`. Hash-
+  // form parent refs are intentionally NOT supported here (the parent's
+  // id changes as line numbers shift; pass the resolved path:line).
+  // see USER_STORIES.md
   if (filters.parent) {
-    // Children of the given parent (by id or hash)
     const parentRef = filters.parent;
     filtered = filtered.filter((t) => {
       if (t.parentLine === null) return false;
@@ -312,6 +317,12 @@ export interface StatsResult {
   byGroup?: { prefix: string; entries: Array<{ tag: string; minutes: number; pct: number }> };
 }
 
+// US-206 + US-303: estimate-vs-actual stats over a rolling window. The
+// `ratio = sum(actual) / sum(estimate)` is the AI / human calibration
+// signal — paired with within-band hit rate (±25% target) and per-tag
+// minute totals (top contributors). `byGroup` (US-301) lets callers
+// roll the per-tag table up by a substring like `象限`.
+// see USER_STORIES.md
 export function computeStats(all: ParsedTask[], opts: StatsOpts): StatsResult {
   const today = todayISO();
   let from = opts.from ?? "";
@@ -405,6 +416,11 @@ function shortEst(mins: number | null): string {
   return mins ? formatMinutes(mins) : "—";
 }
 
+// US-202: stable id (`path:Lnnn`) sits at column 0 of every list row so
+// agents can `cut -d' ' -f1` to extract refs and pipe them straight back
+// into write verbs. Status, quadrant, and title follow — all space-
+// separated so awk-style field extraction stays trivial.
+// see USER_STORIES.md
 function formatTaskHeader(t: ParsedTask): string {
   return `${t.path}:L${t.line + 1}  ${statusCheckbox(t.status)}  ${extractQuadrant(t.tags)}  ${t.title}`;
 }
