@@ -28,6 +28,16 @@ compile();
 const { filterTasks, computeStats, formatList, formatStats, formatError } =
   await import("../test/.compiled/cli.bundle.js");
 
+// Use production `todayISO()` (local-time based) instead of `toISOString().slice(0,10)`
+// (UTC-based). Production filterTasks/computeStats internally call todayISO();
+// fixtures must match the same calendar to avoid timezone-mismatch windows
+// (UTC vs local) where tests fail across the ~16h overlap each day.
+function todayLocal() {
+  const d = new Date();
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function mkTask(over = {}) {
   return {
     id: "f.md:L1",
@@ -59,7 +69,7 @@ function mkTask(over = {}) {
 }
 
 test("filterTasks — scheduled=today", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const all = [
     mkTask({ id: "a", scheduled: today }),
     mkTask({ id: "b", scheduled: null }),
@@ -132,7 +142,7 @@ test("computeStats — zero done tasks", () => {
 });
 
 test("computeStats — ratio + per-task mean", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const all = [
     mkTask({ id: "a", status: "done", completed: today, estimate: 60, actual: 90 }),
     mkTask({ id: "b", status: "done", completed: today, estimate: 30, actual: 30 }),
@@ -148,7 +158,7 @@ test("computeStats — ratio + per-task mean", () => {
 });
 
 test("computeStats — byTag aggregates minutes", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const all = [
     mkTask({ id: "a", status: "done", completed: today, actual: 60, tags: ["#2象限"] }),
     mkTask({ id: "b", status: "done", completed: today, actual: 30, tags: ["#2象限", "#基建"] }),
@@ -161,7 +171,7 @@ test("computeStats — byTag aggregates minutes", () => {
 });
 
 test("computeStats — group prefix produces byGroup", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const all = [
     mkTask({ id: "a", status: "done", completed: today, actual: 60, tags: ["#2象限"] }),
     mkTask({ id: "b", status: "done", completed: today, actual: 30, tags: ["#3象限"] }),
