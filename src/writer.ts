@@ -11,6 +11,13 @@ import { App, TFile, normalizePath } from "obsidian";
 import { ParsedTask } from "./types";
 import { parseTaskLine, formatMinutes } from "./parser";
 
+// Re-exported so writer.test.mjs can construct TFile instances that pass
+// the bundled `instanceof TFile` checks in `nestUnder` / `addTask` /
+// other code paths. Same pattern as cache.ts:22 — the bundle's internal
+// TFile class is distinct from any class declared in obsidian-stub.mjs,
+// so test code must import from the bundle to get the right identity.
+export { TFile };
+
 export interface TaskRef {
   path: string;
   line: number;
@@ -862,11 +869,16 @@ export async function nestUnder(
     );
   }
   const block = extractTaskBlock(childLinesSnapshot, child.line, childIndentLen);
-  const newIndent = parent.indent + "    ";
-  const reindented = reindentBlock(block, childIndentLen, newIndent);
 
   // Step 1: append to parent file (verifies parent line still matches).
+  // task #57: defer the new-child indent decision until we have the
+  // parent file's lines in hand so `pickChildIndent` can match the
+  // existing children's indent style (TAB vs 4-space) instead of
+  // hard-coding `parent.indent + "    "`. This was the runtime
+  // duplicate path that the planner-only fix in 087fcbc missed —
+  // Jerry caught it in mandatory review (msg `1e4304ab`).
   let parentInsertIndex = -1;
+  let reindented: string[] = [];
   await app.vault.process(parentFile, (data) => {
     const lines = data.split("\n");
     if (lines[parent.line] !== parent.rawLine) {
@@ -875,6 +887,13 @@ export async function nestUnder(
         `${parent.path}:L${parent.line + 1} content drifted; reload tasks and retry`,
       );
     }
+    const newIndent = pickChildIndent(
+      lines,
+      parent.line,
+      parent.indent,
+      parent.indent.length,
+    );
+    reindented = reindentBlock(block, childIndentLen, newIndent);
     const insertIndex = findChildrenEnd(lines, parent.line, parent.indent.length);
     parentInsertIndex = insertIndex;
     return lines

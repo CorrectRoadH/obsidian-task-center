@@ -616,3 +616,101 @@ test("planCrossFileNest — task #57 corollary: parent with NO children falls ba
   ]);
   assert.deepEqual(plan.newChildLines, []);
 });
+
+// task #57 v2: Jerry's mandatory review (msg `1e4304ab`) caught that the
+// production cross-file `nestUnder()` runtime path duplicates the
+// planner's indent decision INLINE (writer.ts:865 `parent.indent +
+// "    "`) instead of delegating to `planCrossFileNest`. So the
+// planner-only fix from `087fcbc` greens the unit but the actual
+// vault-touching nestUnder cross-file write still emits 4-space.
+//
+// This test imports the runtime `nestUnder` and drives it through a
+// minimal in-memory vault stub mirroring ctrdh's real setup. Asserts
+// the parent file ends with `\t- [ ] C_top` (matching its existing
+// TAB-indented children), not `    - [ ] C_top`.
+const { nestUnder, TFile } = await import("../test/.compiled/writer.bundle.js");
+
+test("nestUnder cross-file — task #57 runtime: production path also matches existing TAB-indented children", async () => {
+  // ctrdh's real shape: parent file has TAB children with one 4-space
+  // outlier; source file has a top-level task with one 4-space subchild.
+  const parentInitial =
+    "- [ ] A_parent ⏳ 2026-04-26\n" +
+    "\t- [ ] A_child_1\n" +
+    "\t- [ ] A_child_2\n" +
+    "    - [ ] A_child_3_4space\n" +
+    "\t- [ ] A_child_4\n";
+  const childInitial =
+    "- [ ] C_top ➕ 2026-04-26\n" +
+    "    - [ ] C_subchild\n";
+
+  // Vault stub: each file is a real TFile instance (so instanceof checks
+  // inside nestUnder pass). Track each file's content; expose
+  // getAbstractFileByPath, cachedRead, and `vault.process(file, fn)`.
+  const fileObjs = new Map();
+  const fileData = new Map();
+  for (const [path, data] of [
+    ["parent.md", parentInitial],
+    ["child.md", childInitial],
+  ]) {
+    const f = new TFile();
+    f.path = path;
+    f.extension = "md";
+    f.stat = { mtime: 1000 };
+    fileObjs.set(path, f);
+    fileData.set(path, data);
+  }
+
+  const app = {
+    vault: {
+      getAbstractFileByPath: (p) => fileObjs.get(p) ?? null,
+      cachedRead: async (file) => fileData.get(file.path),
+      process: async (file, fn) => {
+        const data = fileData.get(file.path);
+        const next = fn(data);
+        fileData.set(file.path, next);
+      },
+    },
+  };
+
+  // Minimal ParsedTask shapes — only the fields nestUnder actually
+  // reads (id, path, line, indent, rawLine, parentLine).
+  const child = {
+    id: "child.md:L0",
+    path: "child.md",
+    line: 0,
+    indent: "",
+    rawLine: "- [ ] C_top ➕ 2026-04-26",
+    parentLine: null,
+  };
+  const parent = {
+    id: "parent.md:L0",
+    path: "parent.md",
+    line: 0,
+    indent: "",
+    rawLine: "- [ ] A_parent ⏳ 2026-04-26",
+    parentLine: null,
+  };
+
+  await nestUnder(app, child, parent);
+
+  const parentAfter = fileData.get("parent.md");
+  // The new child must use TAB to match A_child_1/_2/_4 (the dominant
+  // indent style under A_parent). NOT 4-space — that would cause
+  // CommonMark to nest under the last TAB-indented sibling.
+  assert.ok(
+    parentAfter.includes("\t- [ ] C_top ➕ 2026-04-26"),
+    `parent file did not get TAB-indented C_top.\nGot:\n${parentAfter}`,
+  );
+  // C_subchild moves with C_top: was 4-space relative to C_top (root),
+  // so under TAB-prefixed C_top it becomes "\t    - [ ] C_subchild".
+  assert.ok(
+    parentAfter.includes("\t    - [ ] C_subchild"),
+    `parent file did not get C_subchild at the correct relative depth.\nGot:\n${parentAfter}`,
+  );
+  // The original C_top in child.md must be removed (cross-file move).
+  const childAfter = fileData.get("child.md");
+  assert.ok(
+    !childAfter.includes("- [ ] C_top"),
+    `child file still has C_top after move.\nGot:\n${childAfter}`,
+  );
+});
