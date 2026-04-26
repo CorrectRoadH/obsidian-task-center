@@ -233,6 +233,10 @@ const EN = {
     "Daily Notes plugin disabled — tasks will be written to inbox",
   "dep.dailyNotesNoFolder":
     "Daily Notes folder not set — tasks will be written to inbox",
+  "dep.tasksMissing":
+    "Tasks community plugin not installed — Tasks-format extensions may not render",
+  "dep.tasksDisabled":
+    "Tasks community plugin disabled — Tasks-format extensions may not render",
   "dep.openSettings": "Click to open Obsidian settings",
 
   // US-720 (task #63): today execution view — entry-point tab that
@@ -412,6 +416,10 @@ const ZH: Partial<typeof EN> = {
     "Daily Notes 插件未启用 — 任务将写入收件箱",
   "dep.dailyNotesNoFolder":
     "Daily Notes 未设置文件夹 — 任务将写入收件箱",
+  "dep.tasksMissing":
+    "Tasks 社区插件未安装 — Tasks 扩展字段可能展示不完整",
+  "dep.tasksDisabled":
+    "Tasks 社区插件未启用 — Tasks 扩展字段可能展示不完整",
   "dep.openSettings": "点击打开 Obsidian 设置",
 
   // US-720: 今日执行视图

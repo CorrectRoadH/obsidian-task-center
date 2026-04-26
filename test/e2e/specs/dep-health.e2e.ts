@@ -44,6 +44,27 @@ async function enableDailyNotes(): Promise<void> {
   });
 }
 
+async function fakeEnableTasks(): Promise<void> {
+  await browser.executeObsidian(async ({ app }) => {
+    const p = (app as any).plugins;
+    p.manifests["obsidian-tasks"] = {
+      id: "obsidian-tasks",
+      name: "Tasks",
+      version: "999.0.0",
+      minAppVersion: "1.0.0",
+    };
+    p.plugins["obsidian-tasks"] = { _enabled: true };
+  });
+}
+
+async function cleanupFakeTasks(): Promise<void> {
+  await browser.executeObsidian(async ({ app }) => {
+    const p = (app as any).plugins;
+    delete p.manifests["obsidian-tasks"];
+    delete p.plugins["obsidian-tasks"];
+  });
+}
+
 describe("US-701 dependency health check (Daily Notes)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
@@ -52,6 +73,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
   afterEach(async function () {
     // Always restore Daily Notes so we don't bleed state into other specs.
     await enableDailyNotes();
+    await cleanupFakeTasks();
   });
 
   // US-701a: Daily Notes disabled → status bar must warn the user.
@@ -120,6 +142,10 @@ describe("US-701 dependency health check (Daily Notes)", function () {
   // false positives (always-visible warnings).
   it("US-701c: no dep warning when Daily Notes is enabled and configured", async function () {
     await enableDailyNotes();
+    // task #71 adds Tasks-plugin warnings to the same status-bar surface.
+    // This Daily Notes healthy-state test needs all deps healthy, otherwise a
+    // valid `tasks-missing` warning would make `[data-dep-warning]` exist.
+    await fakeEnableTasks();
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
     await forFlush();
