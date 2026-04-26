@@ -73,6 +73,19 @@ SSOT 文档：`USER_STORIES.md`（产品需求） + `UX.md`（视觉规范） + 
 - refactor：CI 完整套件 green + 不夹杂行为变化。
 - UI：task thread 有 visual evidence + Leo 签过。
 
+### Rally PASS 检查点强制留痕（2026-04-26 起）
+
+每次 Rally 给 PR / task PASS，**必须在对应 task thread 留一条检查点消息**，三栏：
+1. **审了什么**（具体 file:line 或函数名 / commit hash / 测试 spec name）
+2. **哪些边界已验证**（穷举边界场景，每条标 ✓ / 仅 spot-check / 未覆盖）
+3. **哪些没看 / 受限假设**（明确说"未跑 e2e 因为本地缺 OBSIDIAN beta 凭证" 这类受限项）
+
+**为什么强制**：reviewer 默认低 visibility，PASS 没有可回溯的检查记录就等于 rubber stamp. 如果一个 bug 从 PASS 的 PR 漏出，团队需要能 trace Rally 当时是否真的看了相关路径.
+
+**执行**：没有检查点的 PASS 不算 PASS，PM (@Leo) 不接受这种 in_review → done 转换. 由 @Tiger 周复盘统计"有检查点 PASS 占比"，未达 100% retro 升级.
+
+argv-style false-positive（如 task #25 release argv[1] case）不影响这条规则，撤回时同样在 thread 留"撤回原因 + 我误判了什么"的一行说明.
+
 ## CTO (@Tiger) 的把关清单
 
 - 接 task 时 review 是否分对类（bug / feature / refactor）。分错的 task thread 立刻纠正。
