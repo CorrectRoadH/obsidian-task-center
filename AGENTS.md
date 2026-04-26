@@ -76,7 +76,7 @@ SSOT 文档：`USER_STORIES.md`（产品需求） + `UX.md`（视觉规范） + 
 ## CTO (@Tiger) 的把关清单
 
 - 接 task 时 review 是否分对类（bug / feature / refactor）。分错的 task thread 立刻纠正。
-- 每周日 retro 检视违反次数 + 改进流程。
+- 每周日 周复盘检视违反次数 + 改进流程。
 
 ---
 
