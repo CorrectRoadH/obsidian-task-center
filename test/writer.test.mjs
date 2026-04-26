@@ -628,7 +628,7 @@ test("planCrossFileNest — task #57 corollary: parent with NO children falls ba
 // minimal in-memory vault stub mirroring ctrdh's real setup. Asserts
 // the parent file ends with `\t- [ ] C_top` (matching its existing
 // TAB-indented children), not `    - [ ] C_top`.
-const { nestUnder, TFile } = await import("../test/.compiled/writer.bundle.js");
+const { addTask, nestUnder, TFile } = await import("../test/.compiled/writer.bundle.js");
 
 test("nestUnder cross-file — task #57 runtime: production path also matches existing TAB-indented children", async () => {
   // ctrdh's real shape: parent file has TAB children with one 4-space
@@ -712,5 +712,52 @@ test("nestUnder cross-file — task #57 runtime: production path also matches ex
   assert.ok(
     !childAfter.includes("- [ ] C_top"),
     `child file still has C_top after move.\nGot:\n${childAfter}`,
+  );
+});
+
+test("addTask(parent) — task #70 runtime: new child matches existing TAB-indented children", async () => {
+  const initial =
+    "- [ ] A_parent ⏳ 2026-04-26\n" +
+    "\t- [ ] A_child_1\n" +
+    "\t- [ ] A_child_2\n" +
+    "    - [ ] A_child_3_4space\n";
+
+  const file = new TFile();
+  file.path = "parent.md";
+  file.extension = "md";
+  file.stat = { mtime: 1000 };
+  let data = initial;
+  const app = {
+    vault: {
+      getAbstractFileByPath: (p) => (p === "parent.md" ? file : null),
+      process: async (_file, fn) => {
+        data = fn(data);
+      },
+    },
+  };
+  const parent = {
+    id: "parent.md:L0",
+    path: "parent.md",
+    line: 0,
+    indent: "",
+    rawLine: "- [ ] A_parent ⏳ 2026-04-26",
+    parentLine: null,
+    created: null,
+  };
+
+  const result = await addTask(app, {
+    text: "New child",
+    parent,
+    stampCreated: false,
+  });
+
+  assert.equal(result.created, "\t- [ ] New child");
+  assert.ok(
+    data.includes("\t- [ ] New child"),
+    `addTask(parent) did not use TAB child indent.\nGot:\n${data}`,
+  );
+  assert.ok(
+    !data.includes("    - [ ] New child"),
+    `addTask(parent) still emitted 4-space child indent.\nGot:\n${data}`,
   );
 });

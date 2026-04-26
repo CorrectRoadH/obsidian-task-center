@@ -495,15 +495,15 @@ export async function addTask(
     file = af;
   }
 
-  let indent = "";
-  if (opts.parent) {
-    indent = opts.parent.indent + "    ";
-  }
-  const newLine = buildTaskLine(opts, indent);
-
   let insertedLine = -1;
+  let createdLine = "";
   await app.vault.process(file, (data) => {
     const lines = data.split("\n");
+    const indent = opts.parent
+      ? pickChildIndent(lines, opts.parent.line, opts.parent.indent, opts.parent.indent.length)
+      : "";
+    const newLine = buildTaskLine(opts, indent);
+    createdLine = newLine;
     if (opts.parent) {
       // Insert right after the parent's last descendant — `findChildrenEnd`
       // stops before any trailing blank lines so the new item stays inside
@@ -530,7 +530,7 @@ export async function addTask(
     return lines.join("\n");
   });
 
-  return { path: targetPath, line: insertedLine, created: newLine };
+  return { path: targetPath, line: insertedLine, created: createdLine };
 }
 
 // ---------- Nest (move a task to become a subtask of another) ----------
