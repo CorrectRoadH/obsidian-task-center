@@ -905,6 +905,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     position: sticky;
     bottom: 0;
     left: 0;
@@ -936,6 +937,16 @@
     background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
+    font-weight: 600;
+  }
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-home-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
     font-weight: 600;
   }
 

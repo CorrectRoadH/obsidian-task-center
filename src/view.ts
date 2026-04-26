@@ -400,7 +400,7 @@ export class TaskCenterView extends ItemView {
     const body = el.createDiv({ cls: "bt-body" });
     if (this.state.planToday) {
       this.renderPlanToday(body);
-    } else if (this.tasks.length === 0 && this.state.tab !== "today") {
+    } else if (this.tasks.length === 0) {
       this.renderOnboarding(body);
     } else {
       switch (this.state.tab) {
@@ -466,6 +466,14 @@ export class TaskCenterView extends ItemView {
    */
   private renderMobileActionBar(parent: HTMLElement) {
     const bar = parent.createDiv({ cls: "bt-mobile-action-bar" });
+    bar.dataset.mobileEntry = "true";
+
+    const home = bar.createEl("button", {
+      text: tr("mobile.openTaskCenter"),
+      cls: "bt-mobile-home-btn",
+    });
+    home.dataset.mobileAction = "open-task-center";
+    home.addEventListener("click", () => this.setTab("today"));
 
     const trash = bar.createDiv({ cls: "bt-mobile-trash" });
     trash.dataset.dropZone = "trash";
@@ -476,6 +484,7 @@ export class TaskCenterView extends ItemView {
       text: tr("toolbar.add"),
       cls: "bt-mobile-add-btn",
     });
+    add.dataset.mobileAction = "quick-add";
     add.addEventListener("click", () => this.openQuickAdd());
   }
 
@@ -485,10 +494,15 @@ export class TaskCenterView extends ItemView {
   // see USER_STORIES.md
   private renderOnboarding(parent: HTMLElement) {
     const wrap = parent.createDiv({ cls: "bt-onboarding" });
+    wrap.dataset.emptyState = "first-use";
+    if (this.contentEl.dataset.mobileLayout === "true") {
+      wrap.dataset.mobileEmptyState = "true";
+    }
     wrap.createEl("h2", { text: tr("onboarding.title") });
     // UX-mobile §10: desktop body mentions Cmd/Ctrl+T which doesn't apply.
-    wrap.createEl("p", { text: tr(Platform.isMobile ? "onboarding.mobileBody" : "onboarding.body") });
+    wrap.createEl("p", { text: tr(isMobileMode() ? "onboarding.mobileBody" : "onboarding.body") });
     const btn = wrap.createEl("button", { text: tr("onboarding.cta"), cls: "bt-onboarding-cta" });
+    btn.dataset.mobileAction = "empty-quick-add";
     btn.addEventListener("click", () => this.openQuickAdd());
   }
 
