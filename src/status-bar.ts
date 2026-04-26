@@ -81,6 +81,13 @@ export class StatusBar {
   }
 }
 
+// task #41: mirror the board's US-107 filter so a `- [ ] ⏳ today` line
+// (a blank-title task) is dropped from today/overdue counts. Without this
+// the status bar's number disagreed with the visible card count.
 function activeTodo(t: ParsedTask): boolean {
-  return t.status === "todo" && !t.inheritsTerminal;
+  return (
+    t.status === "todo" &&
+    !t.inheritsTerminal &&
+    t.title.trim() !== ""
+  );
 }
