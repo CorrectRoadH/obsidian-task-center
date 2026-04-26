@@ -208,6 +208,9 @@
 - `US-701a` **Daily Notes 未启用时必须展示可操作提示**。当 Obsidian 内置 Daily Notes 插件处于禁用状态，插件启动及用户打开看板时，**状态栏**（或持久 Notice）必须展示形如 "Daily Notes 插件未启用，任务将写入收件箱" 的提示，并提供一个跳转到 Obsidian 插件设置页的入口。不允许静默 fallback——用户需要知道写入目标已变更。
 - `US-701b` **Daily Notes 未配置时（folder 为空）必须展示可操作提示**。当 Daily Notes 启用但未设置日记文件夹，插件应在状态栏展示 "Daily Notes 未设置文件夹，任务将写入收件箱" 提示，并附设置入口。逻辑与 US-701a 对称。
 - `US-701c` **警告状态必须在配置修复后自动消失**。用户在 Obsidian 设置中启用 Daily Notes 或补齐配置后，警告应随下一次 workspace 事件（layout-change / settings-change）自动清除，无需重启 Obsidian。
+- `US-701d` **Tasks 社区插件未安装时必须展示可操作提示**。当 Obsidian 社区插件列表中不存在 `obsidian-tasks` 插件（`app.plugins.manifests["obsidian-tasks"]` 为空），插件启动及用户打开看板时，状态栏必须展示 `data-dep-warning="tasks-missing"` 提示，告知用户依赖未安装。不允许静默跳过。
+- `US-701e` **Tasks 社区插件已安装但禁用时必须展示可操作提示**。当 `app.plugins.manifests["obsidian-tasks"]` 存在但未加载（`app.plugins.plugins["obsidian-tasks"]` 为空），状态栏必须展示 `data-dep-warning="tasks-disabled"` 提示，区别于未安装的 tasks-missing。
+- `US-701f` **Tasks 插件正常启用时不显示任何 tasks 相关警告**。当 `app.plugins.plugins["obsidian-tasks"]` 已加载，状态栏不得出现任何 `data-dep-warning` 值包含 `"tasks-"` 的元素。
 
 ### 今日执行视图（US-720）
 
