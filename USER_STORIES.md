@@ -171,9 +171,10 @@
   - Quick Add input（US-167，桌面 + 移动）
   - 卡片标题 inline 改名 input（US-119 / US-161）
   - 子任务添加 input（US-141 / US-162）
+  - 日期 prompt input（DatePromptModal，按 `d/D` 唤起的快速排期）
   - 任何设置项里要按 Enter 提交的输入
   - 未来新增的所有 text input / textarea
-  反例：用户输入"周六" 拼音过程中按 Enter 选字，被当成 submit 触发——**这是 bug 不是 feature**。Esc 不在此规则内（IME 期间 Esc 是"取消候选词"还是"关 modal"由浏览器 / Electron 决定，不强制覆盖）。
+  反例：用户输入"周六" 拼音过程中按 Enter 选字，被当成 submit 触发——**这是 bug 不是 feature**。Esc 不在此规则内（IME 期间 Esc 是"取消候选词"还是"关 modal"由浏览器 / Electron 决定，不强制覆盖）。**不需要守卫的 Enter 处理**：focusable div 的卡片 hotkey（已 skip text-input focus 路径）、按钮 keydown 触发（chip / role=button 等，不是 text input，IME composition 不会发生）。
 
 ### 移动端独有（Obsidian Mobile / iOS / iPadOS / Android）
 
