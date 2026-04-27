@@ -146,7 +146,7 @@ src/
 │   ├── card.ts          单卡渲染（含子任务递归）+ 状态机
 │   ├── tree.ts          box-drawing 树渲染（CLI 与 GUI 复用，UX §16-6）
 │   ├── dnd.ts           拖拽 controller（含 rAF dwell timer，UX §16-8）
-│   ├── source-dialog.ts 源 Markdown 编辑对话框（US-168）
+│   ├── source-dialog.ts 源 Markdown 编辑 shell/controller（US-168）
 │   └── undo.ts          UndoStack（深 20，drift 校验）
 ├── status-bar.ts    状态栏（订阅 cache，不再 rescan）
 ├── quickadd.ts      QuickAdd modal
@@ -175,36 +175,37 @@ src/
 - `view` **不**自己订阅 `metadataCache.on("resolved")`（BUG.md #3）。订阅只在 `cache` 一处。
 - `status-bar` **不**自己 `parseVaultTasks`。这是 BUG.md 的根本原因。
 
-### 2.2 Source edit dialog（US-168）
+### 2.2 Source edit panel / shell（US-168）
 
-点击卡片的查看/编辑路径统一为 source edit dialog。旧的 hover popover、卡片双击打开源文件、右键菜单打开源文件都应删除，避免三套入口表达同一能力：
+点击卡片的查看/编辑路径统一为 source edit panel。旧的 hover popover、卡片双击打开源文件、右键菜单打开源文件都应删除，避免三套入口表达同一能力。#78 spike 的结论是：Obsidian public API 不能把原生 `MarkdownView` 安全嵌入 plugin `Modal`，所以这里的 "dialog" 是产品形态/控制器，不是纯 `Modal` 容器。
 
 ```
 Task card click
   → TaskCenterView.openSourceDialog(task)
   → SourceEditDialog.open(task)
   → resolve TFile(task.path)
-  → mount Obsidian Markdown editor surface
+  → open a real WorkspaceLeaf + MarkdownView
   → editor.setCursor({ line: task.line, ch: 0 })
   → editor.scrollIntoView({ from/to: task.line }, true)
+  → dialog-like shell controls close / reveal / refresh
   → on close / vault modify → cache invalidation → board refresh
 ```
 
 **硬约束**：
 
-- 对话框里的内容必须是可编辑的 Obsidian Markdown editor surface，不能用 `MarkdownRenderer` 只读渲染替代。`MarkdownRenderer` 只能继续服务 hover popover。
+- 编辑内容必须来自真实 `WorkspaceLeaf + MarkdownView`，不能用 `MarkdownRenderer` 只读渲染替代，也不能伪造 `WorkspaceLeaf` 或搬运 workspace leaf DOM 到 `Modal.contentEl`。
 - 定位使用 Obsidian editor API：`MarkdownView.editor.setCursor()` + `editor.scrollIntoView(range, true)`。当前 `openAtSource()` 已在普通 leaf 路径里验证这组 API 可用；新对话框必须复用同一定位语义。
 - 旧 `ContextPopoverController` / `view/popover.ts` 不再需要；实现任务必须删除 hover popover 代码、样式、测试和文档引用，而不是只在打开 dialog 前关闭它。
 - 写回仍走 Obsidian editor / vault 原生保存语义；不要在 dialog 里另写一套 parser/writer。看板只通过既有 vault/cache 事件刷新。
 - `openAtSource()` 普通 leaf 行为只能作为实现过渡工具存在；最终用户路径不再暴露右键"打开源文件"或卡片双击跳源文件。
-- 如果 Obsidian 公共 API 无法把 `MarkdownView` 安全挂进 `Modal`，实现前必须在 task thread 报告可验证证据，并由 PM/Jerry 选择替代形态。禁止静默降级成只读 markdown preview。
+- `docs/source-edit-dialog-spike.md` 是本架构决策的证据文件；后续实现如果偏离真实 leaf 路径，必须先更新 spike 证据并经 PM/Jerry 确认。
 
 **模块边界**：
 
-- `view/source-dialog.ts` 只处理 Obsidian UI 生命周期、文件打开、光标定位、关闭和 refresh callback。
-- 它可以依赖 `App` / `Modal` / `MarkdownView` / `TFile` / `ParsedTask`，但不依赖 `TaskCenterApi` 写动词。
+- `view/source-dialog.ts` 只处理 Obsidian UI 生命周期、真实 leaf 打开、光标定位、关闭和 refresh callback。
+- 它可以依赖 `App` / `WorkspaceLeaf` / `MarkdownView` / `TFile` / `ParsedTask`，但不依赖 `TaskCenterApi` 写动词。
 - `view.ts` 只负责把卡片 click 事件路由到 `openSourceDialog(task)`，并阻止按钮 / drag / contextmenu 冒泡误触发；不得继续给卡片绑定 `dblclick → openAtSource`。
-- 测试以 e2e 为主：点击卡片后断言 dialog 出现、编辑器内容包含源文件上下文、当前任务行居中或至少 cursor line 正确、修改子任务后 vault 文件变更并刷新卡片。
+- 测试以 e2e 为主：点击卡片后断言 source edit shell 出现、真实 Markdown editor 内容包含源文件上下文、当前任务行居中或至少 cursor line 正确、修改子任务后 vault 文件变更并刷新卡片。
 
 ---
 
