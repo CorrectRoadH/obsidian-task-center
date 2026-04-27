@@ -211,6 +211,9 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     await card.click();
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
+    const beforeEsc = await activeLeafSnapshot();
+    expect(beforeEsc.type).toBe("task-center-board");
+    expect(beforeEsc.path).not.toBe(dailyPath);
 
     await browser.performActions([
       {

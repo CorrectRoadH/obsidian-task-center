@@ -114,9 +114,9 @@ export async function openTaskSourceEditShell(
   const split = createSourceEditorSplit(app);
   editorHost.appendChild(split.containerEl);
 
-  const restoreHostLeaf = () => {
+  const restoreHostLeaf = (focus = true) => {
     try {
-      if (hostLeaf) app.workspace.setActiveLeaf(hostLeaf, { focus: true });
+      if (hostLeaf) app.workspace.setActiveLeaf(hostLeaf, { focus });
     } catch {
       // The source shell is already closing; losing focus restoration should not
       // keep the editor shell open or prevent saving.
@@ -167,7 +167,7 @@ export async function openTaskSourceEditShell(
     overlay.remove();
     await opts.onSave?.();
     restoreHostLeaf();
-    requestAnimationFrame(restoreHostLeaf);
+    requestAnimationFrame(() => restoreHostLeaf());
     window.setTimeout(restoreHostLeaf, 0);
   };
   overlay.__sourceEditClose = destroy;
@@ -192,12 +192,14 @@ export async function openTaskSourceEditShell(
   overlay.addEventListener("click", () => void destroy());
 
   try {
+    restoreHostLeaf(false);
     leaf = app.workspace.createLeafInParent(split, 0) as SourceEditorLeaf;
     await leaf.openFile(file, {
       active: false,
       eState: { line: task.line },
     });
     view = await focusTaskLineInMarkdownView(leaf, task.line);
+    restoreHostLeaf(false);
     overlay.__sourceEditLeaf = leaf;
     overlay.__sourceEditView = view;
   } catch (err) {
