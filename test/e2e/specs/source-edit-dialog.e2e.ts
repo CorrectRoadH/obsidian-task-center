@@ -83,6 +83,12 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     await obsidianPage.resetVault(VAULT);
   });
 
+  afterEach(async function () {
+    await browser.execute(() => {
+      document.querySelector<HTMLElement>("[data-source-edit-shell]")?.remove();
+    });
+  });
+
   it("US-168a/b: clicking a normal task card opens a Markdown-backed source edit shell at that task", async function () {
     const { card, taskId } = await openBoardWithTask();
     const beforeViewType = (await browser.executeObsidian(async ({ app }) => {
