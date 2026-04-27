@@ -4,8 +4,6 @@ import {
   Menu,
   Notice,
   Platform,
-  TFile,
-  MarkdownView,
 } from "obsidian";
 import { ParsedTask, VIEW_TYPE_TASK_CENTER } from "./types";
 import { formatMinutes } from "./parser";
@@ -28,12 +26,12 @@ import { t as tr, getLocale } from "./i18n";
 import { animateOut } from "./anim";
 import { TabDwellTracker } from "./view/dnd";
 import { UndoStack, UndoEntry, UndoOp } from "./view/undo";
-import { ContextPopoverController } from "./view/popover";
 import { BottomSheet } from "./view/bottom-sheet";
 import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
 import { findGroupingTag, groupingTagForKey, groupingTagIndex, normalizeGroupingTags } from "./grouping";
+import { openTaskSourceEditShell } from "./view/source-dialog";
 import type { SavedTaskView, SavedViewStatus } from "./types";
 import type TaskCenterPlugin from "./main";
 
@@ -113,8 +111,6 @@ export class TaskCenterView extends ItemView {
     durationMs: 600,
     onCommit: (tab) => this.setTab(tab),
   });
-  // Card hover popover — implementation in src/view/popover.ts.
-  private contextPopover: ContextPopoverController;
   // US-128: Ctrl/Cmd+Z undo stack. Only records writes initiated from this
   // view (drag / keyboard / quick-add). CLI writes are not captured —
   // they're scriptable and idempotent enough that auto-undo would be more
@@ -132,12 +128,6 @@ export class TaskCenterView extends ItemView {
     this.undoStack = new UndoStack(this.app, {
       onApplied: () => this.scheduleRefresh(),
       notify: (msg, ms) => new Notice(msg, ms),
-    });
-    this.contextPopover = new ContextPopoverController({
-      app: this.app,
-      addChild: (c) => this.addChild(c),
-      removeChild: (c) => this.removeChild(c),
-      isDragging: () => this.contentEl.hasClass("dragging-active"),
     });
     this.state = {
       // Priority: last-closed tab → defaultView setting → "week"
@@ -220,7 +210,6 @@ export class TaskCenterView extends ItemView {
       this.cacheUnsub = null;
     }
     this.dwellTracker.reset();
-    this.contextPopover.close();
     if (this.mobileDrag) {
       this.mobileDrag.destroy();
       this.mobileDrag = null;
@@ -246,6 +235,12 @@ export class TaskCenterView extends ItemView {
     return this.contentEl.querySelector(
       `[data-task-id="${CSS.escape(taskId)}"]`,
     ) as HTMLElement | null;
+  }
+
+  private async openSourceEditShell(task: ParsedTask): Promise<void> {
+    this.state.selectedTaskId = task.id;
+    this.contentEl.focus();
+    await openTaskSourceEditShell(this.app, this.leaf, task);
   }
 
   /**
@@ -376,15 +371,6 @@ export class TaskCenterView extends ItemView {
     // Preserve scroll position of the body across rebuilds
     const oldBody = el.querySelector(".bt-body");
     const savedScrollTop = oldBody ? (oldBody as HTMLElement).scrollTop : 0;
-
-    // task #68: close any open hover popover before tearing the card
-    // tree down. The popover is mounted on `document.body`, so `el.empty()`
-    // here doesn't take it with us — the floating panel survives the
-    // re-render even though its anchor card is gone, and `mouseleave`
-    // never fires (the cursor never moved). Closing explicitly here
-    // covers every render path: tab switches, settings changes,
-    // refreshes from cache events, undo redraws.
-    this.contextPopover.close();
 
     el.empty();
     el.addClass("task-center-view");
@@ -1001,10 +987,9 @@ export class TaskCenterView extends ItemView {
 
   /**
    * Mobile-only: long-press a card → bottom sheet with task actions.
-   * Mirrors the desktop right-click menu + hover popover (UX-mobile.md
-   * §5.1 / US-506) into a single thumb-reachable surface. Buttons call
-   * the same `api.*` methods as the desktop UI; rendered as a flat list
-   * of large tap targets.
+   * Mirrors the desktop right-click menu (UX-mobile.md §5.1 / US-506)
+   * into a single thumb-reachable surface. Buttons call the same `api.*`
+   * methods as the desktop UI; rendered as a flat list of large tap targets.
    */
   private openCardActionSheet(t: ParsedTask): void {
     const today = todayISO();
@@ -1024,7 +1009,8 @@ export class TaskCenterView extends ItemView {
     sheet = new BottomSheet(this.app, {
       title: t.title,
       populate: (el) => {
-        // Source location — replaces the desktop hover popover preview.
+        // Source location — quick orientation only. Editing source context
+        // now goes through the US-168 single-click source edit shell.
         const source = el.createDiv({ cls: "bt-sheet-source" });
         source.setText(`${t.path}:L${t.line + 1}`);
 
@@ -1041,8 +1027,8 @@ export class TaskCenterView extends ItemView {
         };
 
         // task #43: route every label in the long-press action sheet
-        // through tr() so a Chinese session sees "完成 / 取消完成 / 打开
-        // 源文件 / 放弃" etc. instead of the raw EN literals. The two
+        // through tr() so a Chinese session sees "完成 / 取消完成 / 放弃"
+        // etc. instead of the raw EN literals. The two
         // ⏳ <date> entries keep the date verbatim — the i18n template
         // wraps it without reformatting (locale-stable per US-411).
         btn(
@@ -1052,14 +1038,6 @@ export class TaskCenterView extends ItemView {
         btn(tr("sheet.scheduleAt", { date: today }), () => this.api.schedule(t.id, today));
         btn(tr("sheet.scheduleAt", { date: tomorrow }), () => this.api.schedule(t.id, tomorrow));
         btn(tr("sheet.scheduleClear"), () => this.api.schedule(t.id, null));
-        btn(tr("sheet.openSource"), async () => {
-          sheet?.close();
-          const file = this.app.vault.getAbstractFileByPath(t.path);
-          if (file instanceof TFile) {
-            const leaf = this.app.workspace.getLeaf(false);
-            await leaf.openFile(file, { eState: { line: t.line } });
-          }
-        });
         btn(tr("sheet.drop"), () => this.api.drop(t.id));
       },
     });
@@ -1222,7 +1200,9 @@ export class TaskCenterView extends ItemView {
               `${t.actual ? formatMinutes(t.actual) : "—"} / ${t.estimate ? formatMinutes(t.estimate) : "—"}`,
             );
           }
-          row.addEventListener("click", () => this.openAtSource(t));
+          row.addEventListener("click", () => {
+            void this.openSourceEditShell(t);
+          });
         }
       }
     }
@@ -1337,8 +1317,9 @@ export class TaskCenterView extends ItemView {
   //
   // Single question this view answers: "what should I do today?". Three
   // capped groups — overdue, scheduled-for-today, and one recommendation
-  // pulled from the inbox/unscheduled. Each card carries the four minimal
-  // actions (done / reschedule-to-tomorrow / drop / open-source). The
+  // pulled from the inbox/unscheduled. Each card carries the three minimal
+  // inline actions (done / reschedule-to-tomorrow / drop); clicking the
+  // card opens the US-168 source edit shell. The
   // view intentionally does NOT mirror the full board: per-group cap is 3
   // so the first screen stays scannable.
   //
@@ -1436,7 +1417,7 @@ export class TaskCenterView extends ItemView {
     const actions = card.createDiv({ cls: "bt-today-card-actions" });
     const mkBtn = (
       text: string,
-      action: "done" | "reschedule-tomorrow" | "drop" | "open-source",
+      action: "done" | "reschedule-tomorrow" | "drop",
       handler: () => void | Promise<void>,
     ) => {
       const btn = actions.createEl("button", { text, cls: `bt-today-action bt-today-action-${action}` });
@@ -1463,9 +1444,11 @@ export class TaskCenterView extends ItemView {
       await this.api.drop(t.id);
       await this.refreshAfterAction();
     });
-    mkBtn(tr("today.actionOpenSource"), "open-source", () => this.openAtSource(t));
 
-    card.addEventListener("dblclick", () => this.openAtSource(t));
+    card.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void this.openSourceEditShell(t);
+    });
   }
 
   private async refreshAfterAction(): Promise<void> {
@@ -1758,18 +1741,9 @@ export class TaskCenterView extends ItemView {
     if (t.status === "todo") this.renderAddSubtaskRow(card, t);
 
     this.wireCardEvents(card, t);
-    // Hover popover is desktop-only — UX-mobile.md §4: "不显 hover popover".
-    // On touch, browsers fire emulated mouseenter on first tap and stale
-    // mouseleave on next tap elsewhere; the popover would flash and stay.
-    // Long-press menu replaces it on mobile (UX-mobile §5.1 / US-506).
-    //
-    // task #44: route through `isMobileMode()` so the e2e test can flip
-    // mobile gestures on via `plugin.__setTestForceMobile(true)` in the
-    // WDIO desktop Chromium runner. Default value matches Platform.isMobile
-    // so the production code path is unchanged.
-    if (!isMobileMode()) {
-      this.contextPopover.attach(card, t);
-    } else {
+    // Mobile gestures still need the pointer controller; source/context
+    // editing is now the single-click source shell on every platform.
+    if (isMobileMode()) {
       // Unified mobile gesture controller (UX-mobile §13 #6: long-press +
       // drag + swipe must share one state machine).
       //   US-506: hold N ms still → openCardActionSheet (action menu)
@@ -2112,10 +2086,6 @@ export class TaskCenterView extends ItemView {
     sheet.open();
   }
 
-  // Context hover popover lives in `./view/popover` (ContextPopoverController).
-  // Wired in the constructor; cards register via `this.contextPopover.attach()`
-  // in renderCard.
-
   private renderAddSubtaskRow(card: HTMLElement, parent: ParsedTask) {
     const row = card.createDiv({ cls: "bt-subtask-add" });
     // Don't let this row trigger card-level drag or selection
@@ -2294,12 +2264,11 @@ export class TaskCenterView extends ItemView {
       });
     }
 
-    // Click → select
+    // Click → source edit shell. US-168 replaces hover previews and
+    // double-click source jumps with one primary card action.
     el.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.state.selectedTaskId = t.id;
-      this.contentEl.focus();
-      this.render();
+      void this.openSourceEditShell(t);
     });
 
     // Right-click context menu
@@ -2307,9 +2276,6 @@ export class TaskCenterView extends ItemView {
       e.preventDefault();
       this.openContextMenu(e as MouseEvent, t);
     });
-
-    // Double-click → open source
-    el.addEventListener("dblclick", () => this.openAtSource(t));
   }
 
   private makeDropZone(el: HTMLElement, targetDate: string | null) {
@@ -2570,7 +2536,7 @@ export class TaskCenterView extends ItemView {
     }
     if (e.key === "e" || e.key === "E") {
       e.preventDefault();
-      this.openAtSource(sel);
+      void this.openSourceEditShell(sel);
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
@@ -2580,7 +2546,7 @@ export class TaskCenterView extends ItemView {
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      this.openAtSource(sel);
+      void this.openSourceEditShell(sel);
       return;
     }
   }
@@ -2612,17 +2578,13 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Context menu / source ----------
 
-  // US-164: right-click a card to get the same actions the keyboard /
-  // drag flows expose — open source, toggle done, schedule today /
-  // tomorrow / clear, switch quadrant 1~4, drop. Mouse users don't
-  // need to memorize hotkeys (the keyboard map mirrors this in
-  // `handleKey`). Wired from `wireCardEvents`'s `contextmenu` listener.
+  // US-164: right-click a card to get secondary task actions — toggle
+  // done, schedule today / tomorrow / clear, switch grouping tags, drop.
+  // Source/context editing is now the US-168 single-click source shell.
+  // Wired from `wireCardEvents`'s `contextmenu` listener.
   // see USER_STORIES.md
   openContextMenu(e: MouseEvent, task: ParsedTask) {
     const m = new Menu();
-    m.addItem((i) =>
-      i.setTitle(tr("ctx.openSource")).onClick(() => this.openAtSource(task)),
-    );
     m.addItem((i) =>
       i.setTitle(task.status === "done" ? tr("ctx.markTodo") : tr("ctx.markDone")).onClick(async () => {
         await this.runWithRemoveAnim(task.id, async () => {
@@ -2677,22 +2639,6 @@ export class TaskCenterView extends ItemView {
       }),
     );
     m.showAtMouseEvent(e);
-  }
-
-  async openAtSource(task: ParsedTask) {
-    const file = this.app.vault.getAbstractFileByPath(task.path);
-    if (!(file instanceof TFile)) {
-      new Notice(tr("notice.fileNotFound", { path: task.path }));
-      return;
-    }
-    const leaf = this.app.workspace.getLeaf(true);
-    await leaf.openFile(file);
-    const view = leaf.view;
-    if (view instanceof MarkdownView) {
-      const editor = view.editor;
-      editor.setCursor({ line: task.line, ch: 0 });
-      editor.scrollIntoView({ from: { line: task.line, ch: 0 }, to: { line: task.line, ch: 0 } }, true);
-    }
   }
 
   openDatePrompt(task: ParsedTask) {

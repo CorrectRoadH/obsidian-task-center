@@ -109,7 +109,6 @@ const EN = {
   "notice.crossFile": "(cross-file)",
 
   // Context menu
-  "ctx.openSource": "Open source",
   "ctx.markDone": "Mark done",
   "ctx.markTodo": "Mark todo",
   "ctx.scheduleToday": "Schedule today",
@@ -211,7 +210,6 @@ const EN = {
   "sheet.done": "✓ Done",
   "sheet.scheduleAt": "⏳ {date}",
   "sheet.scheduleClear": "⏳ —",
-  "sheet.openSource": "📂 Open source",
   "sheet.drop": "🗑 Drop",
 
   // task #43: date prompt hint line — bilingual EN baseline (the original
@@ -250,8 +248,6 @@ const EN = {
   "today.actionDone": "✓ Done",
   "today.actionReschedule": "↷ Tomorrow",
   "today.actionDrop": "🗑 Drop",
-  "today.actionOpenSource": "📂 Source",
-
   // US-721 (task #64): today planning mode.
   "plan.entry": "Plan today",
   "plan.title": "Plan today",
@@ -342,7 +338,6 @@ const ZH: Partial<typeof EN> = {
   "notice.nested": "已嵌入到「{title}」{where}",
   "notice.crossFile": "（跨文件）",
 
-  "ctx.openSource": "跳转到源文件",
   "ctx.markDone": "标记完成",
   "ctx.markTodo": "取消完成",
   "ctx.scheduleToday": "排到今天",
@@ -425,7 +420,6 @@ const ZH: Partial<typeof EN> = {
   "sheet.done": "✓ 完成",
   "sheet.scheduleAt": "⏳ {date}",
   "sheet.scheduleClear": "⏳ —",
-  "sheet.openSource": "📂 打开源文件",
   "sheet.drop": "🗑 放弃",
 
   // task #43: 日期弹窗提示
@@ -456,8 +450,6 @@ const ZH: Partial<typeof EN> = {
   "today.actionDone": "✓ 完成",
   "today.actionReschedule": "↷ 明天",
   "today.actionDrop": "🗑 放弃",
-  "today.actionOpenSource": "📂 来源",
-
   // US-721: 今日计划模式
   "plan.entry": "计划今天",
   "plan.title": "今日计划",

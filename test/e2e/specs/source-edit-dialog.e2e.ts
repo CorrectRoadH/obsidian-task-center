@@ -73,7 +73,7 @@ async function openBoardWithTask(path = "Tasks/Inbox.md", line = "- [ ] Source e
   );
   await browser.executeObsidianCommand("obsidian-task-center:open");
   await forFlush();
-  const card = $(`.task-center-view [data-task-id="${path}:L2"]`);
+  const card = $(`.task-center-view [data-task-id="${path}:L2"] .bt-card-meta`);
   await card.waitForExist({ timeout: 5000 });
   return { card, taskId: `${path}:L2` };
 }
@@ -111,9 +111,9 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     await expect($(".bt-ctx-popover")).not.toExist();
 
     await card.click({ button: "right" });
-    const menuTitles = await Promise.all(
-      (await $$(".menu-item-title")).map((el) => el.getText()),
-    );
+    const menuTitleEls = await $$(".menu-item-title");
+    const menuTitles = [];
+    for (const el of menuTitleEls) menuTitles.push(await el.getText());
     expect(menuTitles.join("\n")).not.toMatch(/Open source|打开源文件/);
   });
 

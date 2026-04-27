@@ -834,50 +834,6 @@
   border-radius: 4px;
 }
 
-/* Hover context popover — shows source-file surroundings for a task card. */
-.bt-ctx-popover {
-  position: fixed;
-  z-index: 100;
-  max-width: 480px;
-  min-width: 260px;
-  max-height: 360px;
-  overflow: auto;
-  padding: 10px 12px;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  font-size: 13px;
-  line-height: 1.5;
-  pointer-events: none; /* don't interfere with hover tracking on the card */
-}
-.bt-ctx-popover .bt-ctx-parent {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  padding: 4px 6px;
-  margin-bottom: 8px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-  border-left: 2px solid var(--interactive-accent);
-  font-size: 12px;
-  opacity: 0.85;
-}
-.bt-ctx-popover .bt-ctx-parent-arrow {
-  flex-shrink: 0;
-  color: var(--interactive-accent);
-  font-weight: 600;
-}
-.bt-ctx-popover .bt-ctx-parent-body > * {
-  margin: 0;
-}
-.bt-ctx-popover .bt-ctx-body > *:first-child {
-  margin-top: 0;
-}
-.bt-ctx-popover .bt-ctx-body > *:last-child {
-  margin-bottom: 0;
-}
-
 /* ─────────────────────────────────────────────────────────────────────────
    Mobile layout (UX-mobile.md §2 / §13).
    Decision is by viewport WIDTH, not platform — a 600px split pane on a

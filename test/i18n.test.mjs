@@ -101,7 +101,7 @@ test("US-412 — err.task_not_found key exists in both EN and ZH tables", async 
 //     → status-bar.ts + view.ts:renderMobileStatusRow (shared keys)
 //   - meta.est / meta.act        → view.ts est/act badges
 //   - sheet.markUndone / sheet.done / sheet.scheduleAt /
-//     sheet.scheduleClear / sheet.openSource / sheet.drop
+//     sheet.scheduleClear / sheet.drop
 //                                 → view.ts:openCardActionSheet
 //   - prompt.dateHint            → dateprompt.ts
 test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (translated where text-bearing)", async () => {
@@ -115,7 +115,6 @@ test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (tr
     { key: "sheet.done", vars: undefined, mustDifferFromEnInZh: true },
     { key: "sheet.scheduleAt", vars: { date: "2026-04-26" }, mustDifferFromEnInZh: false },
     { key: "sheet.scheduleClear", vars: undefined, mustDifferFromEnInZh: false },
-    { key: "sheet.openSource", vars: undefined, mustDifferFromEnInZh: true },
     { key: "sheet.drop", vars: undefined, mustDifferFromEnInZh: true },
     { key: "prompt.dateHint", vars: undefined, mustDifferFromEnInZh: true },
     // Leo HOLD on first review (msg `cbf0489c`): Completed tab's
