@@ -178,11 +178,11 @@ describe("US-720 today execution view (task #63)", function () {
     expect(content).not.toContain(`⏳ ${today}`);
   });
 
-  // US-720d: empty state element shown when no tasks in any group.
-  // FAIL until: today view renders data-today-empty when all groups are empty.
-  it("US-720d: empty state shown when no tasks exist", async function () {
-    // Force this spec's task source empty instead of relying on runner reset state.
-    await writeAndWait("Tasks/Inbox.md", "");
+  // US-720d: Today empty state shown when no task qualifies for a Today group.
+  // A totally empty vault renders first-use onboarding instead; this fixture
+  // keeps the board non-empty while making overdue/today/unscheduled-rec empty.
+  it("US-720d: empty state shown when no Today group has tasks", async function () {
+    await writeAndWait("Tasks/Inbox.md", "- [ ] Future task ⏳ 2099-01-01\n");
     await resetTaskCacheForTest();
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
