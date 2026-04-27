@@ -112,21 +112,23 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     expect(beforeViewType).toBe("task-center-board");
     expect(afterViewType).toBe(beforeViewType);
 
-    await browser.executeObsidian(async ({ app }) => {
+    await browser.executeObsidian(async () => {
       const shell = document.querySelector("[data-source-edit-shell]");
       const editorEl = shell?.querySelector(".cm-editor");
       if (!editorEl) throw new Error("native CodeMirror editor is not rendered inside source shell");
-      const view = app.workspace.activeLeaf?.view as unknown as {
-        editor?: {
-          replaceRange: (
-            replacement: string,
-            from: { line: number; ch: number },
-            to?: { line: number; ch: number },
-          ) => void;
+      const view = (shell as unknown as {
+        __sourceEditView?: {
+          editor?: {
+            replaceRange: (
+              replacement: string,
+              from: { line: number; ch: number },
+              to?: { line: number; ch: number },
+            ) => void;
+          };
+          save?: () => Promise<void>;
         };
-        save?: () => Promise<void>;
-      };
-      if (!view.editor) throw new Error("native MarkdownView editor missing");
+      }).__sourceEditView;
+      if (!view?.editor) throw new Error("native MarkdownView editor missing");
       view.editor.replaceRange(
         " edited in native editor",
         { line: 1, ch: "    - [ ] Source edit target".length },

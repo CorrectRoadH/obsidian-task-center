@@ -20,9 +20,17 @@ type SourceEditorSplit = WorkspaceSplit & {
 
 type ConstructableWorkspaceSplit = new (workspace: unknown, direction: string) => SourceEditorSplit;
 
+type SourceEditShellElement = HTMLElement & {
+  __sourceEditLeaf?: WorkspaceLeaf;
+  __sourceEditView?: MarkdownView;
+  __sourceEditClose?: () => Promise<void>;
+};
+
 function clearPreviousSourceShells(): void {
   for (const el of Array.from(document.querySelectorAll<HTMLElement>("[data-source-edit-shell]"))) {
-    el.remove();
+    const close = (el as SourceEditShellElement).__sourceEditClose;
+    if (close) void close();
+    else el.remove();
   }
 }
 
@@ -76,7 +84,7 @@ export async function openTaskSourceEditShell(
 
   clearPreviousSourceShells();
 
-  const overlay = document.body.createDiv({ cls: "task-center-source-edit-overlay" });
+  const overlay = document.body.createDiv({ cls: "task-center-source-edit-overlay" }) as SourceEditShellElement;
   overlay.dataset.sourceEditShell = "true";
   overlay.dataset.sourceEditTaskId = task.id;
   overlay.dataset.sourceEditEditor = "obsidian-markdown-view";
@@ -122,6 +130,7 @@ export async function openTaskSourceEditShell(
     await opts.onSave?.();
     if (hostLeaf) app.workspace.setActiveLeaf(hostLeaf, { focus: false });
   };
+  overlay.__sourceEditClose = destroy;
 
   const onKeydown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -142,6 +151,8 @@ export async function openTaskSourceEditShell(
     });
     app.workspace.setActiveLeaf(leaf, { focus: true });
     view = await focusTaskLineInMarkdownView(leaf, task.line);
+    overlay.__sourceEditLeaf = leaf;
+    overlay.__sourceEditView = view;
   } catch (err) {
     await destroy();
     new Notice(tr("sourceEdit.nativeFailed"));
