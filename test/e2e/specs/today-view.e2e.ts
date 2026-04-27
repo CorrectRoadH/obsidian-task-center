@@ -156,7 +156,9 @@ describe("US-720 today execution view (task #63)", function () {
   // US-720d: empty state element shown when no tasks in any group.
   // FAIL until: today view renders data-today-empty when all groups are empty.
   it("US-720d: empty state shown when no tasks exist", async function () {
-    // Vault is reset — no tasks.
+    // Force this spec's task source empty instead of relying on runner reset state.
+    await writeAndWait("Tasks/Inbox.md", "");
+
     await browser.executeObsidianCommand("obsidian-task-center:open");
     await forFlush();
 
@@ -164,7 +166,6 @@ describe("US-720 today execution view (task #63)", function () {
     await todayTab.waitForExist({ timeout: 5000 });
     await todayTab.click();
 
-    // BUG: empty state not rendered — FAILS.
     await expect($('[data-today-empty]')).toExist();
   });
 });
