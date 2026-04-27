@@ -85,7 +85,9 @@ async function resetTaskCacheForTest() {
     cache.allLoaded = false;
     cache.allLoadingPromise = null;
     // @ts-expect-error — runtime plugin test hook
-    await app.plugins.plugins["obsidian-task-center"].__forFlush();
+    const plugin = app.plugins.plugins["obsidian-task-center"];
+    await plugin.refreshOpenViews();
+    await plugin.__forFlush();
   });
 }
 
