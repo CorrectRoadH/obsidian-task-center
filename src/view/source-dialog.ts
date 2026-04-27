@@ -153,6 +153,7 @@ export async function openTaskSourceEditShell(
     document.removeEventListener("keyup", onKeyup, true);
     window.removeEventListener("keydown", onKeydown, true);
     window.removeEventListener("keyup", onKeyup, true);
+    restoreHostLeaf(false);
     try {
       await (view as unknown as { save?: () => Promise<void> })?.save?.();
     } catch {
@@ -177,6 +178,7 @@ export async function openTaskSourceEditShell(
     if (closing) return;
     closing = true;
     suppressNextEscapeKeyup();
+    restoreHostLeaf(false);
     void destroy();
   };
 
