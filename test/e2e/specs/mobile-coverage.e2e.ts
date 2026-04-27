@@ -161,10 +161,10 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
   // without needing the test hook.
   it("US-503: mobile Week — today expanded by default; tapping a collapsed day expands it", async function () {
     const today = todayISO();
-    const yest = offsetISO(-1);
+    const targetDay = inWeekNeighbor();
     await writeAndWait(
       "Tasks/Inbox.md",
-      `- [ ] Today task ⏳ ${today}\n- [ ] Yesterday task ⏳ ${yest}\n`,
+      `- [ ] Today task ⏳ ${today}\n- [ ] Neighbor task ⏳ ${targetDay}\n`,
     );
     await openMobileBoardWeek();
 
@@ -180,7 +180,7 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
       const head = day.querySelector<HTMLElement>(".bt-week-day-head") ?? day;
       head.click();
       return true;
-    }, yest);
+    }, targetDay);
     expect(expanded).toBe(true);
 
     await $(`.task-center-view [data-task-id="Tasks/Inbox.md:L2"]`).waitForExist({

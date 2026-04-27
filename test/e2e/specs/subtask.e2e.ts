@@ -9,6 +9,13 @@ function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function offsetISO(deltaDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + deltaDays);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
@@ -135,10 +142,11 @@ describe("Task Center — 子任务 (US-141/162)", function () {
 
   // US-141: subtask added to a past-week parent (regression for daily-note + week navigation)
   it("adds a subtask when parent is in a past week's daily note", async function () {
-    const dailyPath = `Daily/2026-04-12.md`;
+    const pastDate = offsetISO(-14);
+    const dailyPath = `Daily/${pastDate}.md`;
     await writeAndWait(
       dailyPath,
-      `- [ ] 用债务周期分析投资 ⏳ 2026-04-12\n    - [ ] 把cetus还有债务还清\n`,
+      `- [ ] 用债务周期分析投资 ⏳ ${pastDate}\n    - [ ] 把cetus还有债务还清\n`,
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
@@ -147,7 +155,7 @@ describe("Task Center — 子任务 (US-141/162)", function () {
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
 
-    // Navigate back until the 2026-04-12 week is visible (2 weeks back from current).
+    // Navigate back until the past week is visible (2 weeks back from current).
     for (let i = 0; i < 2; i++) {
       await browser.execute(() => {
         document
@@ -155,9 +163,9 @@ describe("Task Center — 子任务 (US-141/162)", function () {
           ?.click();
       });
     }
-    await $(".task-center-view [data-date='2026-04-12']").waitForExist({
+    await $(`.task-center-view [data-date='${pastDate}']`).waitForExist({
       timeout: 3000,
-      timeoutMsg: "week containing 2026-04-12 did not appear after navigating back",
+      timeoutMsg: `week containing ${pastDate} did not appear after navigating back`,
     });
 
     const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
