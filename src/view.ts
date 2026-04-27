@@ -96,6 +96,12 @@ function taskMatchesDate(t: ParsedTask, date: string): boolean {
   return t.scheduled === date || t.deadline === date || t.completed === date || t.created === date;
 }
 
+function taskDateColumn(t: ParsedTask): string | null {
+  if (t.status === "todo") return t.inheritsTerminal ? null : t.scheduled;
+  if (t.status === "done") return t.completed;
+  return null;
+}
+
 export class TaskCenterView extends ItemView {
   plugin: TaskCenterPlugin;
   api: TaskCenterApi;
@@ -523,10 +529,16 @@ export class TaskCenterView extends ItemView {
     const counts = {
       today: overdueCount + todayScheduled,
       week: this.hideChildrenOfVisibleParents(
-        activeTodos.filter((t) => t.scheduled && t.scheduled >= weekStart && t.scheduled <= weekEnd),
+        this.tasks.filter((t) => {
+          const date = taskDateColumn(t);
+          return !!date && date >= weekStart && date <= weekEnd;
+        }),
       ).length,
       month: this.hideChildrenOfVisibleParents(
-        activeTodos.filter((t) => t.scheduled && t.scheduled >= monthStart && t.scheduled <= monthEnd),
+        this.tasks.filter((t) => {
+          const date = taskDateColumn(t);
+          return !!date && date >= monthStart && date <= monthEnd;
+        }),
       ).length,
       completed: this.hideChildrenOfVisibleParents(
         this.tasks.filter((t) => t.status === "done"),
@@ -830,7 +842,7 @@ export class TaskCenterView extends ItemView {
       head.createSpan({ text: `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, cls: "bt-week-date" });
 
       const dayTasks = this.tasks
-        .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
+        .filter((t) => taskDateColumn(t) === day)
         .filter(filter);
       dayTasks.sort((a, b) => {
         if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
@@ -894,10 +906,8 @@ export class TaskCenterView extends ItemView {
       // same day). Otherwise we want both: parent card without this
       // child, and the child as a top-level card on its own day.
       if (ids.has(parentId)) {
-        if (!t.scheduled || t.scheduled === this.findParentTask(t)?.scheduled) {
-          return false;
-        }
-        return true;
+        const parent = this.findParentTask(t);
+        return parent ? this.hasIndependentDateFromParent(t, parent) : true;
       }
       // Parent lives in another day column (has its own ⏳).
       const parent = this.tasks.find(
@@ -906,10 +916,18 @@ export class TaskCenterView extends ItemView {
       if (parent && parent.scheduled) {
         // Only hide when the child rides with the parent — no independent
         // ⏳, or matching ⏳ (which is already covered by the parent card).
-        if (!t.scheduled || t.scheduled === parent.scheduled) return false;
+        if (!this.hasIndependentDateFromParent(t, parent)) return false;
       }
       return true;
     });
+  }
+
+  private hasIndependentDateFromParent(child: ParsedTask, parent: ParsedTask): boolean {
+    const parentDate = parent.scheduled;
+    if (child.scheduled && child.scheduled !== parentDate) return true;
+    if (child.completed && child.completed !== parentDate) return true;
+    if (child.cancelled && child.cancelled !== parentDate) return true;
+    return false;
   }
 
   private findParentTask(t: ParsedTask): ParsedTask | undefined {
@@ -966,7 +984,7 @@ export class TaskCenterView extends ItemView {
       // e2e drop-target selector — same contract as the week view.
       cell.dataset.date = day;
       const dayTasksAll = this.tasks
-        .filter((t) => t.scheduled === day && t.status === "todo" && !t.inheritsTerminal)
+        .filter((t) => taskDateColumn(t) === day)
         .filter(filter);
       const dayTasks = this.hideChildrenOfVisibleParents(dayTasksAll);
       const head = cell.createDiv({ cls: "bt-month-cell-head" });
@@ -1727,7 +1745,7 @@ export class TaskCenterView extends ItemView {
         .map((l) => this.tasks.find((x) => x.path === t.path && x.line === l))
         .filter((x): x is ParsedTask => !!x);
       const children = resolved
-        .filter((c) => !(c.scheduled && c.scheduled !== t.scheduled));
+        .filter((c) => !this.hasIndependentDateFromParent(c, t));
       // US-125 task #33 observability — the "subtask missing from parent
       // card" repro is hard to capture in synthetic e2e (Wood scanned 6
       // axes, none reproduced). When a user trips the bug, ask them to
@@ -2109,6 +2127,7 @@ export class TaskCenterView extends ItemView {
     // Drag source
     el.addEventListener("dragstart", (e) => {
       if (!e.dataTransfer) return;
+      e.stopPropagation();
       e.dataTransfer.setData("text/task-id", t.id);
       e.dataTransfer.effectAllowed = "move";
       el.addClass("dragging");
@@ -2116,7 +2135,8 @@ export class TaskCenterView extends ItemView {
       // trash bin) can attract attention without waiting for direct hover.
       this.contentEl.addClass("dragging-active");
     });
-    el.addEventListener("dragend", () => {
+    el.addEventListener("dragend", (e) => {
+      e.stopPropagation();
       el.removeClass("dragging");
       this.contentEl.removeClass("dragging-active");
     });
@@ -2195,6 +2215,7 @@ export class TaskCenterView extends ItemView {
     // Right-click context menu
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       this.openContextMenu(e as MouseEvent, t);
     });
   }

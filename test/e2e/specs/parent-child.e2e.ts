@@ -270,6 +270,42 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     });
   });
 
+  it("task #104: completed child appears on its completed day even when parent is scheduled later", async function () {
+    const today = todayISO();
+    const tomorrow = inWeekNeighbor();
+    const path = "Tasks/Inbox.md";
+
+    await writeAndWait(
+      path,
+      [
+        `- [ ] 与 HelloGithub站长相关工作 ⏳ ${tomorrow}`,
+        `\t- [x] 写简历 ✅ ${today} ⏳ ${today}`,
+        `\t- [ ] 写稿子`,
+        `\t\t-  多动症与时间管理`,
+        `\t\t- 被投诉需要什么`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $(".task-center-view").waitForExist({ timeout: 5000 });
+    await switchToWeekTab();
+
+    const parentSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L1"]`;
+    const completedChildSel = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L2"]`;
+    const childNestedUnderParent = `${parentSel} [data-task-id="${path}:L2"]`;
+
+    await $(parentSel).waitForExist({ timeout: 5000, timeoutMsg: "parent card not found on its scheduled day" });
+    await $(completedChildSel).waitForExist({
+      timeout: 5000,
+      timeoutMsg: "completed child did not appear on its completed day",
+    });
+    await expect(await browser.$(childNestedUnderParent).isExisting()).toBe(
+      false,
+      "completed cross-day child should not be swallowed by the later parent card",
+    );
+  });
+
   // US-407: reschedule (set ⏳) must not eat other fields
   it("US-407: setting ⏳ scheduled date preserves all other extension fields", async function () {
     const path = "Tasks/Inbox.md";

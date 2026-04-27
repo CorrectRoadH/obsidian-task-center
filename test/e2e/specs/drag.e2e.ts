@@ -233,4 +233,81 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await expect(content).toContain("    - [ ] C");
   });
 
+  it("task #106: dragging an inline subtask to another day schedules the child, not the parent", async function () {
+    const today = todayISO();
+    const tomorrow = inWeekNeighbor();
+    const path = "Tasks/Inbox.md";
+
+    await writeAndWait(
+      path,
+      `- [ ] Parent scheduled today ⏳ ${today}\n    - [ ] Child dragged to another day\n`,
+    );
+    await openBoardWeekView();
+
+    const parentCardSel = `.task-center-view [data-task-id="${path}:L1"]`;
+    const childSubcardSel = `.task-center-view [data-task-id="${path}:L2"]`;
+    const targetSel = `.task-center-view [data-date="${tomorrow}"]`;
+
+    await $(parentCardSel).waitForExist({ timeout: 5000 });
+    await $(childSubcardSel).waitForExist({ timeout: 5000 });
+    await $(targetSel).waitForExist({ timeout: 5000, timeoutMsg: `day column [data-date="${tomorrow}"] not found` });
+
+    await simulateDrag(childSubcardSel, targetSel);
+
+    await browser.waitUntil(
+      async () => (await readFile(path)).includes(`Child dragged to another day ⏳ ${tomorrow}`),
+      { timeout: 5000, timeoutMsg: "child was not scheduled after dragging subtask" },
+    );
+
+    const content = await readFile(path);
+    await expect(content).toContain(`- [ ] Parent scheduled today ⏳ ${today}`);
+    await expect(content).toContain(`    - [ ] Child dragged to another day ⏳ ${tomorrow}`);
+    await expect(content).not.toContain(`- [ ] Parent scheduled today ⏳ ${tomorrow}`);
+  });
+
+  it("task #106: right-clicking an inline subtask targets the child task only", async function () {
+    const today = todayISO();
+    const path = "Tasks/Inbox.md";
+
+    await writeAndWait(
+      path,
+      `- [ ] Parent with child menu ⏳ ${today}\n    - [ ] Child context target\n`,
+    );
+    await openBoardWeekView();
+
+    const childSubcardSel = `.task-center-view [data-task-id="${path}:L2"]`;
+    await $(childSubcardSel).waitForExist({ timeout: 5000 });
+
+    const seen = await browser.execute((sel: string) => {
+      const app = (window as unknown as {
+        app?: {
+          workspace?: {
+            getLeavesOfType?: (type: string) => Array<{ view?: unknown }>;
+          };
+        };
+      }).app;
+      const leaf = app?.workspace?.getLeavesOfType?.("task-center-board")?.[0];
+      const view = leaf?.view as unknown as {
+        openContextMenu?: (e: MouseEvent, task: { id: string }) => void;
+      };
+      if (!view?.openContextMenu) throw new Error("Task Center view/openContextMenu not found");
+      const calls: string[] = [];
+      const original = view.openContextMenu.bind(view);
+      view.openContextMenu = (e: MouseEvent, task: { id: string }) => {
+        calls.push(task.id);
+        e.preventDefault();
+      };
+      try {
+        const el = document.querySelector<HTMLElement>(sel);
+        if (!el) throw new Error(`missing subcard ${sel}`);
+        el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }));
+        return calls;
+      } finally {
+        view.openContextMenu = original;
+      }
+    }, childSubcardSel);
+
+    await expect(seen).toEqual([`${path}:L2`]);
+  });
+
 });
