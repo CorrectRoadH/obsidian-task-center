@@ -147,6 +147,7 @@ src/
 │   ├── tree.ts          box-drawing 树渲染（CLI 与 GUI 复用，UX §16-6）
 │   ├── dnd.ts           拖拽 controller（含 rAF dwell timer，UX §16-8）
 │   ├── popover.ts       hover popover（700ms 延时）
+│   ├── source-dialog.ts 源 Markdown 编辑对话框（US-168）
 │   └── undo.ts          UndoStack（深 20，drift 校验）
 ├── status-bar.ts    状态栏（订阅 cache，不再 rescan）
 ├── quickadd.ts      QuickAdd modal
@@ -174,6 +175,37 @@ src/
 - `cache` **不**直接调 `writer`；写完后通过 `vault.modify` 事件回流到 `cache.invalidateFile`。
 - `view` **不**自己订阅 `metadataCache.on("resolved")`（BUG.md #3）。订阅只在 `cache` 一处。
 - `status-bar` **不**自己 `parseVaultTasks`。这是 BUG.md 的根本原因。
+
+### 2.2 Source edit dialog（US-168）
+
+点击卡片的编辑主路径不再是"跳到源文件 leaf"或 hover popover，而是 source edit dialog：
+
+```
+Task card click
+  → TaskCenterView.openSourceDialog(task)
+  → SourceEditDialog.open(task)
+  → resolve TFile(task.path)
+  → mount Obsidian Markdown editor surface
+  → editor.setCursor({ line: task.line, ch: 0 })
+  → editor.scrollIntoView({ from/to: task.line }, true)
+  → on close / vault modify → cache invalidation → board refresh
+```
+
+**硬约束**：
+
+- 对话框里的内容必须是可编辑的 Obsidian Markdown editor surface，不能用 `MarkdownRenderer` 只读渲染替代。`MarkdownRenderer` 只能继续服务 hover popover。
+- 定位使用 Obsidian editor API：`MarkdownView.editor.setCursor()` + `editor.scrollIntoView(range, true)`。当前 `openAtSource()` 已在普通 leaf 路径里验证这组 API 可用；新对话框必须复用同一定位语义。
+- 对话框打开前必须调用 `contextPopover.close()`，避免 body 上残留 hover popover（task #68 同类生命周期问题）。
+- 写回仍走 Obsidian editor / vault 原生保存语义；不要在 dialog 里另写一套 parser/writer。看板只通过既有 vault/cache 事件刷新。
+- 右键菜单"打开源文件"保留 `openAtSource()` 普通 leaf 行为；它是高级跳转入口，不是卡片点击主路径。
+- 如果 Obsidian 公共 API 无法把 `MarkdownView` 安全挂进 `Modal`，实现前必须在 task thread 报告可验证证据，并由 PM/Jerry 选择替代形态。禁止静默降级成只读 markdown preview。
+
+**模块边界**：
+
+- `view/source-dialog.ts` 只处理 Obsidian UI 生命周期、文件打开、光标定位、关闭和 refresh callback。
+- 它可以依赖 `App` / `Modal` / `MarkdownView` / `TFile` / `ParsedTask`，但不依赖 `TaskCenterApi` 写动词。
+- `view.ts` 只负责把卡片 click 事件路由到 `openSourceDialog(task)`，并阻止按钮 / drag / contextmenu 冒泡误触发。
+- 测试以 e2e 为主：点击卡片后断言 dialog 出现、编辑器内容包含源文件上下文、当前任务行居中或至少 cursor line 正确、修改子任务后 vault 文件变更并刷新卡片。
 
 ---
 
