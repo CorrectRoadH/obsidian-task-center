@@ -125,6 +125,14 @@
   cursor: pointer;
   font-weight: 600;
 }
+.task-center-view .bt-mobile-filter-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 600;
+}
 .task-center-view .bt-gear {
   padding: 3px 8px;
   border: none;
@@ -866,7 +874,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 8px 12px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     background: var(--background-primary);
     border-top: 1px solid var(--background-modifier-border);
     box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
@@ -915,6 +923,42 @@
      thumb-reachable bottom button is the canonical entry. */
   .task-center-view[data-mobile-layout="true"] .bt-toolbar .bt-add-btn {
     display: none;
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-toolbar .bt-search {
+    flex: 1 1 120px;
+    min-width: 120px;
+    max-width: none;
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-toolbar > .bt-saved-views {
+    display: none;
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-toolbar .bt-mobile-filter-btn {
+    flex: 0 0 auto;
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-body {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .task-center-view[data-mobile-layout="true"] .bt-card,
+  .task-center-view[data-mobile-layout="true"] .bt-today-card,
+  .task-center-view[data-mobile-layout="true"] .bt-plan-candidate {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   /* Tab bar: 4 tabs + counts won't fit on a 360px phone — horizontal scroll
@@ -1173,6 +1217,19 @@
 }
 .task-center-bottom-sheet .bt-sheet-action:active {
   background: var(--background-modifier-hover);
+}
+
+.task-center-bottom-sheet .bt-mobile-filter-sheet .bt-saved-views {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-center-bottom-sheet .bt-mobile-filter-sheet .bt-saved-view-select,
+.task-center-bottom-sheet .bt-mobile-filter-sheet .bt-saved-view-filter,
+.task-center-bottom-sheet .bt-mobile-filter-sheet .bt-saved-view-save {
+  width: 100%;
+  min-height: 36px;
 }
 
 /* ============================================================================

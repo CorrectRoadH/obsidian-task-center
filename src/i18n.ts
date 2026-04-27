@@ -270,6 +270,8 @@ const EN = {
   "savedViews.save": "Save view",
   "savedViews.promptName": "Saved view name",
   "savedViews.defaultName": "Saved view",
+  "savedViews.mobileEntry": "Filters",
+  "savedViews.mobileTitle": "Views and filters",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -472,6 +474,8 @@ const ZH: Partial<typeof EN> = {
   "savedViews.save": "保存视图",
   "savedViews.promptName": "保存视图名称",
   "savedViews.defaultName": "保存视图",
+  "savedViews.mobileEntry": "过滤 / 视图",
+  "savedViews.mobileTitle": "视图与过滤",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

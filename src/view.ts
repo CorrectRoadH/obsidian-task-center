@@ -631,7 +631,16 @@ export class TaskCenterView extends ItemView {
       }
     });
 
-    this.renderSavedViewsToolbar(bar);
+    if (isMobileMode()) {
+      const mobileFilters = bar.createEl("button", {
+        text: tr("savedViews.mobileEntry"),
+        cls: "bt-mobile-filter-btn",
+      });
+      mobileFilters.dataset.mobileAction = "filters";
+      mobileFilters.addEventListener("click", () => this.openMobileFilterSheet());
+    } else {
+      this.renderSavedViewsToolbar(bar);
+    }
 
     // US-163: toolbar `+` opens Quick Add, which writes the new line to
     // today's daily-note tail (the only entry point — see writer.addTask
@@ -739,6 +748,17 @@ export class TaskCenterView extends ItemView {
       await this.saveCurrentView(name.trim());
       this.render();
     });
+  }
+
+  private openMobileFilterSheet(): void {
+    const sheet = new BottomSheet(this.app, {
+      title: tr("savedViews.mobileTitle"),
+      populate: (el) => {
+        const body = el.createDiv({ cls: "bt-mobile-filter-sheet" });
+        this.renderSavedViewsToolbar(body);
+      },
+    });
+    sheet.open();
   }
 
   private navLabel(): string {
