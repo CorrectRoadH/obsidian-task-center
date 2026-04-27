@@ -64,6 +64,12 @@ async function writeAndWait(path: string, body: string) {
     path,
     body,
   );
+  await browser.executeObsidian(async ({ app }, p: string) => {
+    // @ts-expect-error — runtime plugin test hook
+    await app.plugins.plugins["obsidian-task-center"].cache.invalidateFile(p);
+    // @ts-expect-error — runtime plugin test hook
+    await app.plugins.plugins["obsidian-task-center"].__forFlush();
+  }, path);
 }
 
 describe("US-720 today execution view (task #63)", function () {
