@@ -148,7 +148,6 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
       { timeout: 5000, timeoutMsg: "source edit dialog did not save markdown back to vault" },
     );
 
-    await card.click();
     await shell.waitForExist({ timeout: 5000 });
     await browser.keys("Escape");
     await shell.waitForExist({ timeout: 5000, reverse: true });
