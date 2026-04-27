@@ -18,12 +18,11 @@ function offsetISO(deltaDays: number): string {
 
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
-    // @ts-expect-error — runtime plugin
+    // @ts-expect-error - runtime plugin
     await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
   });
 }
 
-/** Write file content and wait for cache, then poll until file matches expected content. */
 async function writeAndWait(path: string, body: string) {
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
@@ -33,11 +32,11 @@ async function writeAndWait(path: string, body: string) {
         if (folder) await app.vault.createFolder(folder).catch(() => undefined);
         f = await app.vault.create(p, content);
       } else {
-        // @ts-expect-error — runtime TFile
+        // @ts-expect-error - runtime TFile
         await app.vault.modify(f, content);
       }
       await new Promise<void>((resolve) => {
-        // @ts-expect-error — runtime TFile
+        // @ts-expect-error - runtime TFile
         const ref = app.metadataCache.on("changed", (file) => {
           if (file.path === p) {
             app.metadataCache.offref(ref);
@@ -59,7 +58,7 @@ async function readFile(path: string): Promise<string> {
   return (await browser.executeObsidian(async ({ app }, p: string) => {
     const f = app.vault.getAbstractFileByPath(p);
     if (!f) return "";
-    // @ts-expect-error — runtime TFile
+    // @ts-expect-error - runtime TFile
     return await app.vault.read(f);
   }, path)) as unknown as string;
 }
@@ -81,86 +80,86 @@ async function switchToWeekTab() {
   );
 }
 
-describe("Task Center — 子任务 (US-141/162)", function () {
+async function openBoardToTask(taskId: string) {
+  await browser.executeObsidianCommand("obsidian-task-center:open");
+  await forFlush();
+  await $(".task-center-view").waitForExist({ timeout: 5000 });
+  await switchToWeekTab();
+  const card = $(`.task-center-view [data-task-id="${taskId}"]`);
+  await card.waitForExist({ timeout: 5000 });
+  await expect($(".task-center-view .bt-subtask-add-trigger")).not.toExist();
+  await expect($(".task-center-view .bt-subtask-add-input")).not.toExist();
+  return card;
+}
+
+async function editSourceAtLine(taskId: string, line: number, text: string) {
+  const card = await openBoardToTask(taskId);
+  await card.click();
+  const shell = $("[data-source-edit-shell]");
+  await shell.waitForExist({ timeout: 5000 });
+  await browser.executeObsidian(
+    async (_ctx, taskLine: number, childText: string) => {
+      const shell = document.querySelector("[data-source-edit-shell]");
+      const view = (shell as unknown as {
+        __sourceEditView?: {
+          editor?: {
+            getLine: (line: number) => string;
+            replaceRange: (replacement: string, from: { line: number; ch: number }) => void;
+          };
+          save?: () => Promise<void>;
+        };
+      })?.__sourceEditView;
+      if (!view?.editor) throw new Error("source edit MarkdownView editor missing");
+      const parentLine = view.editor.getLine(taskLine);
+      view.editor.replaceRange(`\n    - [ ] ${childText}`, { line: taskLine, ch: parentLine.length });
+      await view.save?.();
+    },
+    line,
+    text,
+  );
+  await browser.keys("Escape");
+  await shell.waitForExist({ timeout: 5000, reverse: true });
+  await forFlush();
+}
+
+describe("Task Center - subtasks via source edit (US-141/162/168)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
   });
 
-  // US-141/162: add a subtask via the UI button
-  it("adds a subtask under a parent task in the inbox", async function () {
+  it("adds a subtask under a parent task in the inbox through source edit", async function () {
     const today = todayISO();
-    await writeAndWait(
-      "Tasks/Inbox.md",
-      `- [ ] Parent task ⏳ ${today}\n    - [ ] First child\n`,
-    );
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Parent task ⏳ ${today}\n    - [ ] First child\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
-    await forFlush();
-
-    await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await switchToWeekTab();
-
-    const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
-    await $(parentSel).waitForExist({ timeout: 5000 });
-
-    // Click the add-subtask trigger (semantic: any button/element with subtask-add role or class)
-    const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
-    await trigger.waitForExist({ timeout: 5000 });
-    await trigger.click();
-
-    const input = $(`${parentSel} .bt-subtask-add-input`);
-    await input.waitForExist({ timeout: 5000 });
-    await input.setValue("Newly added subtask");
-
-    const commit = $(`${parentSel} .bt-subtask-add-commit`);
-    await commit.click();
-
-    // Primary assertion: the markdown file was updated correctly.
-    await browser.waitUntil(
-      async () => (await readFile("Tasks/Inbox.md")).includes("Newly added subtask"),
-      { timeout: 5000, timeoutMsg: "subtask never appeared in file" },
-    );
+    await editSourceAtLine("Tasks/Inbox.md:L1", 0, "Newly added subtask");
 
     const content = await readFile("Tasks/Inbox.md");
     await expect(content).toContain("- [ ] Parent task");
     await expect(content).toContain("    - [ ] First child");
     await expect(content).toContain("    - [ ] Newly added subtask");
-
-    // Secondary: UI also shows the new subtask.
     await browser.waitUntil(
       async () => {
         const texts = await browser.execute(() =>
-          Array.from(document.querySelectorAll(".task-center-view .bt-subcard-title")).map(
-            (e) => e.textContent,
-          ),
+          Array.from(document.querySelectorAll(".task-center-view .bt-subcard-title")).map((e) => e.textContent),
         );
         return (texts as string[]).some((t) => t?.includes("Newly added subtask"));
       },
-      { timeout: 3000, timeoutMsg: "new subtask never rendered in the UI" },
+      { timeout: 3000, timeoutMsg: "new source-edited subtask never rendered in the UI" },
     );
   });
 
-  // US-141: subtask added to a past-week parent (regression for daily-note + week navigation)
-  it("adds a subtask when parent is in a past week's daily note", async function () {
+  it("adds a subtask when parent is in a past week's daily note through source edit", async function () {
     const pastDate = offsetISO(-14);
     const dailyPath = `Daily/${pastDate}.md`;
-    await writeAndWait(
-      dailyPath,
-      `- [ ] 用债务周期分析投资 ⏳ ${pastDate}\n    - [ ] 把cetus还有债务还清\n`,
-    );
+    await writeAndWait(dailyPath, `- [ ] 用债务周期分析投资 ⏳ ${pastDate}\n    - [ ] 把cetus还有债务还清\n`);
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
     await forFlush();
-
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
-
-    // Navigate back until the past week is visible (2 weeks back from current).
     for (let i = 0; i < 2; i++) {
       await browser.execute(() => {
-        document
-          .querySelector<HTMLElement>(".task-center-view [data-action='nav-prev']")
-          ?.click();
+        document.querySelector<HTMLElement>(".task-center-view [data-action='nav-prev']")?.click();
       });
     }
     await $(`.task-center-view [data-date='${pastDate}']`).waitForExist({
@@ -168,106 +167,42 @@ describe("Task Center — 子任务 (US-141/162)", function () {
       timeoutMsg: `week containing ${pastDate} did not appear after navigating back`,
     });
 
-    const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
-    await $(parentSel).waitForExist({ timeout: 5000 });
-
-    const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
-    await trigger.waitForExist({ timeout: 5000 });
-    await trigger.click();
-
-    const input = $(`${parentSel} .bt-subtask-add-input`);
-    await input.waitForExist({ timeout: 5000 });
-    await input.setValue("新子任务");
-
-    const commit = $(`${parentSel} .bt-subtask-add-commit`);
-    await commit.click();
-
-    await browser.waitUntil(
-      async () => (await readFile(dailyPath)).includes("新子任务"),
-      { timeout: 5000, timeoutMsg: "past-week subtask never appeared in file" },
-    );
+    const card = $(`.task-center-view [data-task-id="${dailyPath}:L1"]`);
+    await card.waitForExist({ timeout: 5000 });
+    await expect($(".task-center-view .bt-subtask-add-trigger")).not.toExist();
+    await card.click();
+    const shell = $("[data-source-edit-shell]");
+    await shell.waitForExist({ timeout: 5000 });
+    await browser.executeObsidian(async () => {
+      const shell = document.querySelector("[data-source-edit-shell]");
+      const view = (shell as unknown as {
+        __sourceEditView?: {
+          editor?: {
+            getLine: (line: number) => string;
+            replaceRange: (replacement: string, from: { line: number; ch: number }) => void;
+          };
+          save?: () => Promise<void>;
+        };
+      })?.__sourceEditView;
+      if (!view?.editor) throw new Error("source edit MarkdownView editor missing");
+      const parentLine = view.editor.getLine(0);
+      view.editor.replaceRange("\n    - [ ] 新子任务", { line: 0, ch: parentLine.length });
+      await view.save?.();
+    });
+    await browser.keys("Escape");
+    await shell.waitForExist({ timeout: 5000, reverse: true });
+    await forFlush();
 
     const content = await readFile(dailyPath);
     await expect(content).toContain("    - [ ] 新子任务");
   });
 
-  // US-162: Enter key commits the new subtask
-  it("commits subtask on Enter key press", async function () {
-    const today = todayISO();
-    await writeAndWait(
-      "Tasks/Inbox.md",
-      `- [ ] Enter-commit parent ⏳ ${today}\n    - [ ] placeholder\n`,
-    );
-
-    await browser.executeObsidianCommand("obsidian-task-center:open");
-    await forFlush();
-
-    await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await switchToWeekTab();
-
-    // Reset to current week in case a previous test navigated away.
-    await browser.execute(() => {
-      document
-        .querySelector<HTMLElement>(".task-center-view [data-action='nav-today']")
-        ?.click();
-    });
-    await $(`.task-center-view [data-date='${today}']`).waitForExist({
-      timeout: 2000,
-      timeoutMsg: "today's column did not appear after clicking Today",
-    });
-
-    const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
-    await $(parentSel).waitForExist({ timeout: 5000 });
-
-    const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
-    await trigger.waitForExist({ timeout: 5000 });
-    await trigger.click();
-
-    const input = $(`${parentSel} .bt-subtask-add-input`);
-    await input.waitForExist({ timeout: 5000 });
-    await input.click();
-    await browser.keys("Enter-commit child".split(""));
-    await browser.keys(["Enter"]);
-
-    await browser.waitUntil(
-      async () => (await readFile("Tasks/Inbox.md")).includes("Enter-commit child"),
-      { timeout: 5000, timeoutMsg: "Enter-committed subtask never appeared in file" },
-    );
-  });
-
-  // US-141/162: subtask added to a parent in a daily note (no ⏳ on parent)
-  it("adds a subtask to a parent living in a daily note (no scheduled date)", async function () {
+  it("adds a subtask to a parent living in a daily note through source edit", async function () {
     const today = todayISO();
     const dailyPath = `Daily/${today}.md`;
-    await writeAndWait(
-      dailyPath,
-      `- [ ] Daily parent\n    - [ ] Existing child\n`,
-    );
+    await writeAndWait(dailyPath, "- [ ] Daily parent\n    - [ ] Existing child\n");
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
-    await forFlush();
-
-    await $(".task-center-view").waitForExist({ timeout: 5000 });
-    await switchToWeekTab();
-
-    const parentSel = `.task-center-view [data-task-id="${dailyPath}:L1"]`;
-    await $(parentSel).waitForExist({ timeout: 5000 });
-
-    const trigger = $(`${parentSel} .bt-subtask-add-trigger`);
-    await trigger.waitForExist({ timeout: 5000 });
-    await trigger.click();
-
-    const input = $(`${parentSel} .bt-subtask-add-input`);
-    await input.waitForExist({ timeout: 5000 });
-    await input.setValue("Daily note subtask");
-
-    const commit = $(`${parentSel} .bt-subtask-add-commit`);
-    await commit.click();
-
-    await browser.waitUntil(
-      async () => (await readFile(dailyPath)).includes("Daily note subtask"),
-      { timeout: 5000, timeoutMsg: "daily-note subtask never appeared in file" },
-    );
+    await editSourceAtLine(`${dailyPath}:L1`, 0, "Daily note subtask");
 
     const content = await readFile(dailyPath);
     await expect(content).toContain("- [ ] Daily parent");

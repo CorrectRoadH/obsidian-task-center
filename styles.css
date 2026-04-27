@@ -384,74 +384,6 @@
 .task-center-view .bt-sub-sched { color: var(--color-blue); font-size: 10px; }
 .task-center-view .bt-subcard.done { opacity: 0.5; text-decoration: line-through; }
 
-/* Inline "+ subtask" affordance — sits below the children block, indented to
-   align with subcards. Faint by default so it doesn't add visual noise across
-   a dense masonry, but lights up on card hover/select for easy discovery. */
-.task-center-view .bt-subtask-add {
-  margin-top: 4px;
-  margin-left: 22px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  min-height: 18px;
-}
-.task-center-view .bt-subtask-add-trigger {
-  color: var(--text-muted);
-  opacity: 0.35;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transition: opacity 0.12s ease, background 0.12s ease;
-  user-select: none;
-}
-.task-center-view .bt-card:hover .bt-subtask-add-trigger,
-.task-center-view .bt-card.selected .bt-subtask-add-trigger {
-  opacity: 1;
-}
-.task-center-view .bt-subtask-add-trigger:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
-}
-.task-center-view .bt-subtask-add.editing {
-  background: var(--background-secondary);
-  border-radius: 3px;
-  padding: 2px 4px;
-}
-.task-center-view .bt-subtask-add-input {
-  flex: 1;
-  font-size: 11px;
-  padding: 2px 4px;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 3px;
-  color: var(--text-normal);
-  outline: none;
-  min-width: 0;
-}
-.task-center-view .bt-subtask-add-input:focus {
-  border-color: var(--interactive-accent);
-}
-.task-center-view .bt-subtask-add-commit,
-.task-center-view .bt-subtask-add-cancel {
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 3px;
-  font-size: 12px;
-  user-select: none;
-  flex-shrink: 0;
-}
-.task-center-view .bt-subtask-add-commit { color: var(--color-green, #43a047); }
-.task-center-view .bt-subtask-add-cancel { color: var(--text-muted); }
-.task-center-view .bt-subtask-add-commit:hover,
-.task-center-view .bt-subtask-add-cancel:hover {
-  background: var(--background-modifier-hover);
-}
-
 /* Drop zones */
 .task-center-view .drop-hover {
   outline: 2px dashed var(--interactive-accent);
@@ -988,11 +920,6 @@
     transform: scale(1.04);
     transform-origin: center;
     opacity: 0.9;
-  }
-
-  /* Subtask add trigger always visible on mobile (no hover state). */
-  .task-center-view[data-mobile-layout="true"] .bt-card .bt-subtask-add-trigger {
-    opacity: 1;
   }
 
   /* `+N` chip on subcards with deeper subtrees (US-505). Tap → bottom

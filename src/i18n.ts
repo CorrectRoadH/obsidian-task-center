@@ -118,10 +118,6 @@ const EN = {
   "ctx.groupingTag": "Set group: {tag}",
   "ctx.drop": "Drop",
 
-  // Inline subtask add (visible on every card)
-  "card.addSubtask": "+ subtask",
-  "card.subtaskPlaceholder": "subtask title",
-
   // Quick add modal
   "qa.title": "Add task",
   "qa.placeholder":
@@ -356,9 +352,6 @@ const ZH: Partial<typeof EN> = {
   "ctx.quadrant": "第{n}组",
   "ctx.groupingTag": "设为分组：{tag}",
   "ctx.drop": "放弃",
-
-  "card.addSubtask": "+ 子任务",
-  "card.subtaskPlaceholder": "子任务标题",
 
   "qa.title": "新建任务",
   "qa.placeholder":

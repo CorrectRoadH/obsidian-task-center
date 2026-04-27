@@ -1758,11 +1758,6 @@ export class TaskCenterView extends ItemView {
       for (const c of children) this.renderSubcard(expander, c, t.scheduled ?? null);
     }
 
-    // Inline "+ subtask" affordance — visible on every card so adding a
-    // subtask is one click, no shortcuts required. Subtask inherits the
-    // parent's ⏳ so it lands in the same column / day automatically.
-    if (t.status === "todo") this.renderAddSubtaskRow(card, t);
-
     this.wireCardEvents(card, t);
     // Mobile gestures still need the pointer controller; source/context
     // editing is now the single-click source shell on every platform.
@@ -2103,99 +2098,6 @@ export class TaskCenterView extends ItemView {
       },
     });
     sheet.open();
-  }
-
-  private renderAddSubtaskRow(card: HTMLElement, parent: ParsedTask) {
-    const row = card.createDiv({ cls: "bt-subtask-add" });
-    // Don't let this row trigger card-level drag or selection
-    row.draggable = false;
-    row.addEventListener("dragstart", (e) => e.preventDefault());
-    row.addEventListener("click", (e) => e.stopPropagation());
-    row.addEventListener("dblclick", (e) => e.stopPropagation());
-    this.renderSubtaskAddIdle(row, parent);
-  }
-
-  private renderSubtaskAddIdle(row: HTMLElement, parent: ParsedTask) {
-    row.empty();
-    row.removeClass("editing");
-    const trigger = row.createDiv({ cls: "bt-subtask-add-trigger" });
-    trigger.setText(tr("card.addSubtask"));
-    trigger.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.renderSubtaskAddEditing(row, parent);
-    });
-  }
-
-  private renderSubtaskAddEditing(row: HTMLElement, parent: ParsedTask) {
-    row.empty();
-    row.addClass("editing");
-    const input = row.createEl("input", { type: "text", cls: "bt-subtask-add-input" });
-    input.placeholder = tr("card.subtaskPlaceholder");
-    const commit = row.createDiv({ cls: "bt-subtask-add-commit", text: "✓" });
-    const cancel = row.createDiv({ cls: "bt-subtask-add-cancel", text: "✕" });
-
-    let done = false;
-    const finish = async (save: boolean) => {
-      if (done) return;
-      done = true;
-      const text = input.value.trim();
-      if (save && text) {
-        try {
-          await this.api.add({
-            text,
-            parent: parent.id,
-            // Intentionally do NOT inherit parent's scheduled. An unset
-            // scheduled means "follows the parent" — the child renders inline
-            // under the parent card regardless of day. Inheriting created
-            // stale dates the moment the parent got rescheduled.
-            inboxFallback: this.plugin.settings.inboxPath,
-            stampCreated: this.plugin.settings.stampCreated,
-          });
-        } catch (err) {
-          new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
-        }
-        this.scheduleRefresh();
-      } else {
-        // Nothing to save — restore the trigger in place without a re-render
-        this.renderSubtaskAddIdle(row, parent);
-      }
-    };
-
-    input.addEventListener("keydown", (e) => {
-      // Stop view-wide hotkeys (1-4, Space, D, E, Delete, arrows) firing while typing
-      e.stopPropagation();
-      // US-162: Enter commits the new subtask line (US-141 then auto-
-      //         inherits ⏳ from the parent in writer.addTask).
-      // US-413: skip the Enter commit while IME composition is active —
-      //         see src/quickadd.ts for the same pattern.
-      // see USER_STORIES.md
-      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
-        e.preventDefault();
-        finish(true);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        finish(false);
-      }
-    });
-    input.addEventListener("blur", () => finish(true));
-    input.addEventListener("click", (e) => e.stopPropagation());
-    input.addEventListener("dragstart", (e) => e.preventDefault());
-
-    // mousedown preventDefault keeps focus in input → click event still fires
-    // on the button; without this, blur would trigger commit before the click
-    // is processed and the cancel ✕ would never get to actually cancel.
-    commit.addEventListener("mousedown", (e) => e.preventDefault());
-    cancel.addEventListener("mousedown", (e) => e.preventDefault());
-    commit.addEventListener("click", (e) => {
-      e.stopPropagation();
-      finish(true);
-    });
-    cancel.addEventListener("click", (e) => {
-      e.stopPropagation();
-      finish(false);
-    });
-
-    input.focus();
   }
 
   private wireCardEvents(

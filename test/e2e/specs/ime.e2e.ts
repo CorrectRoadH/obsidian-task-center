@@ -61,9 +61,9 @@ async function readFile(path: string): Promise<string> {
  * (typing pinyin/kana/hangul before candidate selection), Enter only
  * commits the IME selection — it must NOT submit the surrounding form.
  *
- * This file covers the remaining inline editors plus the removed card-title
- * inline edit path. The Quick Add modal case (chunk a) lives in quickadd.e2e.ts
- * to keep its fixture setup adjacent to the other Quick Add v2 cases.
+ * This file covers the remaining inline editors plus removed card-surface edit
+ * paths. The Quick Add modal case (chunk a) lives in quickadd.e2e.ts to keep
+ * its fixture setup adjacent to the other Quick Add v2 cases.
  */
 describe("Task Center — IME composition guard (US-413)", function () {
   beforeEach(async function () {
@@ -95,68 +95,6 @@ describe("Task Center — IME composition guard (US-413)", function () {
 
     await browser.keys("Escape");
     await shell.waitForExist({ timeout: 5000, reverse: true });
-  });
-
-  // US-413 chunk c — subtask add input. Open the add-subtask editor,
-  // dispatch IME composition + Enter, assert no subtask was created.
-  it("US-413 chunk c — subtask add Enter during IME composition must not commit", async function () {
-    const today = todayISO();
-    await writeAndWait("Tasks/Inbox.md", `- [ ] Parent task ⏳ ${today}\n`);
-
-    await browser.executeObsidianCommand("obsidian-task-center:open");
-    await forFlush();
-
-    const parentSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
-    await $(parentSel).waitForExist({ timeout: 5000 });
-
-    // Click the add-subtask trigger to enter edit mode.
-    await browser.execute((sel: string) => {
-      const trigger = document.querySelector(
-        `${sel} .bt-subtask-add-trigger`,
-      ) as HTMLElement | null;
-      trigger?.click();
-    }, parentSel);
-
-    const input = $(`${parentSel} .bt-subtask-add-input`);
-    await input.waitForExist({ timeout: 3000 });
-
-    await browser.execute((sel: string) => {
-      const el = document.querySelector(
-        `${sel} .bt-subtask-add-input`,
-      ) as HTMLInputElement | null;
-      if (!el) return;
-      el.value = "Subtask mid-composition";
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-      const evt = new KeyboardEvent("keydown", {
-        key: "Enter",
-        keyCode: 229,
-        bubbles: true,
-        cancelable: true,
-      });
-      Object.defineProperty(evt, "isComposing", { value: true });
-      el.dispatchEvent(evt);
-    }, parentSel);
-
-    await browser.pause(200);
-    const content = await readFile("Tasks/Inbox.md");
-    expect(content).not.toContain("Subtask mid-composition");
-    expect(content).toContain("- [ ] Parent task");
-
-    // Cleanup: subtask add input has the same blur→finish(true) listener
-    // (view.ts:1615); dismiss explicitly so async commit doesn't race
-    // into the next test's fixture.
-    await browser.execute((sel: string) => {
-      const el = document.querySelector(
-        `${sel} .bt-subtask-add-input`,
-      ) as HTMLInputElement | null;
-      if (!el) return;
-      el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
-      el.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-      );
-    }, parentSel);
-    await browser.pause(100);
   });
 
   // US-413 chunk d — DatePromptModal text input. Found during the
