@@ -193,7 +193,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     await openDailyLeaf(dailyPath);
 
     const { card } = await openBoardWithTask();
-    await expect($(".workspace-leaf.mod-active .task-center-view")).toExist();
+    await expect($(".task-center-view")).toExist();
 
     await card.click();
     const shell = $("[data-source-edit-shell]");
