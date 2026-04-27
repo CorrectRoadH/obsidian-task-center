@@ -109,7 +109,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     const afterViewType = (await browser.executeObsidian(async ({ app }) => {
       return app.workspace.activeLeaf?.view.getViewType() ?? null;
     })) as string | null;
-    expect(beforeViewType).toBe("task-center-view");
+    expect(beforeViewType).toBe("task-center-board");
     expect(afterViewType).toBe("markdown");
 
     await browser.executeObsidian(async ({ app }) => {
