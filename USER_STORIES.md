@@ -117,11 +117,13 @@
   - 删除：`<h3>` 标题、X 关闭按钮、散文 hint
   - 容器：540×~240px 桌面 / bottom sheet 移动；圆角 14px；linear-gradient 背景；Spotlight 浮起阴影
   - 视觉心智线：Linear Cmd+K + Things 3 add-task。视觉品质细节详 [UX.md §6.6](./UX.md#66-quick-add-新建任务)。
-- `US-168` **点击 Task Card 在当前页打开源 Markdown 编辑对话框**。作为常驻 Obsidian 的人，我点一下卡片，就能在 Task Center 当前视图上方看到该任务所在文件的原始 markdown，并且任务所在行自动滚动到视窗中间、光标落在该行；我可以直接编辑该任务、它的子任务和上下文。这个旅程取代旧的 hover 上下文预览、双击跳源文件、右键打开源文件，不再保留三套查看/编辑入口。点击卡片后不能切到新的 Markdown leaf/页面；必须保留 Task Center 作为背景并显示前景 overlay/dialog。由于 Obsidian public API 不能把 `MarkdownView` 安全嵌入 plugin `Modal`（见 #78 spike），当前可接受实现是 current-view overlay + 可编辑原文 Markdown source textarea；禁止退化为只读 `MarkdownRenderer`。
+- `US-168` **点击 Task Card 在当前页打开源 Markdown 编辑对话框**。作为常驻 Obsidian 的人，我点一下卡片，就能在 Task Center 当前视图上方看到该任务所在文件的原始 markdown，并且任务所在行自动滚动到视窗中间、光标落在该行；我可以直接编辑该任务、它的子任务和上下文。这个旅程取代旧的 hover 上下文预览、双击跳源文件、右键打开源文件，不再保留三套查看/编辑入口。点击卡片后不能裸切到新的 Markdown leaf/页面；必须保留 Task Center 作为背景并显示前景 editor shell。体验目标是 Obsidian 自己的 Live Preview / 所见即所得 Markdown 编辑器能力（主题、光标、选择、列表缩进、checkbox 编辑、快捷键尽量一致）。由于 Obsidian public API 不能把 `MarkdownView` 安全嵌入 plugin `Modal`（见 #78 spike），实现可以使用 dialog-like shell / floating workspace / popover leaf 等方式承载真实 `WorkspaceLeaf + MarkdownView`，但不能让用户感知为离开 Task Center。`textarea` / 自制 preview / 只读 `MarkdownRenderer` 只能作为明确标注的临时 fallback，不算 US-168 100% 完成。
   - `US-168a` 点击普通卡片 / Today 卡片 / 搜索过滤后的卡片都走同一入口，打开对话框并定位到 `task.path:task.line`。
   - `US-168b` 对话框内编辑 markdown 并保存后，vault 文件落盘；看板随后刷新，卡片标题、子任务、日期、tag 与状态反映最新 markdown。
   - `US-168c` 卡片单击不再只是选中；需要选中态时只能作为视觉反馈，不能阻断打开编辑对话框。
   - `US-168d` 旧 hover popover、卡片双击打开源文件、右键菜单打开源文件对应实现必须删除；同一能力统一由点击 source edit panel/dialog-like shell 承担。
+  - `US-168e` Esc、右上关闭、点击遮罩均能关闭编辑层；关闭后仍回到原 Task Center tab / filter / scroll 状态。
+  - `US-168f` 视觉验收必须提供桌面与移动证据，证明它不是整屏 textarea / preview markdown 的开发者工具感，而是可用的 Obsidian-style 编辑体验。
 
 ---
 

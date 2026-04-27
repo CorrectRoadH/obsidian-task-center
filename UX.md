@@ -13,8 +13,9 @@
 
 1. **markdown 是 Truth，UI 只是它的镜子**。屏幕看到的每一张卡都对应文件里的一行，UI 操作 = 改那行。不引入只存在于内存 / 前端的"虚拟任务"。（US-401 / US-407）
 2. **不重发明 Obsidian**。颜色、间距、圆角、阴影、字体全部走 Obsidian CSS 变量；不引第三方 UI 库；尊重用户主题。（设计补全 → 维持 Obsidian 工作流连续性，呼应 P1 角色"不愿切出"）
-3. **每个动作都要有可观测的结果**。看不见的 = 没发生。任何"卡片消失 / 出现 / 变形"都要有 0.12–0.18s 的过渡，让眼睛跟得上。（US-127）
-4. **PM 一票否决**：任何 UI 上"看起来有用但没人故事"的东西都不做，先去 USER_STORIES 加故事再加 UI。设计不是放装饰品的地方。
+3. **借 Obsidian 原生能力，不做低配替代品**。当用户预期是 Obsidian 编辑器、所见即所得、主题一致、快捷键一致时，`textarea` / 自制 preview / 只读 renderer 只能算技术 fallback，不能算体验完成。体验 gate 必须先验证是否能复用 Obsidian 原生能力；确实不能时，要在 release note / task 中标明"降级"，不能包装成完成。
+4. **每个动作都要有可观测的结果**。看不见的 = 没发生。任何"卡片消失 / 出现 / 变形"都要有 0.12–0.18s 的过渡，让眼睛跟得上。（US-127）
+5. **PM 一票否决**：任何 UI 上"看起来有用但没人故事"的东西都不做，先去 USER_STORIES 加故事再加 UI。设计不是放装饰品的地方。
 
 ---
 
@@ -145,7 +146,7 @@
 - 行 2 = tag 行；无 tag 不出现。
 - 行 3 = meta 行；任意 meta（`estimate / actual / 📅 deadline`）有就显，没有就不留空。三个都没有时整行不渲染。
 - 行 4+ = 子任务递归。
-- **不显示**：源文件路径（hover popover 才显）、`➕ 创建日期`（默认隐藏；用户可设开关，设计补全）、未识别的 emoji / 内联字段（字节级保留，但不在卡上画——US-407）。
+- **不显示**：源文件路径（点卡片进入 source edit panel 后可见）、`➕ 创建日期`（默认隐藏；用户可设开关，设计补全）、未识别的 emoji / 内联字段（字节级保留，但不在卡上画——US-407）。
 
 ### 5.2 卡的状态机
 
@@ -173,14 +174,14 @@
 
 ### 5.4 Source edit panel（点击卡片唯一查看/编辑路径）
 
-点击任意 Task Card 打开源 Markdown 编辑面板（US-168）。这个入口**取代**旧的"双击打开源文件"、"hover 看上下文"和"右键打开源文件"：
+点击任意 Task Card 打开源 Markdown 编辑面板（US-168）。这个入口**取代**旧的"双击打开源文件"、"hover 看上下文"和"右键打开源文件"。本功能的目标不是"能改一段 markdown 文本"，而是**让用户在 Task Center 当前页获得接近 Obsidian 原生编辑器的上下文编辑体验**：
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Tasks/Inbox.md:L42                                      [×] │
 │  ───────────────────────────────────────────────────────────  │
 │                                                              │
-│  <可编辑原文 Markdown source>                                  │
+│  <Obsidian 原生 Live Preview / 所见即所得 Markdown editor>       │
 │  ...                                                         │
 │  - [ ] 父任务                                                │
 │      - [ ] 当前任务 ⏳ 2026-04-24   ← 光标在这里，滚动居中      │
@@ -194,12 +195,14 @@
 
 - **唯一查看/编辑入口**：单击卡片。普通看板卡、Today 卡、保存视图过滤后的卡都走同一个 `open task source dialog` 动作。
 - **定位**：打开后光标落在任务原始 markdown 行开头，编辑器把该行滚动到可视区域中间；不是只滚到附近，也不是只高亮卡片。
-- **编辑能力**：面板里展示并编辑任务所在文件的原文 Markdown，用户可以直接改当前任务、加/删/改子任务、查看上下文。禁止用只读 `MarkdownRenderer` 冒充。
-- **形态说明**：#78 spike 已证明 Obsidian public API 不能把 `MarkdownView` 安全嵌进 plugin `Modal`。因此 UX 要求是当前 Task Center 上方的 overlay/dialog；不能切到新的 Markdown leaf/页面。当前可接受实现是可编辑原文 Markdown textarea。
-- **保存与刷新**：用户编辑后显式保存落盘；文件变更事件到达后，看板刷新，卡片内容与子任务树同步。
-- **关闭**：Esc / 右上关闭关闭编辑面板；关闭后仍回到原 Task Center tab / filter 状态。
+- **编辑能力**：面板里展示并编辑任务所在文件的原文 Markdown，用户可以直接改当前任务、加/删/改子任务、查看上下文。默认验收目标是 Obsidian 自己的 Live Preview / 所见即所得 Markdown 编辑体验：主题、光标、选择、快捷键、列表缩进、checkbox 编辑都应尽量与普通 Obsidian 页面一致。
+- **禁止低配冒充**：只读 `MarkdownRenderer`、纯 preview、普通 `textarea` 都不能算 US-168 完成。`textarea` 只允许作为明确标注的临时 fallback / emergency patch；若使用 fallback，本任务必须保持 open 或另开 P1，不允许把 fallback release 当成 100% 体验。
+- **形态说明**：#78 spike 已证明 Obsidian public API 不能把 `MarkdownView` 安全嵌进 plugin `Modal`。因此实现可使用 dialog-like shell / floating workspace / popover leaf 等方式承载真实 `WorkspaceLeaf + MarkdownView`，但用户可见旅程必须仍像当前 Task Center 上方的编辑面板：不能裸切到新的 Markdown 页面，不能让 Task Center 消失。
+- **保存与刷新**：沿用 Obsidian 编辑器保存语义；文件变更事件到达后，看板刷新，卡片内容与子任务树同步。如果实现有显式 Save，也必须和 Obsidian 自动保存语义不冲突。
+- **关闭**：Esc / 右上关闭 / 点击遮罩关闭编辑面板；关闭后仍回到原 Task Center tab / filter / scroll 状态。
 - **旧路径删除**：卡片 hover popover 不再存在；卡片双击不再绑定打开源文件；右键菜单不再展示"打开源文件"。减少用户在三套查看/编辑入口之间选择。
-- **移动端**：手机上同一动作可落为全屏编辑面板；仍必须是可编辑原文 markdown，不是只读预览。
+- **视觉质量 gate**：不得出现"整屏 textarea / preview markdown"的开发者工具感；不得让用户以为自己离开了 Task Center；不得把标题、路径、按钮挤压成桌面控件堆叠。桌面与移动都必须提供截图/录屏证据，证明编辑器、关闭、保存、定位、背景状态保留可用。
+- **移动端**：手机上同一动作可落为全屏编辑面板；仍必须是可编辑 Markdown 编辑体验，不是只读预览；软键盘出现时关闭/保存按钮不能被遮挡。
 
 ### 5.5 右键菜单
 
