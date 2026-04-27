@@ -4,7 +4,7 @@
  * Contract for implementation:
  *   data-source-edit-shell            — dialog-like source editor shell
  *   data-source-edit-task-id          — task id currently being edited
- *   data-source-edit-editor="markdown-source" — shell edits original source markdown in-place
+ *   data-source-edit-editor="obsidian-markdown-view" — shell hosts a real Obsidian MarkdownView
  *
  * These tests are intentionally red on the pre-US-168 implementation:
  * - clicking a card only selects it instead of opening source edit shell
@@ -85,6 +85,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
 
   afterEach(async function () {
     await browser.execute(() => {
+      document.querySelector<HTMLElement>("[data-source-edit-action='close']")?.click();
       document.querySelector<HTMLElement>("[data-source-edit-shell]")?.remove();
     });
   });
@@ -100,27 +101,35 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
     await expect(shell).toHaveAttribute("data-source-edit-task-id", taskId);
-    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown-source");
+    await expect(shell).toHaveAttribute("data-source-edit-editor", "obsidian-markdown-view");
+    await expect($("[data-source-edit-markdown-view]")).toExist();
+    await expect($("[data-source-edit-shell] .markdown-source-view, [data-source-edit-shell] .cm-editor")).toExist();
     await expect($(".task-center-view")).toExist();
 
     const afterViewType = (await browser.executeObsidian(async ({ app }) => {
       return app.workspace.activeLeaf?.view.getViewType() ?? null;
     })) as string | null;
-    expect(afterViewType).toBe(beforeViewType);
+    expect(beforeViewType).toBe("task-center-view");
+    expect(afterViewType).toBe("markdown");
 
-    const editor = $("[data-source-edit-textarea]");
-    await expect(editor).toHaveValue(expect.stringContaining("Source edit target"));
-    await expect(editor).toHaveValue(expect.stringContaining("Existing child"));
-
-    const updated = [
-      "- [ ] Parent context",
-      `    - [ ] Source edit target ⏳ ${todayISO()}`,
-      "        - [ ] Existing child",
-      "        - [ ] Edited in dialog",
-      "",
-    ].join("\n");
-    await editor.setValue(updated);
-    await $("[data-source-edit-action='save']").click();
+    await browser.executeObsidian(async ({ app }) => {
+      const view = app.workspace.activeLeaf?.view as unknown as {
+        editor?: {
+          replaceRange: (
+            replacement: string,
+            from: { line: number; ch: number },
+            to?: { line: number; ch: number },
+          ) => void;
+        };
+        save?: () => Promise<void>;
+      };
+      if (!view.editor) throw new Error("native MarkdownView editor missing");
+      view.editor.replaceRange(
+        "\n        - [ ] Edited in native editor",
+        { line: 2, ch: "        - [ ] Existing child".length },
+      );
+      await view.save?.();
+    });
     await browser.waitUntil(
       async () => {
         const content = await browser.executeObsidian(async ({ app }, p: string) => {
@@ -133,6 +142,10 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
       },
       { timeout: 5000, timeoutMsg: "source edit dialog did not save markdown back to vault" },
     );
+
+    await browser.keys("Escape");
+    await shell.waitForExist({ timeout: 5000, reverse: true });
+    await expect($(".task-center-view")).toExist();
   });
 
   it("US-168d: hover popover and context-menu open-source entry are removed", async function () {
@@ -169,7 +182,8 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
     await expect(shell).toHaveAttribute("data-source-edit-task-id", "Tasks/Inbox.md:L1");
-    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown-source");
-    await expect($("[data-source-edit-textarea]")).toHaveValue(expect.stringContaining("Today child"));
+    await expect(shell).toHaveAttribute("data-source-edit-editor", "obsidian-markdown-view");
+    await expect($("[data-source-edit-markdown-view]")).toExist();
+    await expect($("[data-source-edit-shell] .markdown-source-view, [data-source-edit-shell] .cm-editor")).toExist();
   });
 });

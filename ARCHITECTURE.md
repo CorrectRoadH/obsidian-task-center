@@ -184,19 +184,20 @@ Task card click
   → TaskCenterView.openSourceDialog(task)
   → SourceEditDialog.open(task)
   → resolve TFile(task.path)
-  → read original file markdown into current-view overlay editor
-  → select / scroll the task line near the middle
-  → explicit Save writes full markdown back to vault
+  → create a temporary WorkspaceSplit inside the current-view overlay
+  → create a real WorkspaceLeaf in that split and open the file as MarkdownView
+  → set cursor / scroll the task line near the middle
+  → Obsidian MarkdownView handles live preview/source editing and save semantics
   → cache invalidation → board refresh
 ```
 
 **硬约束**：
 
 - 编辑内容必须来自任务所在文件的原文 Markdown，不能用 `MarkdownRenderer` 只读渲染替代。
-- 打开后不能切换 active leaf 到 Markdown 页面；Task Center 必须仍在背景里。
-- 定位使用 overlay editor 的 selection + scrollTop，把任务行放到可视区域中间附近。
+- 打开后不能裸切到新的 Markdown 页面；Task Center 必须仍在背景里，前景 shell 承载真实 Obsidian editor leaf。
+- 定位使用 `MarkdownView.editor.setCursor()` + `scrollIntoView(..., true)`，把任务行放到可视区域中间附近。
 - 旧 `ContextPopoverController` / `view/popover.ts` 不再需要；实现任务必须删除 hover popover 代码、样式、测试和文档引用，而不是只在打开 dialog 前关闭它。
-- 写回走 `vault.modify(file, textarea.value)` 全文保存；不要在 dialog 里另写一套 parser/writer。看板只通过既有 vault/cache 事件刷新。
+- 写回由 Obsidian MarkdownView / TextFileView save 管线处理；不要在 dialog 里另写一套 parser/writer 或 textarea 全文保存。看板只通过既有 vault/cache 事件刷新。
 - `openAtSource()` 普通 leaf 行为只能作为实现过渡工具存在；最终用户路径不再暴露右键"打开源文件"或卡片双击跳源文件。
 - `docs/source-edit-dialog-spike.md` 是本架构决策的证据文件；后续实现如果偏离真实 leaf 路径，必须先更新 spike 证据并经 PM/Jerry 确认。
 

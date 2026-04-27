@@ -1509,6 +1509,27 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+.task-center-source-edit-editor-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background-primary);
+}
+.task-center-source-edit-editor-host > .workspace-split,
+.task-center-source-edit-editor-host .workspace-leaf,
+.task-center-source-edit-editor-host .workspace-leaf-content,
+.task-center-source-edit-editor-host .view-content,
+.task-center-source-edit-editor-host .markdown-source-view {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.task-center-source-edit-editor-host .workspace-leaf {
+  border: none;
+}
+.task-center-source-edit-editor-host .view-header {
+  display: none;
+}
 .task-center-source-edit-textarea {
   flex: 1 1 auto;
   width: 100%;

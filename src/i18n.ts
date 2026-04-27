@@ -274,11 +274,12 @@ const EN = {
   "savedViews.mobileTitle": "Views and filters",
 
   // US-168: in-place source Markdown edit overlay.
-  "sourceEdit.title": "Edit source Markdown",
+  "sourceEdit.title": "Edit in Obsidian",
   "sourceEdit.save": "Save",
   "sourceEdit.close": "Close",
   "sourceEdit.saved": "Saved",
   "sourceEdit.unsaved": "Unsaved",
+  "sourceEdit.nativeFailed": "Could not open Obsidian's native editor.",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -484,11 +485,12 @@ const ZH: Partial<typeof EN> = {
   "savedViews.mobileEntry": "过滤 / 视图",
   "savedViews.mobileTitle": "视图与过滤",
 
-  "sourceEdit.title": "编辑源 Markdown",
+  "sourceEdit.title": "在 Obsidian 中编辑",
   "sourceEdit.save": "保存",
   "sourceEdit.close": "关闭",
   "sourceEdit.saved": "已保存",
   "sourceEdit.unsaved": "未保存",
+  "sourceEdit.nativeFailed": "无法打开 Obsidian 原生编辑器。",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the
