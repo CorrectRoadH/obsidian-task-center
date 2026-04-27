@@ -104,7 +104,7 @@
 
 ### 编辑卡片 & 快捷键
 
-- `US-161` **点标题就改名**,Enter 提交、Esc 回退;emoji / tag / `[estimate::]` / `[actual::]` / block 锚点 / 优先级符号一个不丢。
+- `US-161` **标题改名不再走卡片 inline input**。点击卡片/标题统一进入 US-168 源 Markdown 编辑层,用户在原文里改标题;emoji / tag / `[estimate::]` / `[actual::]` / block 锚点 / 优先级符号自然保留。CLI/API `rename` 仍作为 agent 与自动化入口保留。
 - `US-163` 新建任务，新建的直接在当天Daily加到文件尾(只允许这个文件入口) - [ ] 任务名 ➕ 创建日期 。默认是未安排截止日期的状态。
 - `US-162` 在 Task Card可以创建任务的子任务，如果 US-146 的话就不要额外加 创建时间了。
   - 可以给 Task Card的子任务加子子任务

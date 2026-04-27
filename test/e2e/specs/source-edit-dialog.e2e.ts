@@ -111,6 +111,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     })) as string | null;
     expect(beforeViewType).toBe("task-center-board");
     expect(afterViewType).toBe(beforeViewType);
+    await expect($(".workspace-leaf.mod-active .task-center-view")).toExist();
 
     await browser.executeObsidian(async () => {
       const shell = document.querySelector("[data-source-edit-shell]");
@@ -152,6 +153,11 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     await browser.keys("Escape");
     await shell.waitForExist({ timeout: 5000, reverse: true });
     await expect($(".task-center-view")).toExist();
+    await expect($(".workspace-leaf.mod-active .task-center-view")).toExist();
+    const afterEscViewType = (await browser.executeObsidian(async ({ app }) => {
+      return app.workspace.activeLeaf?.view.getViewType() ?? null;
+    })) as string | null;
+    expect(afterEscViewType).toBe("task-center-board");
   });
 
   it("US-168d: hover popover and context-menu open-source entry are removed", async function () {

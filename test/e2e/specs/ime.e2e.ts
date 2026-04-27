@@ -61,19 +61,19 @@ async function readFile(path: string): Promise<string> {
  * (typing pinyin/kana/hangul before candidate selection), Enter only
  * commits the IME selection — it must NOT submit the surrounding form.
  *
- * This file covers the two view.ts inline editors (chunks b + c). The
- * Quick Add modal case (chunk a) lives in quickadd.e2e.ts to keep its
- * fixture setup adjacent to the other Quick Add v2 cases.
+ * This file covers the remaining inline editors plus the removed card-title
+ * inline edit path. The Quick Add modal case (chunk a) lives in quickadd.e2e.ts
+ * to keep its fixture setup adjacent to the other Quick Add v2 cases.
  */
 describe("Task Center — IME composition guard (US-413)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
   });
 
-  // US-413 chunk b — inline rename input. Click the card title to enter
-  // edit mode, dispatch IME composition + Enter, assert the file body
-  // is NOT renamed (the rename commit() path was suppressed).
-  it("US-413 chunk b — inline rename Enter during IME composition must not commit", async function () {
+  // US-413 chunk b used to cover card-title inline rename. US-168 made source
+  // edit shell the single card/title edit path, so no `.bt-title-edit` should
+  // be reachable from the card title anymore.
+  it("US-168/US-413 chunk b — card title click opens source shell, not inline rename", async function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] Original title ⏳ ${today}\n`);
 
@@ -83,57 +83,18 @@ describe("Task Center — IME composition guard (US-413)", function () {
     const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
     await $(cardSel).waitForExist({ timeout: 5000 });
 
-    // Click title to enter edit mode.
     await browser.execute((sel: string) => {
       const title = document.querySelector(`${sel} .bt-card-title`) as HTMLElement | null;
       title?.click();
     }, cardSel);
 
-    const input = $(`${cardSel} .bt-title-edit`);
-    await input.waitForExist({ timeout: 3000 });
+    await expect($(`${cardSel} .bt-title-edit`)).not.toExist();
+    const shell = $("[data-source-edit-shell]");
+    await shell.waitForExist({ timeout: 5000 });
+    await expect(shell).toHaveAttribute("data-source-edit-task-id", "Tasks/Inbox.md:L1");
 
-    // Type a new value, then dispatch IME composition + Enter.
-    await browser.execute((sel: string) => {
-      const el = document.querySelector(
-        `${sel} .bt-title-edit`,
-      ) as HTMLInputElement | null;
-      if (!el) return;
-      el.value = "Renamed mid-composition";
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-      const evt = new KeyboardEvent("keydown", {
-        key: "Enter",
-        keyCode: 229,
-        bubbles: true,
-        cancelable: true,
-      });
-      Object.defineProperty(evt, "isComposing", { value: true });
-      el.dispatchEvent(evt);
-    }, cardSel);
-
-    // Settle, then read the file: rename must NOT have happened (commit
-    // path was guarded). The file should still hold the original title.
-    await browser.pause(200);
-    const content = await readFile("Tasks/Inbox.md");
-    expect(content).toContain("Original title");
-    expect(content).not.toContain("Renamed mid-composition");
-
-    // Cleanup: the input still has "Renamed mid-composition" in its
-    // value; without dismissal its blur listener (intentional UX —
-    // click-away saves) would async-commit between this test and the
-    // next, polluting chunk c's fixture. Esc → commit(save=false) is
-    // the explicit cancel path and tears down the editor cleanly.
-    await browser.execute((sel: string) => {
-      const el = document.querySelector(
-        `${sel} .bt-title-edit`,
-      ) as HTMLInputElement | null;
-      if (!el) return;
-      el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
-      el.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-      );
-    }, cardSel);
-    await browser.pause(100);
+    await browser.keys("Escape");
+    await shell.waitForExist({ timeout: 5000, reverse: true });
   });
 
   // US-413 chunk c — subtask add input. Open the add-subtask editor,

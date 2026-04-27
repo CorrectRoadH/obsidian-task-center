@@ -339,32 +339,13 @@
   font-size: 12px;
   line-height: 1.4;
   word-break: break-word;
-  cursor: text;
+  cursor: pointer;
   padding: 0;
   margin: 0;
-  border: 1px solid transparent; /* reserved so input border doesn't shift layout */
   box-sizing: border-box;
 }
 .task-center-view .bt-card-title:hover {
-  border-color: var(--background-modifier-border);
-  border-style: dashed;
-  border-radius: 2px;
-}
-.task-center-view .bt-title-edit {
-  width: 100%;
-  font-size: 12px;
-  line-height: 1.4;
-  font-weight: 500;
-  padding: 0;
-  margin: 0;
-  border: 1px solid var(--interactive-accent);
-  border-radius: 2px;
-  background: var(--background-primary);
-  color: var(--text-normal);
-  font-family: inherit;
-  box-sizing: border-box;
-  outline: none;
-  display: block;
+  color: var(--text-accent);
 }
 .task-center-view .bt-card-meta {
   margin-top: 3px;

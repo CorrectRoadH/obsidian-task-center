@@ -1694,10 +1694,6 @@ export class TaskCenterView extends ItemView {
 
     const title = titleRow.createDiv({ cls: "bt-card-title", text: t.title });
     title.title = t.title; // tooltip for long titles
-    title.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.enterTitleEdit(title, t);
-    });
     if (t.status === "done") card.addClass("done");
 
     // Meta row
@@ -1978,10 +1974,6 @@ export class TaskCenterView extends ItemView {
 
     const title = subCard.createDiv({ cls: "bt-subcard-title", text: c.title });
     title.title = c.title;
-    title.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.enterTitleEdit(title, c);
-    });
 
     // (Previous `bt-sub-sched` badge for cross-day subtasks removed —
     //  US-148 now surfaces such subtasks as standalone top-level cards
@@ -2699,59 +2691,6 @@ export class TaskCenterView extends ItemView {
     new QuickAddModal(this.app, this.api, () => this.scheduleRefresh(), this.plugin.settings).open();
   }
 
-  // US-161: click a card title to inline-rename. Enter commits, Esc
-  // cancels, blur commits (treated as Enter to avoid losing typing on
-  // accidental focus loss). Metadata preservation — emoji dates, tags,
-  // [estimate::] / [actual::], block anchors, priority symbols — happens
-  // in writer.rebuildTaskLineWithNewTitle (US-407 / US-409 byte-level
-  // round-trip), not here.
-  // see USER_STORIES.md
-  enterTitleEdit(el: HTMLElement, task: ParsedTask) {
-    const oldText = task.title;
-    el.empty();
-    const input = el.createEl("input", { type: "text" });
-    input.addClass("bt-title-edit");
-    input.value = oldText;
-    input.focus();
-    input.select();
-    let committed = false;
-    const commit = async (save: boolean) => {
-      if (committed) return;
-      committed = true;
-      const newVal = input.value.trim();
-      if (save && newVal && newVal !== oldText) {
-        try {
-          const r = await this.api.rename(task.id, newVal);
-          if (!r.unchanged) {
-            this.undoStack.push({
-              label: `rename "${oldText.slice(0, 20)}" → "${newVal.slice(0, 20)}"`,
-              ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
-            });
-          }
-        } catch (e) {
-          new Notice(tr("notice.error", { msg: (e as Error).message }), 4000);
-        }
-      }
-      this.scheduleRefresh();
-    };
-    input.addEventListener("keydown", (e) => {
-      // US-413: skip the Enter commit while IME composition is active —
-      // see src/quickadd.ts for the same pattern.
-      if (e.key === "Enter" && !(e.isComposing || e.keyCode === 229)) {
-        e.preventDefault();
-        commit(true);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        commit(false);
-      } else {
-        // Don't let parent view hotkeys (1-4, Space, D, E, Delete, arrows) fire while editing
-        e.stopPropagation();
-      }
-    });
-    input.addEventListener("blur", () => commit(true));
-    input.addEventListener("click", (e) => e.stopPropagation());
-    input.addEventListener("dragstart", (e) => e.preventDefault());
-  }
 }
 
 function statusIcon(s: string): string {
