@@ -110,26 +110,11 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
       return app.workspace.activeLeaf?.view.getViewType() ?? null;
     })) as string | null;
     expect(beforeViewType).toBe("task-center-board");
-    expect(afterViewType).toBe("markdown");
+    expect(afterViewType).toBe(beforeViewType);
 
-    await browser.executeObsidian(async ({ app }) => {
-      const view = app.workspace.activeLeaf?.view as unknown as {
-        editor?: {
-          replaceRange: (
-            replacement: string,
-            from: { line: number; ch: number },
-            to?: { line: number; ch: number },
-          ) => void;
-        };
-        save?: () => Promise<void>;
-      };
-      if (!view.editor) throw new Error("native MarkdownView editor missing");
-      view.editor.replaceRange(
-        "\n        - [ ] Edited in native editor",
-        { line: 2, ch: "        - [ ] Existing child".length },
-      );
-      await view.save?.();
-    });
+    await $("[data-source-edit-shell] .cm-content").click();
+    await browser.keys(" edited in native editor");
+    await $("[data-source-edit-action='close']").click();
     await browser.waitUntil(
       async () => {
         const content = await browser.executeObsidian(async ({ app }, p: string) => {
@@ -138,11 +123,13 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
           // @ts-expect-error — runtime TFile
           return await app.vault.read(f);
         }, "Tasks/Inbox.md");
-        return String(content).includes("Edited in dialog");
+        return String(content).includes("Source edit target edited in native editor");
       },
       { timeout: 5000, timeoutMsg: "source edit dialog did not save markdown back to vault" },
     );
 
+    await card.click();
+    await shell.waitForExist({ timeout: 5000 });
     await browser.keys("Escape");
     await shell.waitForExist({ timeout: 5000, reverse: true });
     await expect($(".task-center-view")).toExist();
