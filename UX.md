@@ -25,7 +25,7 @@
 
 | Surface | 形态 | 何时进入 | 主要故事 |
 | --- | --- | --- | --- |
-| **看板视图（Task Board）** | 一个全 tab 的 WorkspaceLeaf，标签 = `task-center` | 命令面板"Open Task Board" / `⌘/Ctrl+Shift+T` / ribbon icon / 状态栏点击 / `obsidian command id=obsidian-task-center:open` | US-101~149 / US-161~166 |
+| **Task Center 主视图** | 一个全 tab 的 WorkspaceLeaf，标签 = `task-center` | 命令面板"Open Task Center" / `⌘/Ctrl+Shift+T` / ribbon icon / 状态栏点击 / `obsidian command id=obsidian-task-center:open` | US-101~149 / US-161~166 |
 | **状态栏小部件** | Obsidian 状态栏右下，文字徽标 | 启用插件即在 | US-106 / US-405 |
 | **Quick Add 浮窗** | 看板内置的一行输入；也可由命令面板"Add task" 唤起 | `⌘/Ctrl+T`（看板内）/ 看板上的 `+ Add` 按钮 / 命令面板 | US-163 |
 | **Obsidian CLI 动词** | 注册到 Obsidian 原生 CLI 的 `task-center:*` 命名空间 | shell：`obsidian task-center:<verb>` | US-201~214 / US-228 |
@@ -37,7 +37,7 @@
 ## 2. 信息架构（IA）
 
 ```
-看板视图（Task Board）
+Task Center 主视图
 ├─ 顶部 tab 栏：周 / 月 / 已完成 / 未排期      ← 4 个 tab，每个带未读小圆点  (US-105 / US-166)
 ├─ 工具条：
 │   ├─ 筛选输入框（`/` 聚焦）                  (US-109 / US-166)

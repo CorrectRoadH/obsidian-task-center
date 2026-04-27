@@ -9,14 +9,14 @@
 
 ## 0.1.0 — 2026-04-23
 
-Initial release. Energy-aware task board + CLI on top of Obsidian Tasks syntax.
+Initial release. Energy-aware Task Center + CLI on top of Obsidian Tasks syntax.
 
 ### GUI
 
-- Full-tab task board with 4 views: Week / Month / Completed / Unscheduled.
+- Full-tab Task Center with 4 views: Week / Month / Completed / Unscheduled.
 - Drag-and-drop to schedule tasks between days; drag to the sticky trash bin to mark `[-] ❌ today`; drop cascades to todo subtasks (done subtasks preserved).
 - Click card title → inline rename; Enter commits, Escape reverts. All metadata preserved (tags, emojis, `[estimate::]`, `[actual::]`, `^blockrefs`, `🔁` recurrence, `🔺⏫🔼🔽⏬` priority).
-- Keyboard shortcuts on a selected card: `1–4` quadrant, `←/→` day, `D` date prompt, `Space` done, `E`/`Enter` open source, `Delete` drop, `Ctrl/Cmd+Z` undo (20-deep stack for drag / arrow / rename mutations). `/` focuses search. `Ctrl+1–4` switches tabs. `Ctrl+T` quick add. `⌘/Ctrl+Shift+T` opens the board.
+- Keyboard shortcuts on a selected card: `1–4` quadrant, `←/→` day, `D` date prompt, `Space` done, `E`/`Enter` open source, `Delete` drop, `Ctrl/Cmd+Z` undo (20-deep stack for drag / arrow / rename mutations). `/` focuses search. `Ctrl+1–4` switches tabs. `Ctrl+T` quick add. `⌘/Ctrl+Shift+T` opens Task Center.
 - Quick Add modal with natural-language dates (today / tomorrow / 明天 / 周六 / Mon / YYYY-MM-DD).
 - Masonry unscheduled pool sorted by deadline (urgent first), then by created date desc.
 - Week columns sorted by deadline within each day.
@@ -24,7 +24,7 @@ Initial release. Energy-aware task board + CLI on top of Obsidian Tasks syntax.
 - Ancestor terminal propagation — when a task / bullet is `[x]` / `[-]` / `#dropped`, all descendants are hidden from active views.
 - Subtasks deduped at top level when parent is visible; subtask cards badge their `⏳` when different from parent's.
 - Empty-state onboarding when vault has no tasks.
-- Status bar widget: `📋 N today · ⚠ M overdue`; click opens the board.
+- Status bar widget: `📋 N today · ⚠ M overdue`; click opens Task Center.
 - Tab bar shows active-todo counts as badges.
 - Tasks nested inside Obsidian callouts (`> - [ ] ...`) are first-class.
 - i18n auto-detect (zh / en) via `localStorage.language`.
@@ -56,5 +56,5 @@ Initial release. Energy-aware task board + CLI on top of Obsidian Tasks syntax.
 
 - Plugin `id` contains the substring `obsidian`, which blocks submission to the official Community Plugins catalog. Rename required for that flow.
 - Sub-task drag to another day changes `⏳` in place rather than creating a `[[parent]] > child` wikilink entry on the target day (spec left this as a design choice).
-- Settings changes don't hot-reload into open board views; close and reopen the board after changing week-start, etc.
+- Settings changes don't hot-reload into open Task Center views; close and reopen Task Center after changing week-start, etc.
 - `window.prompt` is disabled in Electron; all date entry goes through the `DatePromptModal`.

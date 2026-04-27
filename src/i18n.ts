@@ -130,12 +130,12 @@ const EN = {
     'Set ⏳ for "{title}"  (YYYY-MM-DD, today, tomorrow, or blank to clear)',
 
   // Commands
-  "cmd.open": "Open Task Board",
+  "cmd.open": "Open Task Center",
   "cmd.quickAdd": "Quick add task",
   "cmd.reloadTasks": "Reload tasks",
 
   // Ribbon
-  "ribbon.open": "Open Task Board",
+  "ribbon.open": "Open Task Center",
 
   // Settings
   "settings.header": "Task Center",
@@ -150,7 +150,7 @@ const EN = {
   "settings.groupingTags.desc":
     "Comma-separated tags for Unscheduled grouping, Quick Add chips, 1-9 shortcuts, and CLI group labels.",
   "settings.defaultView.name": "Default view",
-  "settings.defaultView.desc": "Which tab to show when the board opens.",
+  "settings.defaultView.desc": "Which tab to show when Task Center opens.",
   "settings.defaultView.today": "Today",
   "settings.defaultView.week": "Week",
   "settings.defaultView.month": "Month",
@@ -160,9 +160,9 @@ const EN = {
   "settings.weekStart.desc": "Monday = ISO; Sunday = US style.",
   "settings.weekStart.mon": "Monday",
   "settings.weekStart.sun": "Sunday",
-  "settings.openOnStartup.name": "Open board on startup",
+  "settings.openOnStartup.name": "Open Task Center on startup",
   "settings.openOnStartup.desc":
-    "Opens the task board view automatically when Obsidian starts.",
+    "Opens Task Center automatically when Obsidian starts.",
   "settings.mobileHeader": "Mobile",
   "settings.mobileLongPress.name": "Long-press duration (ms)",
   "settings.mobileLongPress.desc":
@@ -192,7 +192,7 @@ const EN = {
   // Same key set is reused by both surfaces so the two stay in lock-step.
   "status.today": "📋 {n} today",
   "status.overdue": "⚠ {n} overdue",
-  "status.openTooltip": "Click to open Task Board",
+  "status.openTooltip": "Click to open Task Center",
 
   // task #43: est/act metadata badges on every card.
   "meta.est": "est {dur}",

@@ -157,7 +157,7 @@ export class TaskCenterView extends ItemView {
     return VIEW_TYPE_TASK_CENTER;
   }
   getDisplayText(): string {
-    return "Task Board";
+    return "Task Center";
   }
   getIcon(): string {
     return "kanban-square";

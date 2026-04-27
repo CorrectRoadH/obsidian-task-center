@@ -57,7 +57,7 @@ Default tag convention: `#1象限 / #2象限 / #3象限 / #4象限` map to Covey
 
 ## GUI
 
-Open the board — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Board", or `obsidian command id=obsidian-task-center:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
+Open Task Center — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Center", or `obsidian command id=obsidian-task-center:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
 
 - **本周 / Week** — 7 columns Mon–Sun, today highlighted. Drag cards between columns to change `⏳`.
 - **本月 / Month** — calendar grid. Each cell is a drop zone.
@@ -320,12 +320,12 @@ Notes:
 | Default inbox path | `Tasks/Inbox.md` | Where `add` writes when `to=` omitted AND Obsidian's built-in **Daily Notes** core plugin is disabled. When Daily Notes is enabled, `add` follows its folder/format/template — Task Center never overrides that. |
 | Default view | Week | Which tab opens first |
 | Week starts on | Monday | ISO vs US-style |
-| Open board on startup | off | Auto-open on vault launch |
+| Open Task Center on startup | off | Auto-open Task Center on vault launch |
 | Stamp ➕ created date | on | Add `➕ YYYY-MM-DD` to every new task |
 
 ## Languages
 
-All UI strings (tab names, settings labels, empty states, toasts) follow Obsidian's current locale automatically. Switching languages mid-session re-renders open boards in real time. User content (hashtags, inline-field names, Obsidian Tasks emoji) is **never translated** — your markdown stays byte-stable. IME composition (Chinese / Japanese / Korean input) is properly guarded everywhere — pressing Enter to commit a candidate doesn't accidentally submit a quick-add or rename.
+All UI strings (tab names, settings labels, empty states, toasts) follow Obsidian's current locale automatically. Switching languages mid-session re-renders open Task Center views in real time. User content (hashtags, inline-field names, Obsidian Tasks emoji) is **never translated** — your markdown stays byte-stable. IME composition (Chinese / Japanese / Korean input) is properly guarded everywhere — pressing Enter to commit a candidate doesn't accidentally submit a quick-add or rename.
 
 ## Daily Notes
 

@@ -20,7 +20,7 @@
 
 | Surface | 移动端形态 | vs 桌面 |
 | --- | --- | --- |
-| **看板视图（Task Board）** | 全屏 leaf；底部 sticky 操作条（垃圾桶 + Quick Add 按钮） | 桌面是 tab 内一个 leaf；移动端通常占满整个屏幕 |
+| **Task Center 主视图** | 全屏 leaf；底部 sticky 操作条（垃圾桶 + Quick Add 按钮） | 桌面是 tab 内一个 leaf；移动端通常占满整个屏幕 |
 | **状态栏小部件** | **不存在**——Obsidian Mobile 没暴露稳定的状态栏槽位 | 桌面 `📋 N today · ⚠ M overdue` 信息**嵌进 board header**（见 §3.4），不再做独立小部件 |
 | **Quick Add** | 底部 sheet（半屏弹起），自动避让软键盘 | 桌面是顶部一行 input |
 | **Obsidian CLI 动词** | **完全不存在**——Obsidian Mobile 不支持 native CLI（v1.12.x 仍仅桌面） | 桌面才有；AI agent 路径**仅桌面** |
