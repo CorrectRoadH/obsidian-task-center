@@ -110,7 +110,7 @@ export async function openTaskSourceEditShell(
 
   let leaf: SourceEditorLeaf | null = null;
   let view: MarkdownView | null = null;
-  let pendingEscapeClose = false;
+  let closing = false;
   const split = createSourceEditorSplit(app);
   editorHost.appendChild(split.containerEl);
 
@@ -129,6 +129,23 @@ export async function openTaskSourceEditShell(
     e.stopPropagation();
     e.stopImmediatePropagation();
     return true;
+  };
+
+  const suppressNextEscapeKeyup = () => {
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      document.removeEventListener("keyup", suppress, true);
+      window.removeEventListener("keyup", suppress, true);
+    };
+    const suppress = (e: KeyboardEvent) => {
+      if (!consumeEscape(e)) return;
+      cleanup();
+    };
+    document.addEventListener("keyup", suppress, true);
+    window.addEventListener("keyup", suppress, true);
+    window.setTimeout(cleanup, 1000);
   };
 
   const destroy = async () => {
@@ -157,12 +174,14 @@ export async function openTaskSourceEditShell(
 
   const onKeydown = (e: KeyboardEvent) => {
     if (!consumeEscape(e)) return;
-    pendingEscapeClose = true;
+    if (closing) return;
+    closing = true;
+    suppressNextEscapeKeyup();
+    void destroy();
   };
 
   const onKeyup = (e: KeyboardEvent) => {
-    if (!consumeEscape(e)) return;
-    if (pendingEscapeClose) void destroy();
+    consumeEscape(e);
   };
 
   document.addEventListener("keydown", onKeydown, true);
@@ -175,10 +194,9 @@ export async function openTaskSourceEditShell(
   try {
     leaf = app.workspace.createLeafInParent(split, 0) as SourceEditorLeaf;
     await leaf.openFile(file, {
-      active: true,
+      active: false,
       eState: { line: task.line },
     });
-    app.workspace.setActiveLeaf(leaf, { focus: true });
     view = await focusTaskLineInMarkdownView(leaf, task.line);
     overlay.__sourceEditLeaf = leaf;
     overlay.__sourceEditView = view;

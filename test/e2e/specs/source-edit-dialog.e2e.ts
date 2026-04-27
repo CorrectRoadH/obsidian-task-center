@@ -106,6 +106,19 @@ async function openDailyLeaf(path: string) {
   );
 }
 
+async function activeLeafSnapshot() {
+  return (await browser.executeObsidian(async ({ app }) => {
+    const view = app.workspace.activeLeaf?.view as unknown as {
+      getViewType?: () => string;
+      file?: { path?: string };
+    };
+    return {
+      type: view?.getViewType?.() ?? null,
+      path: view?.file?.path ?? null,
+    };
+  })) as { type: string | null; path: string | null };
+}
+
 describe("US-168 source edit panel replaces old source-preview paths", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
@@ -199,21 +212,31 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
 
-    await browser.keys("Escape");
+    await browser.performActions([
+      {
+        type: "key",
+        id: "instant-esc",
+        actions: [{ type: "keyDown", value: "\uE00C" }],
+      },
+    ]);
+    await browser.executeAsync((done) => requestAnimationFrame(() => done(undefined)));
+    const duringEsc = await activeLeafSnapshot();
+    expect(duringEsc.type).toBe("task-center-board");
+    expect(duringEsc.path).not.toBe(dailyPath);
+
+    await browser.performActions([
+      {
+        type: "key",
+        id: "instant-esc",
+        actions: [{ type: "keyUp", value: "\uE00C" }],
+      },
+    ]);
+    await browser.releaseActions();
     await shell.waitForExist({ timeout: 5000, reverse: true });
 
     await browser.waitUntil(
       async () => {
-        const active = (await browser.executeObsidian(async ({ app }) => {
-          const view = app.workspace.activeLeaf?.view as unknown as {
-            getViewType?: () => string;
-            file?: { path?: string };
-          };
-          return {
-            type: view?.getViewType?.() ?? null,
-            path: view?.file?.path ?? null,
-          };
-        })) as { type: string | null; path: string | null };
+        const active = await activeLeafSnapshot();
         return active.type === "task-center-board" && active.path !== dailyPath;
       },
       {
