@@ -4,7 +4,7 @@
  * Contract for implementation:
  *   data-source-edit-shell            — dialog-like source editor shell
  *   data-source-edit-task-id          — task id currently being edited
- *   data-source-edit-editor="markdown" — shell is backed by a real Markdown editor path
+ *   data-source-edit-editor="markdown-source" — shell edits original source markdown in-place
  *
  * These tests are intentionally red on the pre-US-168 implementation:
  * - clicking a card only selects it instead of opening source edit shell
@@ -85,22 +85,48 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
 
   it("US-168a/b: clicking a normal task card opens a Markdown-backed source edit shell at that task", async function () {
     const { card, taskId } = await openBoardWithTask();
+    const beforeViewType = (await browser.executeObsidian(async ({ app }) => {
+      return app.workspace.activeLeaf?.view.getViewType() ?? null;
+    })) as string | null;
 
     await card.click();
 
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
     await expect(shell).toHaveAttribute("data-source-edit-task-id", taskId);
-    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown");
-    await expect(shell).toHaveText(expect.stringContaining("Source edit target"));
-    await expect(shell).toHaveText(expect.stringContaining("Existing child"));
+    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown-source");
+    await expect($(".task-center-view")).toExist();
 
-    const cursor = (await browser.executeObsidian(async ({ app }) => {
-      const leaf = app.workspace.activeLeaf;
-      const view = leaf?.view as unknown as { editor?: { getCursor: () => { line: number; ch: number } } };
-      return view.editor?.getCursor() ?? null;
-    })) as { line: number; ch: number } | null;
-    expect(cursor?.line).toBe(1);
+    const afterViewType = (await browser.executeObsidian(async ({ app }) => {
+      return app.workspace.activeLeaf?.view.getViewType() ?? null;
+    })) as string | null;
+    expect(afterViewType).toBe(beforeViewType);
+
+    const editor = $("[data-source-edit-textarea]");
+    await expect(editor).toHaveValue(expect.stringContaining("Source edit target"));
+    await expect(editor).toHaveValue(expect.stringContaining("Existing child"));
+
+    const updated = [
+      "- [ ] Parent context",
+      `    - [ ] Source edit target ⏳ ${todayISO()}`,
+      "        - [ ] Existing child",
+      "        - [ ] Edited in dialog",
+      "",
+    ].join("\n");
+    await editor.setValue(updated);
+    await $("[data-source-edit-action='save']").click();
+    await browser.waitUntil(
+      async () => {
+        const content = await browser.executeObsidian(async ({ app }, p: string) => {
+          const f = app.vault.getAbstractFileByPath(p);
+          if (!f) return "";
+          // @ts-expect-error — runtime TFile
+          return await app.vault.read(f);
+        }, "Tasks/Inbox.md");
+        return String(content).includes("Edited in dialog");
+      },
+      { timeout: 5000, timeoutMsg: "source edit dialog did not save markdown back to vault" },
+    );
   });
 
   it("US-168d: hover popover and context-menu open-source entry are removed", async function () {
@@ -137,7 +163,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
     const shell = $("[data-source-edit-shell]");
     await shell.waitForExist({ timeout: 5000 });
     await expect(shell).toHaveAttribute("data-source-edit-task-id", "Tasks/Inbox.md:L1");
-    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown");
-    await expect(shell).toHaveText(expect.stringContaining("Today child"));
+    await expect(shell).toHaveAttribute("data-source-edit-editor", "markdown-source");
+    await expect($("[data-source-edit-textarea]")).toHaveValue(expect.stringContaining("Today child"));
   });
 });

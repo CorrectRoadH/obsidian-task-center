@@ -272,6 +272,13 @@ const EN = {
   "savedViews.defaultName": "Saved view",
   "savedViews.mobileEntry": "Filters",
   "savedViews.mobileTitle": "Views and filters",
+
+  // US-168: in-place source Markdown edit overlay.
+  "sourceEdit.title": "Edit source Markdown",
+  "sourceEdit.save": "Save",
+  "sourceEdit.close": "Close",
+  "sourceEdit.saved": "Saved",
+  "sourceEdit.unsaved": "Unsaved",
 };
 
 const ZH: Partial<typeof EN> = {
@@ -476,6 +483,12 @@ const ZH: Partial<typeof EN> = {
   "savedViews.defaultName": "保存视图",
   "savedViews.mobileEntry": "过滤 / 视图",
   "savedViews.mobileTitle": "视图与过滤",
+
+  "sourceEdit.title": "编辑源 Markdown",
+  "sourceEdit.save": "保存",
+  "sourceEdit.close": "关闭",
+  "sourceEdit.saved": "已保存",
+  "sourceEdit.unsaved": "未保存",
 };
 
 // US-408: re-detect locale on every `t()` call so that flipping the

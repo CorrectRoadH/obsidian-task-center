@@ -180,7 +180,7 @@
 │  Tasks/Inbox.md:L42                                      [×] │
 │  ───────────────────────────────────────────────────────────  │
 │                                                              │
-│  <真实 Obsidian MarkdownView / WorkspaceLeaf 编辑器>           │
+│  <可编辑原文 Markdown source>                                  │
 │  ...                                                         │
 │  - [ ] 父任务                                                │
 │      - [ ] 当前任务 ⏳ 2026-04-24   ← 光标在这里，滚动居中      │
@@ -194,12 +194,12 @@
 
 - **唯一查看/编辑入口**：单击卡片。普通看板卡、Today 卡、保存视图过滤后的卡都走同一个 `open task source dialog` 动作。
 - **定位**：打开后光标落在任务原始 markdown 行开头，编辑器把该行滚动到可视区域中间；不是只滚到附近，也不是只高亮卡片。
-- **编辑能力**：面板里必须是真实 Obsidian `MarkdownView` / `WorkspaceLeaf` 编辑体验，用户可以直接改当前任务、加/删/改子任务、查看上下文。禁止用只读 `MarkdownRenderer` 冒充。
-- **形态说明**：#78 spike 已证明 Obsidian public API 不能把 `MarkdownView` 安全嵌进 plugin `Modal`。因此 UX 要求是 dialog-like shell / controller：用户感知是临时编辑面板，技术上背后使用真实 Obsidian editor leaf。
-- **保存与刷新**：用户编辑后按 Obsidian 原生保存语义落盘；对话框关闭或文件变更事件到达后，看板刷新，卡片内容与子任务树同步。
-- **关闭**：Esc / 右上关闭关闭编辑面板；关闭前不丢 Obsidian 编辑器已写入的内容。
+- **编辑能力**：面板里展示并编辑任务所在文件的原文 Markdown，用户可以直接改当前任务、加/删/改子任务、查看上下文。禁止用只读 `MarkdownRenderer` 冒充。
+- **形态说明**：#78 spike 已证明 Obsidian public API 不能把 `MarkdownView` 安全嵌进 plugin `Modal`。因此 UX 要求是当前 Task Center 上方的 overlay/dialog；不能切到新的 Markdown leaf/页面。当前可接受实现是可编辑原文 Markdown textarea。
+- **保存与刷新**：用户编辑后显式保存落盘；文件变更事件到达后，看板刷新，卡片内容与子任务树同步。
+- **关闭**：Esc / 右上关闭关闭编辑面板；关闭后仍回到原 Task Center tab / filter 状态。
 - **旧路径删除**：卡片 hover popover 不再存在；卡片双击不再绑定打开源文件；右键菜单不再展示"打开源文件"。减少用户在三套查看/编辑入口之间选择。
-- **移动端**：手机上同一动作可落为全屏编辑面板；仍必须是真实可编辑 markdown，不是只读预览。
+- **移动端**：手机上同一动作可落为全屏编辑面板；仍必须是可编辑原文 markdown，不是只读预览。
 
 ### 5.5 右键菜单
 

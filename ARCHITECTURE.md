@@ -177,26 +177,26 @@ src/
 
 ### 2.2 Source edit panel / shell（US-168）
 
-点击卡片的查看/编辑路径统一为 source edit panel。旧的 hover popover、卡片双击打开源文件、右键菜单打开源文件都应删除，避免三套入口表达同一能力。#78 spike 的结论是：Obsidian public API 不能把原生 `MarkdownView` 安全嵌入 plugin `Modal`，所以这里的 "dialog" 是产品形态/控制器，不是纯 `Modal` 容器。
+点击卡片的查看/编辑路径统一为 source edit panel。旧的 hover popover、卡片双击打开源文件、右键菜单打开源文件都应删除，避免三套入口表达同一能力。#78 spike 的结论是：Obsidian public API 不能把原生 `MarkdownView` 安全嵌入 plugin `Modal`，而直接打开 `WorkspaceLeaf` 会让用户离开当前 Task Center 页面；因此这里的 dialog 必须是当前 Task Center 上方的 overlay/shell。
 
 ```
 Task card click
   → TaskCenterView.openSourceDialog(task)
   → SourceEditDialog.open(task)
   → resolve TFile(task.path)
-  → open a real WorkspaceLeaf + MarkdownView
-  → editor.setCursor({ line: task.line, ch: 0 })
-  → editor.scrollIntoView({ from/to: task.line }, true)
-  → dialog-like shell controls close / reveal / refresh
-  → on close / vault modify → cache invalidation → board refresh
+  → read original file markdown into current-view overlay editor
+  → select / scroll the task line near the middle
+  → explicit Save writes full markdown back to vault
+  → cache invalidation → board refresh
 ```
 
 **硬约束**：
 
-- 编辑内容必须来自真实 `WorkspaceLeaf + MarkdownView`，不能用 `MarkdownRenderer` 只读渲染替代，也不能伪造 `WorkspaceLeaf` 或搬运 workspace leaf DOM 到 `Modal.contentEl`。
-- 定位使用 Obsidian editor API：`MarkdownView.editor.setCursor()` + `editor.scrollIntoView(range, true)`。当前 `openAtSource()` 已在普通 leaf 路径里验证这组 API 可用；新对话框必须复用同一定位语义。
+- 编辑内容必须来自任务所在文件的原文 Markdown，不能用 `MarkdownRenderer` 只读渲染替代。
+- 打开后不能切换 active leaf 到 Markdown 页面；Task Center 必须仍在背景里。
+- 定位使用 overlay editor 的 selection + scrollTop，把任务行放到可视区域中间附近。
 - 旧 `ContextPopoverController` / `view/popover.ts` 不再需要；实现任务必须删除 hover popover 代码、样式、测试和文档引用，而不是只在打开 dialog 前关闭它。
-- 写回仍走 Obsidian editor / vault 原生保存语义；不要在 dialog 里另写一套 parser/writer。看板只通过既有 vault/cache 事件刷新。
+- 写回走 `vault.modify(file, textarea.value)` 全文保存；不要在 dialog 里另写一套 parser/writer。看板只通过既有 vault/cache 事件刷新。
 - `openAtSource()` 普通 leaf 行为只能作为实现过渡工具存在；最终用户路径不再暴露右键"打开源文件"或卡片双击跳源文件。
 - `docs/source-edit-dialog-spike.md` 是本架构决策的证据文件；后续实现如果偏离真实 leaf 路径，必须先更新 spike 证据并经 PM/Jerry 确认。
 

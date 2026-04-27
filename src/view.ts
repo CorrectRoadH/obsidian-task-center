@@ -240,7 +240,14 @@ export class TaskCenterView extends ItemView {
   private async openSourceEditShell(task: ParsedTask): Promise<void> {
     this.state.selectedTaskId = task.id;
     this.contentEl.focus();
-    await openTaskSourceEditShell(this.app, this.leaf, task);
+    await openTaskSourceEditShell(this.app, this.leaf, task, {
+      onSave: async () => {
+        await this.waitForCacheUpdate([task.path], 2000);
+        await this.reloadTasks();
+        this.bumpCacheVersion();
+        this.render();
+      },
+    });
   }
 
   /**
