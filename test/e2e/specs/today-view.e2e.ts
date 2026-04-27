@@ -72,6 +72,23 @@ async function writeAndWait(path: string, body: string) {
   }, path);
 }
 
+async function resetTaskCacheForTest() {
+  await browser.executeObsidian(async ({ app }) => {
+    // resetVault() mutates the fixture below Obsidian and may not emit delete
+    // events for files created by earlier specs. Clear the runtime cache so
+    // this spec's "empty vault" assertion is based on the current fixture.
+    // @ts-expect-error — runtime plugin test hook
+    const cache = app.plugins.plugins["obsidian-task-center"].cache as any;
+    cache.byPath?.clear?.();
+    cache.byHash?.clear?.();
+    cache.pending?.clear?.();
+    cache.allLoaded = false;
+    cache.allLoadingPromise = null;
+    // @ts-expect-error — runtime plugin test hook
+    await app.plugins.plugins["obsidian-task-center"].__forFlush();
+  });
+}
+
 describe("US-720 today execution view (task #63)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
@@ -164,6 +181,7 @@ describe("US-720 today execution view (task #63)", function () {
   it("US-720d: empty state shown when no tasks exist", async function () {
     // Force this spec's task source empty instead of relying on runner reset state.
     await writeAndWait("Tasks/Inbox.md", "");
+    await resetTaskCacheForTest();
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
     await forFlush();
