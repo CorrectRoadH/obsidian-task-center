@@ -110,11 +110,32 @@ export async function openTaskSourceEditShell(
 
   let leaf: SourceEditorLeaf | null = null;
   let view: MarkdownView | null = null;
+  let pendingEscapeClose = false;
   const split = createSourceEditorSplit(app);
   editorHost.appendChild(split.containerEl);
 
+  const restoreHostLeaf = () => {
+    try {
+      if (hostLeaf) app.workspace.setActiveLeaf(hostLeaf, { focus: true });
+    } catch {
+      // The source shell is already closing; losing focus restoration should not
+      // keep the editor shell open or prevent saving.
+    }
+  };
+
+  const consumeEscape = (e: KeyboardEvent): boolean => {
+    if (e.key !== "Escape") return false;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    return true;
+  };
+
   const destroy = async () => {
     document.removeEventListener("keydown", onKeydown, true);
+    document.removeEventListener("keyup", onKeyup, true);
+    window.removeEventListener("keydown", onKeydown, true);
+    window.removeEventListener("keyup", onKeyup, true);
     try {
       await (view as unknown as { save?: () => Promise<void> })?.save?.();
     } catch {
@@ -128,19 +149,26 @@ export async function openTaskSourceEditShell(
     }
     overlay.remove();
     await opts.onSave?.();
-    if (hostLeaf) app.workspace.setActiveLeaf(hostLeaf, { focus: false });
+    restoreHostLeaf();
+    requestAnimationFrame(restoreHostLeaf);
+    window.setTimeout(restoreHostLeaf, 0);
   };
   overlay.__sourceEditClose = destroy;
 
   const onKeydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      void destroy();
-    }
+    if (!consumeEscape(e)) return;
+    pendingEscapeClose = true;
   };
+
+  const onKeyup = (e: KeyboardEvent) => {
+    if (!consumeEscape(e)) return;
+    if (pendingEscapeClose) void destroy();
+  };
+
   document.addEventListener("keydown", onKeydown, true);
+  document.addEventListener("keyup", onKeyup, true);
+  window.addEventListener("keydown", onKeydown, true);
+  window.addEventListener("keyup", onKeyup, true);
   close.addEventListener("click", () => void destroy());
   overlay.addEventListener("click", () => void destroy());
 

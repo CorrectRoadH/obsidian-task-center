@@ -78,6 +78,34 @@ async function openBoardWithTask(path = "Tasks/Inbox.md", line = "- [ ] Source e
   return { card, taskId: `${path}:L2` };
 }
 
+async function openDailyLeaf(path: string) {
+  await writeAndWait(path, `# Daily\n\nOpen Task Center from this note.\n`);
+  await browser.executeObsidian(async ({ app }, p: string) => {
+    const file = app.vault.getAbstractFileByPath(p);
+    if (!file) throw new Error(`Missing daily file: ${p}`);
+    const leaf = app.workspace.getLeaf(true);
+    // @ts-expect-error — runtime TFile
+    await leaf.openFile(file, { active: true });
+    app.workspace.setActiveLeaf(leaf, { focus: true });
+  }, path);
+  await browser.waitUntil(
+    async () => {
+      const active = (await browser.executeObsidian(async ({ app }) => {
+        const view = app.workspace.activeLeaf?.view as unknown as {
+          getViewType?: () => string;
+          file?: { path?: string };
+        };
+        return {
+          type: view?.getViewType?.() ?? null,
+          path: view?.file?.path ?? null,
+        };
+      })) as { type: string | null; path: string | null };
+      return active.type === "markdown" && active.path === path;
+    },
+    { timeout: 5000, timeoutMsg: "daily markdown leaf did not become active" },
+  );
+}
+
 describe("US-168 source edit panel replaces old source-preview paths", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
@@ -158,6 +186,43 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
       return app.workspace.activeLeaf?.view.getViewType() ?? null;
     })) as string | null;
     expect(afterEscViewType).toBe("task-center-board");
+  });
+
+  it("US-168e: Esc from a shell opened after Daily -> Task Center closes only the shell", async function () {
+    const dailyPath = `Daily/${todayISO()}.md`;
+    await openDailyLeaf(dailyPath);
+
+    const { card } = await openBoardWithTask();
+    await expect($(".workspace-leaf.mod-active .task-center-view")).toExist();
+
+    await card.click();
+    const shell = $("[data-source-edit-shell]");
+    await shell.waitForExist({ timeout: 5000 });
+
+    await browser.keys("Escape");
+    await shell.waitForExist({ timeout: 5000, reverse: true });
+
+    await browser.waitUntil(
+      async () => {
+        const active = (await browser.executeObsidian(async ({ app }) => {
+          const view = app.workspace.activeLeaf?.view as unknown as {
+            getViewType?: () => string;
+            file?: { path?: string };
+          };
+          return {
+            type: view?.getViewType?.() ?? null,
+            path: view?.file?.path ?? null,
+          };
+        })) as { type: string | null; path: string | null };
+        return active.type === "task-center-board" && active.path !== dailyPath;
+      },
+      {
+        timeout: 3000,
+        timeoutMsg: "Esc closed source shell but workspace returned to the previous Daily markdown leaf",
+      },
+    );
+    await expect($("[data-source-edit-shell]")).not.toExist();
+    await expect($(".workspace-leaf.mod-active .task-center-view")).toExist();
   });
 
   it("US-168d: hover popover and context-menu open-source entry are removed", async function () {
