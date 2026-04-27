@@ -152,3 +152,54 @@ test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (tr
     }
   }
 });
+
+// task #108: toolbar / Today / saved-view controls are a high-risk i18n
+// surface because they sit in the first viewport. Keep the assertion at the
+// i18n layer so it can run in unit tests without launching Obsidian.
+test("task #108 — toolbar, Today, and saved-view control labels are localized", async () => {
+  const keys = [
+    { key: "toolbar.add", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "toolbar.filter", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "plan.entry", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.groupOverdue", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.groupToday", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.groupRec", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.groupEmpty", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.actionDone", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.actionReschedule", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "today.actionDrop", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.current", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.tag", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.date", vars: undefined, mustDifferFromEnInZh: false },
+    { key: "savedViews.statusAll", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.groupingAll", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.save", vars: undefined, mustDifferFromEnInZh: true },
+  ];
+
+  mockStorage.clear();
+  mockStorage.set("language", "en");
+  const en = await import(
+    `../test/.compiled/i18n.bundle.js?cachebust=${Date.now()}_t108_en`
+  );
+  mockStorage.set("language", "zh");
+  const zh = await import(
+    `../test/.compiled/i18n.bundle.js?cachebust=${Date.now()}_t108_zh`
+  );
+
+  for (const { key, vars, mustDifferFromEnInZh } of keys) {
+    mockStorage.set("language", "en");
+    const enMsg = en.t(key, vars);
+    assert.notEqual(enMsg, key, `EN table missing key: ${key}`);
+
+    mockStorage.set("language", "zh");
+    const zhMsg = zh.t(key, vars);
+    assert.notEqual(zhMsg, key, `ZH table missing key: ${key}`);
+    if (mustDifferFromEnInZh) {
+      assert.notEqual(
+        zhMsg,
+        enMsg,
+        `ZH translation for ${key} should differ from EN ("${enMsg}")`,
+      );
+    }
+  }
+});
