@@ -30,6 +30,7 @@ const {
   createSavedView,
   hasSavedViewFilters,
   suggestSavedViewName,
+  updateSavedViewById,
   upsertSavedView,
 } = await import("../test/.compiled/saved-views.js");
 
@@ -68,6 +69,21 @@ test("US-109c: upsertSavedView replaces an existing view with the same name", ()
   assert.equal(views[1].tag, "#alpha");
   assert.deepEqual(views[1].time, { completed: "week" });
   assert.equal(views[1].status, "done");
+});
+
+test("US-109c: updateSavedViewById preserves the selected saved-view identity", () => {
+  const alpha = createSavedView("Alpha", { search: "old", tag: "#old", time: { scheduled: "today" }, status: "todo" }, () => "sv-alpha");
+  const gamma = createSavedView("Gamma", { search: "", tag: "#gamma", time: {}, status: "all" }, () => "sv-gamma");
+  const updated = createSavedView("Alpha", { search: "new", tag: "#alpha", time: { deadline: "overdue" }, status: "done" }, () => "sv-alpha");
+
+  const views = updateSavedViewById([alpha, gamma], updated);
+
+  assert.deepEqual(views.map((view) => view.id), ["sv-alpha", "sv-gamma"]);
+  assert.deepEqual(views.map((view) => view.name), ["Alpha", "Gamma"]);
+  assert.equal(views[0].search, "new");
+  assert.equal(views[0].tag, "#alpha");
+  assert.deepEqual(views[0].time, { deadline: "overdue" });
+  assert.equal(views[0].status, "done");
 });
 
 test("US-109g: applySavedViewFilters restores saved filters", () => {

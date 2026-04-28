@@ -121,11 +121,13 @@ describe("US-724 saved views / custom filters", function () {
     await $('[data-saved-view-name-input]').setValue("Alpha Today");
     await $('[data-action="confirm-saved-view-name"]').click();
     await forFlush();
+    await expect($('[data-action="update-current-view"]')).toExist();
 
     // Change filters away, then restore through the saved-view dropdown.
     await $('[data-saved-view-filter="tag"]').click();
     await $('[data-tag-clear]').click();
     await $('[data-tag-option="#gamma"]').click();
+    await expect($('[data-action="update-current-view"]')).toExist();
     await $('[data-saved-view-select]').click();
     await $('[data-saved-view-option="Alpha Today"]').click();
 
@@ -138,6 +140,43 @@ describe("US-724 saved views / custom filters", function () {
       return (app as any).plugins.plugins["obsidian-task-center"].settings.savedViews;
     });
     expect(JSON.stringify(saved)).toContain("Alpha Today");
+  });
+
+  it("US-109c: updates the selected saved view instead of prompting for a new name", async function () {
+    const today = todayISO();
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      [
+        `- [ ] Fixture alpha today #alpha ⏳ ${today}`,
+        `- [ ] Fixture gamma today #gamma ⏳ ${today}`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $('[data-saved-views]').waitForExist({ timeout: 5000 });
+
+    await $('[data-saved-view-filter="tag"]').click();
+    await $('[data-tag-option="#alpha"]').click();
+    await $('[data-action="save-current-view"]').click();
+    await $('[data-saved-view-name-input]').setValue("Focus");
+    await $('[data-action="confirm-saved-view-name"]').click();
+    await forFlush();
+
+    await $('[data-saved-view-filter="tag"]').click();
+    await $('[data-tag-clear]').click();
+    await $('[data-tag-option="#gamma"]').click();
+    await $('[data-action="update-current-view"]').click();
+    await forFlush();
+
+    await expect($('[data-saved-view-name-input]')).not.toExist();
+    const savedJson = await browser.executeObsidian(async ({ app }) => {
+      // @ts-expect-error — runtime plugin
+      return JSON.stringify((app as any).plugins.plugins["obsidian-task-center"].settings.savedViews);
+    });
+    expect(savedJson).toContain('"name":"Focus"');
+    expect(savedJson).toContain('"tag":"#gamma"');
+    expect(savedJson).not.toContain('"tag":"#alpha"');
   });
 
   it("US-109d: tag picker excludes block refs and prose-polluted pseudo tags", async function () {

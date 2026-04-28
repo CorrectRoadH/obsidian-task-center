@@ -183,6 +183,7 @@ test("task #108 — toolbar, Today, and saved-view control labels are localized"
     { key: "settings.copy", vars: undefined, mustDifferFromEnInZh: true },
     { key: "settings.copied", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.save", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.update", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.saveDisabled", vars: undefined, mustDifferFromEnInZh: true },
   ];
 

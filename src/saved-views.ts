@@ -33,6 +33,10 @@ export function upsertSavedView(views: readonly SavedTaskView[], view: SavedTask
   ];
 }
 
+export function updateSavedViewById(views: readonly SavedTaskView[], view: SavedTaskView): SavedTaskView[] {
+  return views.map((existing) => existing.id === view.id ? view : existing);
+}
+
 export function applySavedViewFilters(view: SavedTaskView): AppliedSavedViewFilters {
   return {
     savedViewId: view.id,

@@ -705,7 +705,7 @@ i18n/
 ### 9.4 应用层不硬编码 tag / 字段名（US-108 / US-301）
 
 - tag 是普通用户数据，来自 markdown 现状。应用不提供单独的 tag 分类设置，也不内置 `#1象限`、`#now` 这类业务分类。
-- 保存视图切换、tag 筛选、时间筛选、状态筛选都用自绘 button + popover，不使用原生 select / 原生 multiple select。tag 筛选用当前候选集合里实际存在的合法 tag 生成“标签”按钮 + popover（搜索框 + 自绘 checkbox 行）；按钮自己显示选中摘要（首个 tag + `+N`），不在工具条旁边额外铺 selected chips。时间筛选存为 `SavedViewTimeFilters = { scheduled?, deadline?, completed?, created? }`，不再存在无语义 `date` 字段。顶栏直接显示 `scheduled`（排期）范围 popover；`deadline / completed / created` 进入“更多时间”，第一层只显示字段行和当前摘要，第二层复用同一套月历范围选择器。排期筛选不得 fallback 到 `📅 deadline` / `✅ completed` / `➕ created`，`deadline` 的 `overdue / next-7-days` 是 deadline 自己的 token，不进入 scheduled。状态筛选是固定枚举 popover，触发按钮的“状态”和选项里的“全部状态”分开文案，只写 `SavedViewStatus` 到 view state；常用 tag / time / 状态 / 搜索组合通过“保存过滤视图”持久化，空筛选集合不能保存成 preset。
+- 保存视图切换、tag 筛选、时间筛选、状态筛选都用自绘 button + popover，不使用原生 select / 原生 multiple select。tag 筛选用当前候选集合里实际存在的合法 tag 生成“标签”按钮 + popover（搜索框 + 自绘 checkbox 行）；按钮自己显示选中摘要（首个 tag + `+N`），不在工具条旁边额外铺 selected chips。时间筛选存为 `SavedViewTimeFilters = { scheduled?, deadline?, completed?, created? }`，不再存在无语义 `date` 字段。顶栏直接显示 `scheduled`（排期）范围 popover；`deadline / completed / created` 进入“更多时间”，第一层只显示字段行和当前摘要，第二层复用同一套月历范围选择器。排期筛选不得 fallback 到 `📅 deadline` / `✅ completed` / `➕ created`，`deadline` 的 `overdue / next-7-days` 是 deadline 自己的 token，不进入 scheduled。状态筛选是固定枚举 popover，触发按钮的“状态”和选项里的“全部状态”分开文案，只写 `SavedViewStatus` 到 view state；常用 tag / time / 状态 / 搜索组合通过“保存过滤视图”新建 preset，通过“更新”覆盖当前 preset。筛选控件变化不清空 `savedViewId`，只有用户选择“无过滤”才清空；空筛选集合不能保存或更新成 preset。
 - 右键菜单只提供通用 tag 编辑能力：追加 / 移除 markdown 里的普通 tag，不做互斥分组替换。
 - 未排期视图不按内置分组渲染；排序按 US-104，用户要看某类 tag 时通过筛选或保存视图进入。保存视图不写入独立“分组”条件。
 - "时长"字段名同理：summary / 卡片 meta 行从用户配置的字段名读取；`estimate` / `actual` 只能作为默认 preset 示例，不是业务分支。

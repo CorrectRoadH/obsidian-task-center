@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.6.2 — 2026-04-28
+
+- Fix saved filter views so editing filters while a saved view is selected keeps that view selected and updates it in place via an “Update” action.
+
 ## 0.6.1 — 2026-04-28
 
 - Fix filters to match US-109: tag is a multi-select, date is a condition select, and the toolbar search placeholder is explicit instead of a generic filter label.

@@ -45,6 +45,7 @@ import {
   hasSavedViewFilters,
   suggestSavedViewName as suggestSavedViewNameForFilters,
   upsertSavedView,
+  updateSavedViewById,
 } from "./saved-views";
 import type { SavedTaskView, SavedViewStatus } from "./types";
 import type { SavedViewTimeField, SavedViewTimeFilters } from "./types";
@@ -694,7 +695,6 @@ export class TaskCenterView extends ItemView {
     search.value = this.state.filter;
     search.addEventListener("input", () => {
       this.state.filter = search.value;
-      this.state.savedViewId = null;
       const caret = search.selectionStart;
       this.render();
       const el = this.contentEl.querySelector(".bt-search") as HTMLInputElement | null;
@@ -748,13 +748,23 @@ export class TaskCenterView extends ItemView {
 
     this.renderStatusFilter(wrap);
 
-    const save = wrap.createEl("button", { text: tr("savedViews.save"), cls: "bt-saved-view-save" });
-    save.dataset.action = "save-current-view";
+    const selectedView = this.selectedSavedView();
+    const save = wrap.createEl("button", {
+      text: selectedView ? tr("savedViews.update") : tr("savedViews.save"),
+      cls: "bt-saved-view-save",
+    });
+    save.dataset.action = selectedView ? "update-current-view" : "save-current-view";
     const canSave = this.hasSaveableFilters();
     save.disabled = !canSave;
     if (!canSave) save.title = tr("savedViews.saveDisabled");
     save.addEventListener("click", async () => {
       if (!this.hasSaveableFilters()) return;
+      const latestSelectedView = this.selectedSavedView();
+      if (latestSelectedView) {
+        await this.updateCurrentSavedView(latestSelectedView);
+        this.render();
+        return;
+      }
       const name = await this.askSavedViewName();
       if (!name || !name.trim()) return;
       await this.saveCurrentView(name.trim());
@@ -764,7 +774,7 @@ export class TaskCenterView extends ItemView {
 
   private renderSavedViewPicker(parent: HTMLElement): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
-    const selected = this.plugin.settings.savedViews.find((view) => view.id === this.state.savedViewId);
+    const selected = this.selectedSavedView();
     const trigger = container.createEl("button", {
       text: selected?.name ?? tr("savedViews.current"),
       cls: "bt-saved-view-select",
@@ -1167,7 +1177,6 @@ export class TaskCenterView extends ItemView {
     if (trimmed) next[field] = trimmed;
     else delete next[field];
     this.state.savedViewTime = next;
-    this.state.savedViewId = null;
     this.filterPopoverOpen = null;
     this.pendingDateRangeStart = null;
     this.render();
@@ -1175,7 +1184,6 @@ export class TaskCenterView extends ItemView {
 
   private setStatusFilter(value: SavedViewStatus): void {
     this.state.savedViewStatus = value;
-    this.state.savedViewId = null;
     this.filterPopoverOpen = null;
     this.render();
   }
@@ -2701,7 +2709,6 @@ export class TaskCenterView extends ItemView {
       out.push(tag);
     }
     this.state.savedViewTag = out.join(",");
-    this.state.savedViewId = null;
     this.filterPopoverOpen = "tag";
     this.render();
   }
@@ -2749,6 +2756,26 @@ export class TaskCenterView extends ItemView {
     this.plugin.settings.savedViews = upsertSavedView(this.plugin.settings.savedViews, view);
     this.applySavedView(view);
     await this.plugin.saveSettings();
+  }
+
+  private async updateCurrentSavedView(existing: SavedTaskView): Promise<void> {
+    const view = createSavedView(
+      existing.name,
+      {
+        search: this.state.filter,
+        tag: this.state.savedViewTag,
+        time: this.state.savedViewTime,
+        status: this.state.savedViewStatus,
+      },
+      () => existing.id,
+    );
+    this.plugin.settings.savedViews = updateSavedViewById(this.plugin.settings.savedViews, view);
+    this.applySavedView(view);
+    await this.plugin.saveSettings();
+  }
+
+  private selectedSavedView(): SavedTaskView | null {
+    return this.plugin.settings.savedViews.find((view) => view.id === this.state.savedViewId) ?? null;
   }
 
   // ---------- Footer / Add ----------
