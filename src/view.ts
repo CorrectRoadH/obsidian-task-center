@@ -1,9 +1,12 @@
 import {
+  App,
   ItemView,
   WorkspaceLeaf,
   Menu,
+  Modal,
   Notice,
   Platform,
+  TextComponent,
 } from "obsidian";
 import { ParsedTask, VIEW_TYPE_TASK_CENTER } from "./types";
 import { formatMinutes } from "./parser";
@@ -32,6 +35,13 @@ import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
 import { openTaskSourceEditShell } from "./view/source-dialog";
 import { taskDisplayTags } from "./tags";
+import {
+  applySavedViewFilters,
+  clearSavedViewFilters as emptySavedViewFilters,
+  createSavedView,
+  suggestSavedViewName as suggestSavedViewNameForFilters,
+  upsertSavedView,
+} from "./saved-views";
 import type { SavedTaskView, SavedViewStatus } from "./types";
 import type TaskCenterPlugin from "./main";
 
@@ -169,6 +179,9 @@ export class TaskCenterView extends ItemView {
   // Mobile drag controller (US-507) — pointer-based replacement for HTML5
   // DnD that doesn't fire from touch. Lazily created on first mobile drag.
   private mobileDrag: MobileDragController<TabKey> | null = null;
+  private filterPopoverOpen: "view" | "tag" | "date" | "status" | null = null;
+  private dateCalendarAnchorISO = startOfMonth(todayISO());
+  private pendingDateRangeStart: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
@@ -558,7 +571,7 @@ export class TaskCenterView extends ItemView {
     // US-105: tab badge must match what the user sees after switching to
     // the tab. Each tab's body applies `hideChildrenOfVisibleParents` to
     // collapse children that ride with a visible parent — the badge has
-    // to apply the same dedup or it overcounts (the bug ctrdh hit:
+    // to apply the same dedup or it overcounts (the reported bug:
     // Unscheduled tab said 15, body showed 1 because 14 children rode
     // with their parents).
     // US-720 (task #63): today tab badge counts overdue + today scheduled
@@ -723,40 +736,100 @@ export class TaskCenterView extends ItemView {
     const wrap = parent.createDiv({ cls: "bt-saved-views" });
     wrap.dataset.savedViews = "true";
 
-    const select = wrap.createEl("select", { cls: "bt-saved-view-select" });
-    select.dataset.savedViewSelect = "true";
-    select.createEl("option", { value: "", text: tr("savedViews.current") });
-    for (const view of this.plugin.settings.savedViews) {
-      select.createEl("option", { value: view.id, text: view.name });
+    this.renderSavedViewPicker(wrap);
+
+    this.renderTagFilter(wrap);
+
+    this.renderDateFilter(wrap);
+
+    this.renderStatusFilter(wrap);
+
+    const save = wrap.createEl("button", { text: tr("savedViews.save"), cls: "bt-saved-view-save" });
+    save.dataset.action = "save-current-view";
+    save.addEventListener("click", async () => {
+      const name = await this.askSavedViewName();
+      if (!name || !name.trim()) return;
+      await this.saveCurrentView(name.trim());
+      this.render();
+    });
+  }
+
+  private renderSavedViewPicker(parent: HTMLElement): void {
+    const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
+    const selected = this.plugin.settings.savedViews.find((view) => view.id === this.state.savedViewId);
+    const trigger = container.createEl("button", {
+      text: selected?.name ?? tr("savedViews.current"),
+      cls: "bt-saved-view-select",
+    });
+    trigger.dataset.savedViewSelect = "true";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "view" ? "true" : "false");
+    trigger.addEventListener("click", () => {
+      this.filterPopoverOpen = this.filterPopoverOpen === "view" ? null : "view";
+      this.render();
+    });
+    if (this.filterPopoverOpen !== "view") return;
+
+    const popover = container.createDiv({ cls: "bt-filter-popover bt-view-popover" });
+    popover.setAttribute("role", "listbox");
+    const current = popover.createEl("button", { text: tr("savedViews.current"), cls: "bt-menu-option" });
+    current.dataset.savedViewOption = tr("savedViews.current");
+    current.setAttribute("aria-selected", this.state.savedViewId ? "false" : "true");
+    current.addEventListener("click", () => {
+      this.clearSavedViewFilters();
+      this.render();
+    });
+    if (this.plugin.settings.savedViews.length === 0) {
+      popover.createDiv({ text: tr("savedViews.emptyHint"), cls: "bt-menu-empty" });
+      return;
     }
-    select.value = this.state.savedViewId ?? "";
-    select.addEventListener("change", () => {
-      const view = this.plugin.settings.savedViews.find((v) => v.id === select.value);
-      if (!view) {
-        this.clearSavedViewFilters();
-      } else {
+    for (const view of this.plugin.settings.savedViews) {
+      const option = popover.createEl("button", { text: view.name, cls: "bt-menu-option" });
+      option.dataset.savedViewOption = view.name;
+      option.setAttribute("aria-selected", view.id === this.state.savedViewId ? "true" : "false");
+      option.addEventListener("click", () => {
         this.applySavedView(view);
+        this.render();
+      });
+    }
+  }
+
+  private renderDateFilter(parent: HTMLElement): void {
+    const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
+    const dateOptions = this.dateFilterOptions();
+    const label = this.dateFilterLabel(this.state.savedViewDate);
+    const trigger = container.createEl("button", { text: label || tr("savedViews.date"), cls: "bt-saved-view-filter bt-date-trigger" });
+    trigger.dataset.savedViewFilter = "date";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "date" ? "true" : "false");
+    trigger.addEventListener("click", () => {
+      const willOpen = this.filterPopoverOpen !== "date";
+      this.filterPopoverOpen = willOpen ? "date" : null;
+      if (willOpen) {
+        this.dateCalendarAnchorISO = this.dateCalendarAnchorForState();
+        this.pendingDateRangeStart = null;
       }
       this.render();
     });
+    if (this.filterPopoverOpen !== "date") return;
 
-    const tag = wrap.createEl("select", { cls: "bt-saved-view-filter" });
-    tag.dataset.savedViewFilter = "tag";
-    tag.multiple = true;
-    tag.ariaLabel = tr("savedViews.tag");
-    for (const tagName of this.collectKnownTags()) {
-      const option = tag.createEl("option", { value: tagName, text: tagName });
-      option.selected = parseFilterTags(this.state.savedViewTag).includes(tagName.toLowerCase());
+    const popover = container.createDiv({ cls: "bt-filter-popover bt-date-popover" });
+    popover.setAttribute("role", "listbox");
+    const presetPanel = popover.createDiv({ cls: "bt-date-presets" });
+    presetPanel.createDiv({ text: tr("savedViews.datePreset"), cls: "bt-date-section-title" });
+    for (const [value, text] of dateOptions) {
+      const option = presetPanel.createEl("button", { cls: "bt-date-preset" });
+      option.createSpan({ text, cls: "bt-date-preset-label" });
+      option.dataset.dateOption = value || "all";
+      option.setAttribute("aria-selected", (this.state.savedViewDate || "") === value ? "true" : "false");
+      option.addEventListener("click", () => this.setDateFilter(value));
     }
-    tag.addEventListener("change", () => {
-      this.state.savedViewTag = Array.from(tag.selectedOptions).map((option) => option.value).join(",");
-      this.state.savedViewId = null;
-      this.render();
-    });
 
-    const date = wrap.createEl("select", { cls: "bt-saved-view-filter" });
-    date.dataset.savedViewFilter = "date";
-    const dateOptions = [
+    this.renderDateCalendar(popover);
+  }
+
+  private dateFilterOptions(): Array<readonly [string, string]> {
+    return [
       ["", tr("savedViews.dateAll")],
       ["overdue", tr("savedViews.dateOverdue")],
       ["today", tr("savedViews.dateToday")],
@@ -765,57 +838,221 @@ export class TaskCenterView extends ItemView {
       ["next-week", tr("savedViews.dateNextWeek")],
       ["month", tr("savedViews.dateMonth")],
       ["unscheduled", tr("savedViews.dateUnscheduled")],
-    ] as const;
-    for (const [value, text] of dateOptions) date.createEl("option", { value, text });
-    if (this.state.savedViewDate && !dateOptions.some(([value]) => value === this.state.savedViewDate)) {
-      date.createEl("option", { value: this.state.savedViewDate, text: this.state.savedViewDate });
+    ];
+  }
+
+  private dateFilterLabel(value: string): string {
+    const token = value.trim();
+    if (!token) return tr("savedViews.date");
+    const preset = this.dateFilterOptions().find(([option]) => option === token)?.[1];
+    if (preset) return preset;
+    if (token.includes("..")) {
+      const [from, to] = token.split("..", 2);
+      return `${from || tr("savedViews.rangeOpenStart")} - ${to || tr("savedViews.rangeOpenEnd")}`;
     }
-    date.value = this.state.savedViewDate;
-    date.addEventListener("change", () => {
-      this.state.savedViewDate = date.value;
-      this.state.savedViewId = null;
+    return token;
+  }
+
+  private parseDateFilterValue(value: string): { exact: string; from: string; to: string } {
+    const token = value.trim();
+    if (!token) return { exact: "", from: "", to: "" };
+    if (token.includes("..")) {
+      const [from, to] = token.split("..", 2);
+      return { exact: "", from, to };
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(token)) return { exact: token, from: "", to: "" };
+    return { exact: "", from: "", to: "" };
+  }
+
+  private renderDateCalendar(parent: HTMLElement): void {
+    const calendar = parent.createDiv({ cls: "bt-date-calendar" });
+    const head = calendar.createDiv({ cls: "bt-date-calendar-head" });
+    head.createSpan({ text: tr("savedViews.customRange"), cls: "bt-date-section-title" });
+
+    const nav = calendar.createDiv({ cls: "bt-date-calendar-nav" });
+    const prev = nav.createEl("button", { text: "‹", cls: "bt-date-month-nav" });
+    prev.ariaLabel = tr("savedViews.datePreviousMonth");
+    prev.addEventListener("click", () => this.moveDateCalendarMonth(-1));
+    nav.createSpan({ text: this.dateCalendarMonthLabel(), cls: "bt-date-month-label" });
+    const next = nav.createEl("button", { text: "›", cls: "bt-date-month-nav" });
+    next.ariaLabel = tr("savedViews.dateNextMonth");
+    next.addEventListener("click", () => this.moveDateCalendarMonth(1));
+
+    const weekdays = calendar.createDiv({ cls: "bt-date-calendar-weekdays" });
+    const weekStart = this.plugin.settings.weekStartsOn;
+    for (let i = 0; i < 7; i++) {
+      const day = (weekStart + i) % 7;
+      weekdays.createSpan({ text: tr(WEEKDAY_KEYS[day]), cls: "bt-date-calendar-weekday" });
+    }
+
+    const active = this.parseDateFilterValue(this.state.savedViewDate);
+    const rangeFrom = active.from || active.exact || "";
+    const rangeTo = active.to || active.exact || "";
+    const monthStart = startOfMonth(this.dateCalendarAnchorISO);
+    const gridStart = startOfWeek(monthStart, weekStart);
+    const today = todayISO();
+    const days = calendar.createDiv({ cls: "bt-date-calendar-grid" });
+    for (let i = 0; i < 42; i++) {
+      const iso = addDays(gridStart, i);
+      const day = fromISO(iso);
+      const cell = days.createEl("button", { text: String(day.getDate()), cls: "bt-date-calendar-day" });
+      cell.dataset.dateCalendarDay = iso;
+      cell.setAttribute("aria-selected", active.exact === iso || iso === active.from || iso === active.to ? "true" : "false");
+      if (!iso.startsWith(monthStart.slice(0, 7))) cell.addClass("other-month");
+      if (iso === today) cell.addClass("today");
+      if (this.pendingDateRangeStart === iso) cell.addClass("pending");
+      if (rangeFrom && rangeTo && iso >= rangeFrom && iso <= rangeTo) cell.addClass("in-range");
+      if (iso === active.from) cell.addClass("range-start");
+      if (iso === active.to) cell.addClass("range-end");
+      cell.addEventListener("click", () => this.handleDateCalendarDayClick(iso));
+    }
+  }
+
+  private moveDateCalendarMonth(delta: number): void {
+    this.dateCalendarAnchorISO = startOfMonth(shiftMonth(this.dateCalendarAnchorISO, delta));
+    this.filterPopoverOpen = "date";
+    this.render();
+  }
+
+  private handleDateCalendarDayClick(iso: string): void {
+    if (!this.pendingDateRangeStart) {
+      this.pendingDateRangeStart = iso;
+      this.filterPopoverOpen = "date";
+      this.render();
+      return;
+    }
+    const from = this.pendingDateRangeStart <= iso ? this.pendingDateRangeStart : iso;
+    const to = this.pendingDateRangeStart <= iso ? iso : this.pendingDateRangeStart;
+    this.pendingDateRangeStart = null;
+    this.setDateFilter(`${from}..${to}`);
+  }
+
+  private dateCalendarAnchorForState(): string {
+    const parsed = this.parseDateFilterValue(this.state.savedViewDate);
+    return startOfMonth(parsed.exact || parsed.from || parsed.to || todayISO());
+  }
+
+  private dateCalendarMonthLabel(): string {
+    const d = fromISO(this.dateCalendarAnchorISO);
+    return new Intl.DateTimeFormat(getLocale(), { month: "long", year: "numeric" }).format(d);
+  }
+
+  private renderStatusFilter(parent: HTMLElement): void {
+    const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
+    const label = this.statusFilterOptions().find((option) => option.value === this.state.savedViewStatus)?.label
+      ?? tr("savedViews.statusAll");
+    const trigger = container.createEl("button", {
+      text: label,
+      cls: "bt-saved-view-filter bt-status-trigger",
+    });
+    trigger.dataset.savedViewFilter = "status";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "status" ? "true" : "false");
+    trigger.addEventListener("click", () => {
+      this.filterPopoverOpen = this.filterPopoverOpen === "status" ? null : "status";
       this.render();
     });
+    if (this.filterPopoverOpen !== "status") return;
 
-    const status = wrap.createEl("select", { cls: "bt-saved-view-filter" });
-    status.dataset.savedViewFilter = "status";
-    const statusOptions: Array<{ value: SavedViewStatus; label: string }> = [
+    const popover = container.createDiv({ cls: "bt-filter-popover bt-status-popover" });
+    popover.setAttribute("role", "listbox");
+    for (const option of this.statusFilterOptions()) {
+      const item = popover.createEl("button", { cls: "bt-status-option" });
+      item.dataset.statusOption = option.value;
+      item.setAttribute("aria-selected", this.state.savedViewStatus === option.value ? "true" : "false");
+      item.createSpan({ text: option.label, cls: "bt-status-option-label" });
+      item.addEventListener("click", () => this.setStatusFilter(option.value));
+    }
+  }
+
+  private statusFilterOptions(): Array<{ value: SavedViewStatus; label: string }> {
+    return [
       { value: "all", label: tr("savedViews.statusAll") },
       { value: "todo", label: tr("savedViews.statusTodo") },
       { value: "done", label: tr("savedViews.statusDone") },
       { value: "dropped", label: tr("savedViews.statusDropped") },
     ];
-    for (const option of statusOptions) {
-      status.createEl("option", { value: option.value, text: option.label });
-    }
-    status.value = this.state.savedViewStatus;
-    status.addEventListener("change", () => {
-      this.state.savedViewStatus = status.value as SavedViewStatus;
-      this.state.savedViewId = null;
+  }
+
+  private renderTagFilter(parent: HTMLElement): void {
+    const selected = parseFilterTags(this.state.savedViewTag);
+    const selectedSet = new Set(selected);
+    const container = parent.createDiv({ cls: "bt-tag-filter" });
+    const triggerText = this.tagFilterSummary(selected);
+    const trigger = container.createEl("button", { text: triggerText, cls: "bt-tag-filter-trigger" });
+    if (selected.length > 0) trigger.title = selected.join(", ");
+    trigger.dataset.savedViewFilter = "tag";
+    trigger.ariaLabel = tr("savedViews.tag");
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "tag" ? "true" : "false");
+    trigger.addEventListener("click", () => {
+      this.filterPopoverOpen = this.filterPopoverOpen === "tag" ? null : "tag";
       this.render();
     });
 
-    const grouping = wrap.createEl("select", { cls: "bt-saved-view-filter" });
-    grouping.dataset.savedViewFilter = "grouping";
-    grouping.createEl("option", { value: "", text: tr("savedViews.groupingAll") });
-    for (const tagName of this.collectKnownTags()) {
-      grouping.createEl("option", { value: tagName, text: tagName });
-    }
-    grouping.value = this.state.savedViewGrouping;
-    grouping.addEventListener("change", () => {
-      this.state.savedViewGrouping = grouping.value;
-      this.state.savedViewId = null;
-      this.render();
-    });
+    if (this.filterPopoverOpen !== "tag") return;
 
-    const save = wrap.createEl("button", { text: tr("savedViews.save"), cls: "bt-saved-view-save" });
-    save.dataset.action = "save-current-view";
-    save.addEventListener("click", async () => {
-      const name = window.prompt(tr("savedViews.promptName"), this.suggestSavedViewName());
-      if (!name || !name.trim()) return;
-      await this.saveCurrentView(name.trim());
-      this.render();
+    const popover = container.createDiv({ cls: "bt-tag-popover" });
+    popover.setAttribute("role", "listbox");
+    const search = popover.createEl("input", {
+      type: "text",
+      placeholder: tr("savedViews.tagSearch"),
+      cls: "bt-tag-search",
     });
+    const clear = popover.createEl("button", { text: tr("savedViews.clearTags"), cls: "bt-tag-clear" });
+    clear.dataset.tagClear = "true";
+    clear.addEventListener("click", () => this.setSelectedTags([]));
+
+    const list = popover.createDiv({ cls: "bt-tag-options" });
+    const rows: HTMLElement[] = [];
+    for (const option of this.collectTagOptions()) {
+      const row = list.createEl("button", { cls: "bt-tag-option" });
+      row.dataset.tagOption = option.tag;
+      row.title = option.tag;
+      row.setAttribute("role", "checkbox");
+      row.setAttribute("aria-checked", selectedSet.has(option.tag.toLowerCase()) ? "true" : "false");
+      row.createSpan({ text: selectedSet.has(option.tag.toLowerCase()) ? "✓" : "", cls: "bt-tag-check" });
+      row.createSpan({ text: option.tag, cls: "bt-tag-option-label" });
+      row.createSpan({ text: String(option.count), cls: "bt-tag-option-count" });
+      row.addEventListener("click", () => {
+        const isSelected = selectedSet.has(option.tag.toLowerCase());
+        const next = !isSelected
+          ? [...selected, option.tag]
+          : selected.filter((tag) => tag !== option.tag.toLowerCase());
+        this.setSelectedTags(next);
+      });
+      rows.push(row);
+    }
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      for (const row of rows) {
+        const value = row.dataset.tagOption?.toLowerCase() ?? "";
+        row.style.display = !q || value.includes(q) ? "" : "none";
+      }
+    });
+    search.focus();
+  }
+
+  private tagFilterSummary(selected: string[]): string {
+    if (selected.length === 0) return tr("savedViews.tag");
+    const first = selected[0];
+    if (selected.length === 1) return first;
+    return `${first} +${selected.length - 1}`;
+  }
+
+  private setDateFilter(value: string): void {
+    this.state.savedViewDate = value === "all" ? "" : value;
+    this.state.savedViewId = null;
+    this.filterPopoverOpen = null;
+    this.pendingDateRangeStart = null;
+    this.render();
+  }
+
+  private setStatusFilter(value: SavedViewStatus): void {
+    this.state.savedViewStatus = value;
+    this.state.savedViewId = null;
+    this.filterPopoverOpen = null;
+    this.render();
   }
 
   private openMobileFilterSheet(): void {
@@ -1196,7 +1433,7 @@ export class TaskCenterView extends ItemView {
     if (stats.doneCount > 0) {
       const header = wrap.createDiv({ cls: "bt-stats-header" });
       const left = header.createDiv({ cls: "bt-stats-left" });
-      // task #43 (Leo HOLD msg cbf0489c): Completed-tab stats header
+      // task #43 (PM HOLD msg cbf0489c): Completed-tab stats header
       // through tr() so a CN session reads "近 7 日 · 完成 N 条 / 准确率…"
       // instead of the EN literals.
       left.createSpan({
@@ -1685,7 +1922,7 @@ export class TaskCenterView extends ItemView {
       const children = resolved
         .filter((c) => !this.hasIndependentDateFromParent(c, t));
       // US-125 task #33 observability — the "subtask missing from parent
-      // card" repro is hard to capture in synthetic e2e (Wood scanned 6
+      // card" repro is hard to capture in synthetic e2e (Engineer scanned 6
       // axes, none reproduced). When a user trips the bug, ask them to
       // run `localStorage.setItem("task-center-debug","1")` then reload;
       // the next render dumps which children were resolved vs filtered
@@ -2217,16 +2454,14 @@ export class TaskCenterView extends ItemView {
   private getTextFilter(): (t: ParsedTask) => boolean {
     const q = this.state.filter.trim().toLowerCase();
     const tags = parseFilterTags(this.state.savedViewTag);
-    const grouping = normalizeFilterTag(this.state.savedViewGrouping);
     const date = this.state.savedViewDate.trim();
     const status = this.state.savedViewStatus;
-    if (!q && tags.length === 0 && !grouping && !date && status === "all") return () => true;
+    if (!q && tags.length === 0 && !date && status === "all") return () => true;
     return (t) => {
       if (q && !taskMatchesText(t, q)) return false;
       for (const tag of tags) {
         if (!taskHasTag(t, tag)) return false;
       }
-      if (grouping && !taskHasTag(t, grouping)) return false;
       if (date && !taskMatchesDateToken(t, date, this.plugin.settings.weekStartsOn)) return false;
       if (status !== "all" && t.status !== status) return false;
       return true;
@@ -2237,66 +2472,109 @@ export class TaskCenterView extends ItemView {
     return null;
   }
 
-  private collectKnownTags(): string[] {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    const add = (raw: string) => {
+  private collectTagOptions(): Array<{ tag: string; count: number }> {
+    const options = new Map<string, { tag: string; count: number }>();
+    const selected = new Set(parseFilterTags(this.state.savedViewTag));
+    const add = (raw: string, count = 0) => {
       const trimmed = raw.trim();
       if (!trimmed) return;
       const tag = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
-      if (seen.has(tag)) return;
-      seen.add(tag);
-      out.push(tag);
+      const key = tag.toLowerCase();
+      const existing = options.get(key);
+      if (existing) {
+        existing.count += count;
+      } else {
+        options.set(key, { tag, count });
+      }
     };
+    const q = this.state.filter.trim().toLowerCase();
+    const date = this.state.savedViewDate.trim();
+    const status = this.state.savedViewStatus;
     for (const task of this.tasks) {
-      for (const tag of task.tags) add(tag);
+      if (q && !taskMatchesText(task, q)) continue;
+      if (date && !taskMatchesDateToken(task, date, this.plugin.settings.weekStartsOn)) continue;
+      if (status !== "all" && task.status !== status) continue;
+      for (const tag of task.tags) add(tag, 1);
     }
     for (const view of this.plugin.settings.savedViews) {
       for (const tag of parseFilterTags(view.tag)) add(tag);
+      // Backward compatibility: old saved views used `grouping` as a second
+      // tag filter. Keep those tags visible, but new UI no longer writes it.
       if (view.grouping) add(view.grouping);
     }
-    return out.sort((a, b) => a.localeCompare(b));
+    for (const tag of selected) add(tag);
+    return Array.from(options.values()).sort((a, b) => {
+      const aSelected = selected.has(a.tag.toLowerCase());
+      const bSelected = selected.has(b.tag.toLowerCase());
+      if (aSelected !== bSelected) return aSelected ? -1 : 1;
+      if (a.count !== b.count) return b.count - a.count;
+      return a.tag.localeCompare(b.tag);
+    });
+  }
+
+  private collectKnownTags(): string[] {
+    return this.collectTagOptions().map((option) => option.tag);
+  }
+
+  private setSelectedTags(tags: string[]): void {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of tags) {
+      const tag = normalizeFilterTag(raw);
+      if (!tag || seen.has(tag)) continue;
+      seen.add(tag);
+      out.push(tag);
+    }
+    this.state.savedViewTag = out.join(",");
+    this.state.savedViewId = null;
+    this.state.savedViewGrouping = "";
+    this.filterPopoverOpen = "tag";
+    this.render();
   }
 
   private clearSavedViewFilters(): void {
-    this.state.savedViewId = null;
-    this.state.savedViewTag = "";
-    this.state.savedViewDate = "";
-    this.state.savedViewStatus = "all";
-    this.state.savedViewGrouping = "";
+    const filters = emptySavedViewFilters();
+    this.state.savedViewId = filters.savedViewId;
+    this.state.filter = filters.search;
+    this.state.savedViewTag = filters.tag;
+    this.state.savedViewDate = filters.date;
+    this.state.savedViewStatus = filters.status;
+    this.state.savedViewGrouping = filters.grouping;
+    this.filterPopoverOpen = null;
   }
 
   private applySavedView(view: SavedTaskView): void {
-    this.state.savedViewId = view.id;
-    this.state.filter = view.search;
-    this.state.savedViewTag = view.tag;
-    this.state.savedViewDate = view.date;
-    this.state.savedViewStatus = view.status;
-    this.state.savedViewGrouping = view.grouping;
+    const filters = applySavedViewFilters(view);
+    this.state.savedViewId = filters.savedViewId;
+    this.state.filter = filters.search;
+    this.state.savedViewTag = filters.tag;
+    this.state.savedViewDate = filters.date;
+    this.state.savedViewStatus = filters.status;
+    this.state.savedViewGrouping = filters.grouping;
+    this.filterPopoverOpen = null;
   }
 
   private suggestSavedViewName(): string {
-    if (this.state.savedViewTag) return this.state.savedViewTag.replace(/^#/, "");
-    if (this.state.savedViewGrouping) return this.state.savedViewGrouping.replace(/^#/, "");
-    if (this.state.savedViewStatus !== "all") return this.state.savedViewStatus;
-    return tr("savedViews.defaultName");
+    return suggestSavedViewNameForFilters(
+      { tag: this.state.savedViewTag, status: this.state.savedViewStatus },
+      tr("savedViews.defaultName"),
+    );
+  }
+
+  private askSavedViewName(): Promise<string | null> {
+    return new Promise((resolve) => {
+      new SavedViewNameModal(this.app, this.suggestSavedViewName(), resolve).open();
+    });
   }
 
   private async saveCurrentView(name: string): Promise<void> {
-    const id = `sv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const view: SavedTaskView = {
-      id,
-      name,
-      search: this.state.filter.trim(),
-      tag: this.state.savedViewTag.trim(),
-      date: this.state.savedViewDate.trim(),
+    const view = createSavedView(name, {
+      search: this.state.filter,
+      tag: this.state.savedViewTag,
+      date: this.state.savedViewDate,
       status: this.state.savedViewStatus,
-      grouping: this.state.savedViewGrouping.trim(),
-    };
-    this.plugin.settings.savedViews = [
-      ...this.plugin.settings.savedViews.filter((v) => v.name !== name),
-      view,
-    ];
+    });
+    this.plugin.settings.savedViews = upsertSavedView(this.plugin.settings.savedViews, view);
     this.applySavedView(view);
     await this.plugin.saveSettings();
   }
@@ -2499,6 +2777,69 @@ function statusIcon(s: string): string {
   if (s === "dropped") return "✕";
   if (s === "in_progress") return "◐";
   return "○";
+}
+
+class SavedViewNameModal extends Modal {
+  private value: string;
+  private resolved = false;
+  private resolve: (name: string | null) => void;
+
+  constructor(app: App, initialValue: string, resolve: (name: string | null) => void) {
+    super(app);
+    this.value = initialValue;
+    this.resolve = resolve;
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("task-center-saved-view-name-modal");
+    contentEl.createEl("h3", { text: tr("savedViews.promptName") });
+
+    const input = new TextComponent(contentEl);
+    input.inputEl.dataset.savedViewNameInput = "true";
+    input.inputEl.style.width = "100%";
+    input.setValue(this.value);
+    input.onChange((value) => (this.value = value));
+    input.inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !(event.isComposing || event.keyCode === 229)) {
+        event.preventDefault();
+        this.commit();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.close();
+      }
+    });
+
+    const actions = contentEl.createDiv({ cls: "task-center-saved-view-name-actions" });
+    const cancel = actions.createEl("button", { text: tr("savedViews.cancel") });
+    cancel.dataset.action = "cancel-saved-view-name";
+    cancel.addEventListener("click", () => this.close());
+    const save = actions.createEl("button", { text: tr("savedViews.confirmSave"), cls: "mod-cta" });
+    save.dataset.action = "confirm-saved-view-name";
+    save.addEventListener("click", () => this.commit());
+
+    window.setTimeout(() => {
+      input.inputEl.focus();
+      input.inputEl.select();
+    }, 10);
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.resolved) {
+      this.resolved = true;
+      this.resolve(null);
+    }
+  }
+
+  private commit(): void {
+    const name = this.value.trim();
+    if (!name) return;
+    this.resolved = true;
+    this.resolve(name);
+    this.close();
+  }
 }
 
 function compactPath(p: string): string {

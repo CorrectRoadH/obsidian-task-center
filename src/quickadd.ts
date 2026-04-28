@@ -4,10 +4,11 @@ import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO, fromISO } from "./dates";
 import { isMobileMode } from "./platform";
+import { extractMarkdownTags, stripMarkdownTags } from "./tags";
 import type { TaskCenterSettings } from "./types";
 
 // US-167-3: prefill chips. Token strings must match parseQuickAdd's
-// existing recognizers (resolveRelativeDate / tagRe). Tag chips come from
+// existing recognizers (resolveRelativeDate / markdown tag parser). Tag chips come from
 // saved views / currently visible markdown tags, not a dedicated grouping
 // setting (US-108 / US-301).
 const BASE_QUICK_CHIPS: ReadonlyArray<{ label: string; token: string }> = [
@@ -440,12 +441,8 @@ export function parseQuickAdd(input: string, today: string = todayISO()): QuickA
   });
 
   // Extract tags
-  const tagRe = /#([^\s#\[\]()]+)/g;
-  let m;
-  while ((m = tagRe.exec(remaining)) !== null) {
-    tags.push("#" + m[1]);
-  }
-  remaining = remaining.replace(tagRe, "");
+  tags.push(...extractMarkdownTags(remaining));
+  remaining = stripMarkdownTags(remaining);
 
   // Trailing bare relative-date: "... 周六" "tomorrow"
   const words = remaining.trim().split(/\s+/);

@@ -80,7 +80,7 @@ describe("Task Center — mobile filter UI (task #88)", function () {
     const today = todayISO();
     await writeAndWait(
       "Tasks/Inbox.md",
-      `- [ ] Mobile width task #work #1象限 ⏳ ${today}\n`,
+      `- [ ] Mobile width fixture #alpha #1象限 ⏳ ${today}\n`,
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
@@ -124,20 +124,31 @@ describe("Task Center — mobile filter UI (task #88)", function () {
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='tag']")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='date']")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='status']")).toExist();
-    await expect($(".task-center-bottom-sheet [data-saved-view-filter='grouping']")).toExist();
 
     const mobileShapes = await browser.execute(() => {
-      const tag = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='tag']") as HTMLSelectElement | null;
-      const date = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='date']") as HTMLSelectElement | null;
+      const tag = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='tag']");
+      const date = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='date']");
+      const status = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='status']");
       return {
         tagName: tag?.tagName,
-        tagMultiple: !!tag?.multiple,
+        tagPopup: tag?.getAttribute("aria-haspopup"),
         dateTagName: date?.tagName,
+        datePopup: date?.getAttribute("aria-haspopup"),
+        statusTagName: status?.tagName,
+        statusPopup: status?.getAttribute("aria-haspopup"),
       };
     });
-    expect(mobileShapes).toEqual({ tagName: "SELECT", tagMultiple: true, dateTagName: "SELECT" });
+    expect(mobileShapes).toEqual({
+      tagName: "BUTTON",
+      tagPopup: "listbox",
+      dateTagName: "BUTTON",
+      datePopup: "listbox",
+      statusTagName: "BUTTON",
+      statusPopup: "listbox",
+    });
 
-    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").selectByAttribute("value", "#work");
+    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").click();
+    await $(".task-center-bottom-sheet [data-tag-option='#alpha']").click();
     await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).toExist();
 
     await browser.pause(200);

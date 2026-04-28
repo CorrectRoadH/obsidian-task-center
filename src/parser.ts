@@ -1,5 +1,6 @@
 import { App, TFile, ListItemCache, CachedMetadata } from "obsidian";
 import { ParsedTask, TaskStatus } from "./types";
+import { extractMarkdownTags, stripMarkdownTags } from "./tags";
 
 const SCHEDULED_RE = /⏳\s*(\d{4}-\d{2}-\d{2})/;
 const DEADLINE_RE = /📅\s*(\d{4}-\d{2}-\d{2})/;
@@ -21,8 +22,6 @@ const CREATED_RE = /➕\s*(\d{4}-\d{2}-\d{2})/;
 // renderer's de-dup / children filter would silently drop the task.
 // see USER_STORIES.md
 const CHECKBOX_RE = /^(\s*(?:>\s*)*)([-+*])\s+\[(.)\]\s?(.*?)\r?$/;
-const TAG_RE = /#([^\s#\[\]()]+)/g;
-
 // Strip emoji metadata, inline fields, tags, block anchors, and recurrence
 // (`🔁 every week` style — consumed greedily to the next metadata boundary).
 const META_STRIP_RE = /🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|(⏳|📅|🛫|✅|❌|⌛|🔺|⏫|🔼|🔽|⏬|➕)\s*(\d{4}-\d{2}-\d{2})?/gu;
@@ -33,9 +32,9 @@ const META_STRIP_RE = /🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|(⏳|📅|🛫|✅|�
 // see USER_STORIES.md
 const INLINE_FIELD_RE = /\[([^\[\]\n:]+)::\s*([^\]]*)\]/g;
 const INLINE_FIELD_STRIP_RE = /\[[^\[\]\n:]+::\s*[^\]]*\]/g;
-const TAG_STRIP_RE = /(?:^|\s)#[^\s#\[\]()]+/g;
 // Obsidian block reference anchors: `^blockid` at a word boundary
 const BLOCK_REF_STRIP_RE = /(?:^|\s)\^[A-Za-z0-9_-]+(?=\s|$)/g;
+const BLOCK_REF_WITH_HASH_STRIP_RE = /(?:^|\s)#\^[A-Za-z0-9_-]+(?=\s|$)/g;
 
 export function parseDurationToMinutes(input: string | null | undefined): number | null {
   if (!input) return null;
@@ -128,11 +127,12 @@ export function shortHash(input: string): string {
 }
 
 export function cleanTitle(content: string): string {
-  return content
+  const withoutMetadata = content
     .replace(META_STRIP_RE, "")
     .replace(INLINE_FIELD_STRIP_RE, "")
-    .replace(BLOCK_REF_STRIP_RE, " ")
-    .replace(TAG_STRIP_RE, " ")
+    .replace(BLOCK_REF_WITH_HASH_STRIP_RE, " ")
+    .replace(BLOCK_REF_STRIP_RE, " ");
+  return stripMarkdownTags(withoutMetadata)
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -149,7 +149,7 @@ export function parseTaskFromLine(
   if (listItem && listItem.task === undefined) return null;
 
   const content = parsed.content;
-  const tagMatches = Array.from(content.matchAll(TAG_RE)).map((m) => "#" + m[1]);
+  const tagMatches = extractMarkdownTags(content);
   const scheduled = content.match(SCHEDULED_RE)?.[1] ?? null;
   const deadline = content.match(DEADLINE_RE)?.[1] ?? null;
   const start = content.match(START_RE)?.[1] ?? null;
@@ -230,7 +230,7 @@ export async function parseFileTasks(
       // Extract content after bullet marker (for parsing tags on non-tasks too).
       const bulletMatch = raw.match(/^\s*[-+*]\s+(?:\[.\]\s*)?(.*)$/);
       const content = bulletMatch ? bulletMatch[1] : raw;
-      const tags = Array.from(content.matchAll(/#([^\s#\[\]()]+)/g)).map((m) => "#" + m[1]);
+      const tags = extractMarkdownTags(content);
       const parent = li.parent !== undefined && li.parent >= 0 ? li.parent : -1;
       allNodes.set(lineNum, { line: lineNum, parentLine: parent, task: li.task, tags, content });
 

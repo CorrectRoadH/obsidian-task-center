@@ -3,12 +3,16 @@
  *
  * Stable DOM attributes:
  *   data-saved-views                  — saved-view filter toolbar
- *   data-saved-view-filter="tag"      — tag multi-select (US-109d)
- *   data-saved-view-filter="date"     — date condition select (US-109e)
- *   data-saved-view-filter="status"   — status dropdown
- *   data-saved-view-filter="grouping" — grouping dropdown
+ *   data-saved-view-filter="tag"      — tag popover trigger (US-109d)
+ *   data-saved-view-filter="date"     — date popover trigger (US-109e)
+ *   data-saved-view-filter="status"   — status popover trigger (US-109h)
  *   data-action="save-current-view"   — save current filters button
- *   data-saved-view-select            — saved view selector
+ *   data-saved-view-select            — saved view popover trigger
+ *   data-saved-view-option            — saved view menu item
+ *   data-tag-option="#tag"            — tag checkbox row inside the popover
+ *   data-date-option="today"          — date condition row inside the popover
+ *   data-status-option="todo"         — status condition row inside the popover
+ *   data-saved-view-name-input        — saved-view naming modal input
  */
 import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
@@ -58,17 +62,17 @@ describe("US-724 saved views / custom filters", function () {
     await obsidianPage.resetVault(VAULT);
   });
 
-  it("US-109d/e: filters visible cards by tag/date/status/grouping and saves/restores the view", async function () {
+  it("US-109d/e/f: filters visible cards by tags/date/status and saves/restores the view", async function () {
     const today = todayISO();
     await writeAndWait(
       "Tasks/Inbox.md",
       [
-        `- [ ] Work writing today #work #writing #1象限 ⏳ ${today}`,
-        `- [ ] Work only today #work #1象限 ⏳ ${today}`,
-        `- [ ] Life today #life #1象限 ⏳ ${today}`,
-        `- [x] Work done #work #1象限 ✅ ${today}`,
-        `- [ ] Work other group #work #2象限 ⏳ ${today}`,
-        `- [ ] Work later #work #1象限 ⏳ 2099-01-01`,
+        `- [ ] Fixture alpha beta today #alpha #beta #1象限 ⏳ ${today}`,
+        `- [ ] Fixture alpha today #alpha #1象限 ⏳ ${today}`,
+        `- [ ] Fixture gamma today #gamma #1象限 ⏳ ${today}`,
+        `- [x] Fixture alpha done #alpha #1象限 ✅ ${today}`,
+        `- [ ] Fixture alpha other group #alpha #2象限 ⏳ ${today}`,
+        `- [ ] Fixture alpha later #alpha #1象限 ⏳ 2099-01-01`,
       ].join("\n") + "\n",
     );
 
@@ -78,22 +82,33 @@ describe("US-724 saved views / custom filters", function () {
     await $('[data-saved-views]').waitForExist({ timeout: 5000 });
 
     const tagShape = await browser.execute(() => {
-      const el = document.querySelector("[data-saved-view-filter='tag']") as HTMLSelectElement | null;
-      return { tagName: el?.tagName, multiple: !!el?.multiple };
+      const el = document.querySelector("[data-saved-view-filter='tag']");
+      return { tagName: el?.tagName, aria: el?.getAttribute("aria-haspopup") };
     });
-    expect(tagShape).toEqual({ tagName: "SELECT", multiple: true });
+    expect(tagShape).toEqual({ tagName: "BUTTON", aria: "listbox" });
 
-    const dateTagName = await browser.execute(() => {
+    const dateShape = await browser.execute(() => {
       const el = document.querySelector("[data-saved-view-filter='date']");
-      return el?.tagName;
+      return { tagName: el?.tagName, aria: el?.getAttribute("aria-haspopup") };
     });
-    expect(dateTagName).toBe("SELECT");
+    expect(dateShape).toEqual({ tagName: "BUTTON", aria: "listbox" });
 
-    await $('[data-saved-view-filter="tag"]').selectByAttribute("value", "#work");
-    await $('[data-saved-view-filter="tag"]').selectByAttribute("value", "#writing");
-    await $('[data-saved-view-filter="date"]').selectByAttribute("value", "today");
-    await $('[data-saved-view-filter="status"]').selectByAttribute("value", "todo");
-    await $('[data-saved-view-filter="grouping"]').selectByAttribute("value", "#1象限");
+    const statusShape = await browser.execute(() => {
+      const el = document.querySelector("[data-saved-view-filter='status']");
+      return { tagName: el?.tagName, aria: el?.getAttribute("aria-haspopup") };
+    });
+    expect(statusShape).toEqual({ tagName: "BUTTON", aria: "listbox" });
+
+    await $('[data-saved-view-filter="tag"]').click();
+    await $('[data-tag-option="#alpha"]').click();
+    await expect($('[data-tag-option="#alpha"]')).toHaveAttribute("aria-checked", "true");
+    await $('[data-tag-option="#beta"]').click();
+    await $('[data-saved-view-filter="date"]').click();
+    await $('[data-date-option="today"]').click();
+    await $('[data-saved-view-filter="status"]').click();
+    await $('[data-status-option="todo"]').click();
+    await $('[data-saved-view-filter="tag"]').click();
+    await $('[data-tag-option="#1象限"]').click();
 
     await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L2"]')).not.toExist();
@@ -102,19 +117,17 @@ describe("US-724 saved views / custom filters", function () {
     await expect($('[data-task-id="Tasks/Inbox.md:L5"]')).not.toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L6"]')).not.toExist();
 
-    await browser.execute(() => {
-      window.prompt = () => "Work Today";
-    });
     await $('[data-action="save-current-view"]').click();
+    await $('[data-saved-view-name-input]').setValue("Alpha Today");
+    await $('[data-action="confirm-saved-view-name"]').click();
     await forFlush();
 
     // Change filters away, then restore through the saved-view dropdown.
-    await browser.execute(() => {
-      const select = document.querySelector("[data-saved-view-filter='tag']") as HTMLSelectElement;
-      for (const option of Array.from(select.options)) option.selected = option.value === "#life";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await $('[data-saved-view-select]').selectByVisibleText("Work Today");
+    await $('[data-saved-view-filter="tag"]').click();
+    await $('[data-tag-clear]').click();
+    await $('[data-tag-option="#gamma"]').click();
+    await $('[data-saved-view-select]').click();
+    await $('[data-saved-view-option="Alpha Today"]').click();
 
     await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L2"]')).not.toExist();
@@ -124,6 +137,37 @@ describe("US-724 saved views / custom filters", function () {
       // @ts-expect-error — runtime plugin
       return (app as any).plugins.plugins["obsidian-task-center"].settings.savedViews;
     });
-    expect(JSON.stringify(saved)).toContain("Work Today");
+    expect(JSON.stringify(saved)).toContain("Alpha Today");
+  });
+
+  it("US-109d: tag picker excludes block refs and prose-polluted pseudo tags", async function () {
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      [
+        "- [ ] Fixture option source #计划 #安全 [[Spec#Heading]] #^624c3648-bca7-4ee2",
+        "- [ ] Fixture punctuation source #第一象限、#第二象限 等。并通过`advance` #示例工具箱",
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $('[data-saved-views]').waitForExist({ timeout: 5000 });
+    await $('[data-saved-view-filter="tag"]').click();
+
+    const options = await browser.execute(() =>
+      Array.from(document.querySelectorAll("[data-tag-option]")).map((el) => ({
+        value: (el as HTMLElement).dataset.tagOption,
+        text: el.textContent,
+      })),
+    );
+
+    expect(options.map((o) => o.value)).toContain("#计划");
+    expect(options.map((o) => o.value)).toContain("#安全");
+    expect(options.map((o) => o.value)).toContain("#第一象限");
+    expect(options.map((o) => o.value)).toContain("#第二象限");
+    expect(options.map((o) => o.value)).toContain("#示例工具箱");
+    expect(JSON.stringify(options)).not.toContain("#^624c3648");
+    expect(JSON.stringify(options)).not.toContain("并通过");
+    expect(JSON.stringify(options)).not.toContain("[[Spec#Heading");
   });
 });

@@ -214,7 +214,7 @@ const EN = {
   "prompt.dateHint":
     "YYYY-MM-DD · today · tomorrow · 明天 · 周六 · (blank to clear)",
 
-  // task #43 (Leo PM HOLD msg cbf0489c): Completed tab 7-day stats
+  // task #43 (PM PM HOLD msg cbf0489c): Completed tab 7-day stats
   // header — the third visible Completed surface (alongside the
   // accuracy/total + week-of labels that already routed through tr()).
   "stats.sevenDayDone": "7-day · {n} done",
@@ -245,8 +245,11 @@ const EN = {
   "today.actionDrop": "Abandon",
 
   // US-724 (task #67): saved views / custom filters.
-  "savedViews.current": "Current view",
+  "savedViews.current": "No filters",
   "savedViews.tag": "Tags",
+  "savedViews.tagSearch": "Search tags",
+  "savedViews.clearTags": "Clear",
+  "savedViews.emptyHint": "Set filters, then save a new view.",
   "savedViews.date": "Date",
   "savedViews.dateAll": "Date",
   "savedViews.dateOverdue": "Overdue",
@@ -261,9 +264,22 @@ const EN = {
   "savedViews.statusDone": "Done",
   "savedViews.statusDropped": "Dropped",
   "savedViews.groupingAll": "Group",
-  "savedViews.save": "Save",
-  "savedViews.promptName": "Saved view name",
+  "savedViews.save": "Save filter view",
+  "savedViews.promptName": "Filter view name",
+  "savedViews.cancel": "Cancel",
+  "savedViews.confirmSave": "Save",
   "savedViews.defaultName": "Saved view",
+  "savedViews.datePreset": "Quick range",
+  "savedViews.custom": "Custom",
+  "savedViews.customDate": "Custom date",
+  "savedViews.customRange": "Custom range",
+  "savedViews.datePreviousMonth": "Previous month",
+  "savedViews.dateNextMonth": "Next month",
+  "savedViews.rangeFrom": "From",
+  "savedViews.rangeTo": "To",
+  "savedViews.rangeOpenStart": "Start",
+  "savedViews.rangeOpenEnd": "End",
+  "savedViews.apply": "Apply",
   "savedViews.mobileEntry": "Filters",
   "savedViews.mobileTitle": "Views and filters",
 
@@ -353,7 +369,7 @@ const ZH: Partial<typeof EN> = {
 
   "qa.title": "新建任务",
   "qa.placeholder":
-    "去营业厅问携号转网 #tag ⏳ 周六 [estimate:: 25m]",
+    "处理示例任务 #tag ⏳ 周六 [estimate:: 25m]",
   "qa.hint":
     "日期会识别为 ⏳ / 📅；tag 与 inline field 原样保留。",
   "qa.noDailyTarget": "请先启用并配置 Daily Notes 后再新建任务",
@@ -452,8 +468,11 @@ const ZH: Partial<typeof EN> = {
   "today.actionDrop": "放弃",
 
   // US-724: 保存视图 / 自定义过滤
-  "savedViews.current": "当前视图",
+  "savedViews.current": "无过滤",
   "savedViews.tag": "标签",
+  "savedViews.tagSearch": "搜索标签",
+  "savedViews.clearTags": "清空",
+  "savedViews.emptyHint": "设置过滤条件后可保存为视图。",
   "savedViews.date": "日期",
   "savedViews.dateAll": "日期",
   "savedViews.dateOverdue": "逾期",
@@ -468,9 +487,22 @@ const ZH: Partial<typeof EN> = {
   "savedViews.statusDone": "完成",
   "savedViews.statusDropped": "放弃",
   "savedViews.groupingAll": "分组",
-  "savedViews.save": "保存",
-  "savedViews.promptName": "保存视图名称",
+  "savedViews.save": "保存过滤视图",
+  "savedViews.promptName": "过滤视图名称",
+  "savedViews.cancel": "取消",
+  "savedViews.confirmSave": "保存",
   "savedViews.defaultName": "保存视图",
+  "savedViews.datePreset": "快捷范围",
+  "savedViews.custom": "自定义",
+  "savedViews.customDate": "自定义日期",
+  "savedViews.customRange": "自定义范围",
+  "savedViews.datePreviousMonth": "上个月",
+  "savedViews.dateNextMonth": "下个月",
+  "savedViews.rangeFrom": "开始",
+  "savedViews.rangeTo": "结束",
+  "savedViews.rangeOpenStart": "开始",
+  "savedViews.rangeOpenEnd": "结束",
+  "savedViews.apply": "应用",
   "savedViews.mobileEntry": "过滤 / 视图",
   "savedViews.mobileTitle": "视图与过滤",
 

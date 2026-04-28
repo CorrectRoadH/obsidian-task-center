@@ -96,7 +96,7 @@ test("US-412 — err.task_not_found key exists in both EN and ZH tables", async 
 // asserts every replacement i18n key exists in both EN and ZH tables;
 // the green commit then routes the call sites through `tr()`.
 //
-// Coverage mirrors the categories Jerry called out:
+// Coverage mirrors the categories reviewer called out:
 //   - status.today / status.overdue / status.openTooltip
 //     → status-bar.ts + view.ts:renderMobileStatusRow (shared keys)
 //   - meta.est / meta.act        → view.ts est/act badges
@@ -117,7 +117,7 @@ test("task #43 — status / meta / sheet / prompt keys defined for EN and ZH (tr
     { key: "sheet.scheduleClear", vars: undefined, mustDifferFromEnInZh: false },
     { key: "sheet.drop", vars: undefined, mustDifferFromEnInZh: true },
     { key: "prompt.dateHint", vars: undefined, mustDifferFromEnInZh: true },
-    // Leo HOLD on first review (msg `cbf0489c`): Completed tab's
+    // PM HOLD on first review (msg `cbf0489c`): Completed tab's
     // 7-day stats header was the third Completed surface and was
     // initially missed.
     { key: "stats.sevenDayDone", vars: { n: 5 }, mustDifferFromEnInZh: true },

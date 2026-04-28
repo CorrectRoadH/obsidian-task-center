@@ -51,7 +51,7 @@ export interface TaskCenterSettings {
   // compatibility paths.
   inboxPath?: string;
   groupingTags?: string[];
-  // US-724: user-saved board filters ("Work", "Life", "Waiting", etc.).
+  // US-724: user-saved board filters ("Alpha", "Gamma", "Waiting", etc.).
   // These are lightweight presets over the existing board surface; they do
   // not create a separate data model.
   savedViews: SavedTaskView[];

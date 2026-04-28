@@ -16,11 +16,13 @@ function compilePure() {
       "esbuild",
       "src/parser.ts",
       "src/dates.ts",
-      "--bundle=false",
+      "src/tags.ts",
+      "--bundle",
       "--format=esm",
       "--platform=node",
       "--outdir=test/.compiled",
       "--loader:.ts=ts",
+      "--alias:obsidian=./test/obsidian-stub.mjs",
     ],
     { cwd: process.cwd(), stdio: "pipe", encoding: "utf8" },
   );
@@ -38,6 +40,7 @@ const {
   parseTaskLine,
   statusFromCheckbox,
   shortHash,
+  parseTaskFromLine,
 } = await import("../test/.compiled/parser.js");
 const { addDays, startOfWeek, endOfMonth, shiftMonth, resolveWhen, isValidISO } =
   await import("../test/.compiled/dates.js");
@@ -102,12 +105,12 @@ test("parseTaskLine — nested callout", () => {
 // quietly diverges from its sibling tasks — visually "missing" from the
 // parent's card render.
 test("parseTaskLine — strips trailing CR (CRLF)", () => {
-  const r = parseTaskLine("    - [ ] 买廉价的AI会员(GPT Plus\\Kimi) ➕ 2026-04-26 ⏳ 2026-04-26\r");
+  const r = parseTaskLine("    - [ ] Fixture child task(App A\\App B) ➕ 2026-04-26 ⏳ 2026-04-26\r");
   assert.equal(r?.checkbox, " ");
   // Critical: content must NOT carry trailing `\r`.
   assert.equal(
     r?.content,
-    "买廉价的AI会员(GPT Plus\\Kimi) ➕ 2026-04-26 ⏳ 2026-04-26",
+    "Fixture child task(App A\\App B) ➕ 2026-04-26 ⏳ 2026-04-26",
   );
 });
 
@@ -124,19 +127,19 @@ test("cleanTitle — strips emoji dates + tags + inline fields + block anchors",
 });
 
 test("US-108: cleanTitle strips arbitrary inline fields without treating names as app knowledge", () => {
-  const t = cleanTitle("real title [planned:: 45m] [花了:: 30m] [owner:: ctrdh]");
+  const t = cleanTitle("real title [planned:: 45m] [花了:: 30m] [owner:: fixture-user]");
   assert.equal(t, "real title");
 });
 
 test("US-108: parseInlineFields preserves field names and parses duration values generically", () => {
   const r = parseInlineFields(
-    "task [estimate:: 1h] [planned:: 45m] [花了:: 30m] [owner:: ctrdh] [planned:: 15m]",
+    "task [estimate:: 1h] [planned:: 45m] [花了:: 30m] [owner:: fixture-user] [planned:: 15m]",
   );
   assert.deepEqual(r.inlineFields, {
     estimate: ["1h"],
     planned: ["45m", "15m"],
     花了: ["30m"],
-    owner: ["ctrdh"],
+    owner: ["fixture-user"],
   });
   assert.deepEqual(r.durationFields, {
     estimate: 60,
@@ -148,6 +151,17 @@ test("US-108: parseInlineFields preserves field names and parses duration values
 test("cleanTitle — preserves wikilinks", () => {
   const t = cleanTitle("task with [[wikilink]] reference ⏳ 2026-04-24");
   assert.equal(t, "task with [[wikilink]] reference");
+});
+
+test("US-109d: parseTaskFromLine exposes only legal markdown tags", () => {
+  const task = parseTaskFromLine(
+    "Tasks/Inbox.md",
+    0,
+    "- [ ] task [[Note#Heading]] #第一象限、#第二象限 等。并通过`advance` #^624c3648-bca7-4ee2 #alpha/project",
+    null,
+    0,
+  );
+  assert.deepEqual(task?.tags, ["#第一象限", "#第二象限", "#alpha/project"]);
 });
 
 test("cleanTitle — recurrence swallow", () => {
