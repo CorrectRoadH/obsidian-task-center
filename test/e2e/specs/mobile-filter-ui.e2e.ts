@@ -126,8 +126,18 @@ describe("Task Center — mobile filter UI (task #88)", function () {
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='status']")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='grouping']")).toExist();
 
-    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").setValue("#missing");
-    await browser.keys("Enter");
+    const mobileShapes = await browser.execute(() => {
+      const tag = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='tag']") as HTMLSelectElement | null;
+      const date = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='date']") as HTMLSelectElement | null;
+      return {
+        tagName: tag?.tagName,
+        tagMultiple: !!tag?.multiple,
+        dateTagName: date?.tagName,
+      };
+    });
+    expect(mobileShapes).toEqual({ tagName: "SELECT", tagMultiple: true, dateTagName: "SELECT" });
+
+    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").selectByAttribute("value", "#missing");
     await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).not.toExist();
 
     await browser.pause(200);
