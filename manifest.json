@@ -1,9 +1,9 @@
 {
   "id": "task-center",
   "name": "Task Center",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minAppVersion": "1.5.0",
-  "description": "Task Center + CLI for energy-based task management. Full Task Center GUI + shell CLI on top of Obsidian Tasks syntax.",
+  "description": "Task board with parent-child rendering, natural-language quick add, mobile gestures, and CLI commands for Tasks-style markdown.",
   "author": "CorrectRoadH",
   "authorUrl": "https://github.com/CorrectRoadH",
   "isDesktopOnly": false

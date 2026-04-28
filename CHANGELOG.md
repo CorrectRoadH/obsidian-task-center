@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.7.1 — 2026-04-28
+
+- Adjust release description to satisfy Obsidian community-plugin validation.
+
 ## 0.7.0 — 2026-04-28
 
 - Prepare community plugin submission: rename the Obsidian plugin ID from `obsidian-task-center` to `task-center`, add the MIT license file, and sync install docs/tests with the new ID.
