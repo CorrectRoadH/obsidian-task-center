@@ -1,6 +1,6 @@
 {
   "name": "obsidian-task-center",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Task Center + CLI for energy-based task management on top of Obsidian Tasks syntax",
   "main": "main.js",
   "packageManager": "pnpm@10.32.1",
