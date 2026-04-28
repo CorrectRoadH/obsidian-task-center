@@ -244,6 +244,12 @@
   flex-direction: column;
   width: min(260px, calc(100vw - 32px));
 }
+.task-center-view .bt-time-more-popover {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 32px));
+  gap: 6px;
+}
 .task-center-view .bt-date-popover {
   display: grid;
   width: min(620px, calc(100vw - 32px));
@@ -252,6 +258,58 @@
   align-items: stretch;
   gap: 12px;
   padding: 12px;
+}
+.task-center-view .bt-time-more-popover.bt-date-popover {
+  width: min(640px, calc(100vw - 32px));
+}
+.task-center-view .bt-time-back {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 3px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+.task-center-view .bt-time-more-row {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.task-center-view .bt-time-more-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.task-center-view .bt-time-more-pick,
+.task-center-view .bt-time-more-clear {
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+.task-center-view .bt-time-more-pick {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.task-center-view .bt-time-more-clear {
+  width: 28px;
+  color: var(--text-muted);
+}
+.task-center-settings-command {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  user-select: text;
 }
 .task-center-view .bt-menu-option {
   display: flex;
@@ -608,6 +666,7 @@
   grid-template-columns: repeat(7, minmax(200px, 1fr));
   gap: 6px;
   overflow-x: auto;
+  min-height: var(--tc-week-min-height, 50vh);
 }
 .task-center-view .bt-week-col {
   background: var(--background-secondary);
@@ -846,18 +905,55 @@
 }
 .task-center-view .bt-subcard {
   display: flex;
+  align-items: flex-start;
   gap: 6px;
-  padding: 2px 6px;
+  padding: 3px 6px;
   font-size: 11px;
-  background: var(--background-secondary);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 3px;
-  cursor: grab;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease;
 }
-.task-center-view .bt-sub-check { width: 12px; color: var(--text-faint); }
-.task-center-view .bt-subcard-title { flex: 1; }
+.task-center-view .bt-subcard:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+}
+.task-center-view .bt-subcard.dragging {
+  opacity: 0.72;
+}
+.task-center-view .bt-sub-check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  box-shadow: none;
+  background: transparent;
+  appearance: none;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.task-center-view .bt-sub-check:hover,
+.task-center-view .bt-sub-check:focus-visible {
+  color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+  outline: none;
+}
+.task-center-view .bt-subcard-title { flex: 1; min-width: 0; }
 .task-center-view .bt-sub-est { color: var(--text-faint); font-size: 10px; }
 .task-center-view .bt-sub-sched { color: var(--color-blue); font-size: 10px; }
-.task-center-view .bt-subcard.done { opacity: 0.5; text-decoration: line-through; }
+.task-center-view .bt-subcard.done { opacity: 0.65; }
+.task-center-view .bt-subcard.done .bt-subcard-title { text-decoration: line-through; }
 
 /* Drop zones */
 .task-center-view .drop-hover {
@@ -1612,9 +1708,12 @@
 
   /* Stack the 7 day rows top-to-bottom instead of side-by-side. */
   .task-center-view[data-mobile-layout="true"] .bt-week {
+    display: flex;
+    flex-direction: column;
     grid-template-columns: 1fr;
     gap: 4px;
     overflow-x: visible;
+    min-height: var(--tc-week-min-height, 50vh);
   }
   .task-center-view[data-mobile-layout="true"] .bt-week-col {
     min-height: 0;

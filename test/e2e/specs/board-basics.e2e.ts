@@ -74,6 +74,28 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     await expect(card).toExist();
   });
 
+  // US-101: week 主体不能塌得太矮；至少占当前 Task Center 可视高度一半。
+  it("US-101: week body keeps at least half of the Task Center visible height", async function () {
+    const today = todayISO();
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Week min-height task ⏳ ${today}\n`);
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+    await $('[data-tab="week"]').click();
+    await $(".task-center-view .bt-week").waitForExist({ timeout: 5000 });
+
+    const metrics = await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".task-center-view")!;
+      const week = document.querySelector<HTMLElement>(".task-center-view .bt-week")!;
+      return {
+        viewHeight: view.getBoundingClientRect().height,
+        weekHeight: week.getBoundingClientRect().height,
+      };
+    });
+
+    expect(metrics.weekHeight).toBeGreaterThanOrEqual(Math.floor(metrics.viewHeight / 2));
+  });
+
   // US-107: tasks with empty title must be silently ignored — no card appears
   it("US-107: ignores blank-title tasks (empty checkbox body)", async function () {
     const today = todayISO();

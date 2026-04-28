@@ -4,13 +4,13 @@
  * Stable DOM attributes:
  *   data-saved-views                  — saved-view filter toolbar
  *   data-saved-view-filter="tag"      — tag popover trigger (US-109d)
- *   data-saved-view-filter="date"     — date popover trigger (US-109e)
+ *   data-saved-view-filter="time-scheduled" — scheduled range popover trigger (US-109e)
  *   data-saved-view-filter="status"   — status popover trigger (US-109h)
  *   data-action="save-current-view"   — save current filters button
  *   data-saved-view-select            — saved view popover trigger
  *   data-saved-view-option            — saved view menu item
  *   data-tag-option="#tag"            — tag checkbox row inside the popover
- *   data-date-option="today"          — date condition row inside the popover
+ *   data-time-option="scheduled:today" — scheduled condition row inside the popover
  *   data-status-option="todo"         — status condition row inside the popover
  *   data-saved-view-name-input        — saved-view naming modal input
  */
@@ -88,7 +88,7 @@ describe("US-724 saved views / custom filters", function () {
     expect(tagShape).toEqual({ tagName: "BUTTON", aria: "listbox" });
 
     const dateShape = await browser.execute(() => {
-      const el = document.querySelector("[data-saved-view-filter='date']");
+      const el = document.querySelector("[data-saved-view-filter='time-scheduled']");
       return { tagName: el?.tagName, aria: el?.getAttribute("aria-haspopup") };
     });
     expect(dateShape).toEqual({ tagName: "BUTTON", aria: "listbox" });
@@ -103,8 +103,8 @@ describe("US-724 saved views / custom filters", function () {
     await $('[data-tag-option="#alpha"]').click();
     await expect($('[data-tag-option="#alpha"]')).toHaveAttribute("aria-checked", "true");
     await $('[data-tag-option="#beta"]').click();
-    await $('[data-saved-view-filter="date"]').click();
-    await $('[data-date-option="today"]').click();
+    await $('[data-saved-view-filter="time-scheduled"]').click();
+    await $('[data-time-option="scheduled:today"]').click();
     await $('[data-saved-view-filter="status"]').click();
     await $('[data-status-option="todo"]').click();
     await $('[data-saved-view-filter="tag"]').click();

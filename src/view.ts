@@ -34,9 +34,10 @@ import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
 import { openTaskSourceEditShell } from "./view/source-dialog";
+import { weekMinHeightFromViewHeightPx } from "./view/layout";
 import { taskDisplayTags } from "./tags";
 import { formatDateFilterLabel } from "./date-filter";
-import { taskMatchesScheduleToken } from "./schedule-filter";
+import { taskMatchesTimeToken, timeTokenAppliesToField } from "./time-filter";
 import {
   applySavedViewFilters,
   clearSavedViewFilters as emptySavedViewFilters,
@@ -46,9 +47,14 @@ import {
   upsertSavedView,
 } from "./saved-views";
 import type { SavedTaskView, SavedViewStatus } from "./types";
+import type { SavedViewTimeField, SavedViewTimeFilters } from "./types";
 import type TaskCenterPlugin from "./main";
 
 type TabKey = "today" | "week" | "month" | "completed" | "unscheduled";
+type FilterPopoverKey = "view" | "tag" | "status" | "time-more" | `time:${SavedViewTimeField}`;
+
+const PRIMARY_TIME_FIELD: SavedViewTimeField = "scheduled";
+const SECONDARY_TIME_FIELDS: SavedViewTimeField[] = ["deadline", "completed", "created"];
 
 interface ViewState {
   tab: TabKey;
@@ -57,9 +63,8 @@ interface ViewState {
   filter: string;
   savedViewId: string | null;
   savedViewTag: string;
-  savedViewDate: string;
+  savedViewTime: SavedViewTimeFilters;
   savedViewStatus: SavedViewStatus;
-  savedViewGrouping: string;
   showUnscheduledPool: boolean;
   collapsedWeeks: Set<string>; // Week-start ISO → collapsed in completed view
   // Mobile week view: each day-row collapses by default; today is open and
@@ -116,9 +121,16 @@ function taskMatchesText(t: ParsedTask, q: string): boolean {
   return false;
 }
 
-function taskMatchesScheduleFilter(t: ParsedTask, token: string, weekStartsOn: 0 | 1): boolean {
-  if (t.inheritsTerminal) return !token || token === "all";
-  return taskMatchesScheduleToken(t.scheduled, token, weekStartsOn);
+function taskTimeValue(t: ParsedTask, field: SavedViewTimeField): string | null {
+  if (field === "scheduled") return t.scheduled;
+  if (field === "deadline") return t.deadline;
+  if (field === "completed") return t.completed;
+  return t.created;
+}
+
+function taskMatchesTimeFilter(t: ParsedTask, field: SavedViewTimeField, token: string, weekStartsOn: 0 | 1): boolean {
+  if (!timeTokenAppliesToField(field, token)) return false;
+  return taskMatchesTimeToken(taskTimeValue(t, field), token, weekStartsOn);
 }
 
 function taskDateColumn(t: ParsedTask): string | null {
@@ -151,9 +163,10 @@ export class TaskCenterView extends ItemView {
   // Mobile drag controller (US-507) — pointer-based replacement for HTML5
   // DnD that doesn't fire from touch. Lazily created on first mobile drag.
   private mobileDrag: MobileDragController<TabKey> | null = null;
-  private filterPopoverOpen: "view" | "tag" | "date" | "status" | null = null;
+  private filterPopoverOpen: FilterPopoverKey | null = null;
   private dateCalendarAnchorISO = startOfMonth(todayISO());
   private pendingDateRangeStart: string | null = null;
+  private viewResizeObserver: ResizeObserver | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
@@ -171,9 +184,8 @@ export class TaskCenterView extends ItemView {
       filter: "",
       savedViewId: null,
       savedViewTag: "",
-      savedViewDate: "",
+      savedViewTime: {},
       savedViewStatus: "all",
-      savedViewGrouping: "",
       showUnscheduledPool: true,
       collapsedWeeks: new Set(),
       expandedDays: new Set(),
@@ -217,7 +229,13 @@ export class TaskCenterView extends ItemView {
     // the setting can override the viewport. UX-mobile §7.
     // see USER_STORIES.md
     this.applyMobileLayoutAttr();
-    this.registerDomEvent(window, "resize", () => this.applyMobileLayoutAttr());
+    this.registerDomEvent(window, "resize", () => {
+      this.applyMobileLayoutAttr();
+      this.updateViewLayoutMetrics();
+    });
+    this.viewResizeObserver = new ResizeObserver(() => this.updateViewLayoutMetrics());
+    this.viewResizeObserver.observe(this.contentEl);
+    this.updateViewLayoutMetrics();
 
     // US-408: re-render when the user changes Obsidian's UI language.
     // Obsidian fires `css-change` on every theme/language reload; that's
@@ -234,6 +252,15 @@ export class TaskCenterView extends ItemView {
     this.contentEl.dataset.mobileLayout = narrow || force ? "true" : "false";
   }
 
+  private updateViewLayoutMetrics(): void {
+    const rectHeight = this.contentEl.getBoundingClientRect().height;
+    const viewHeight = rectHeight || this.contentEl.clientHeight;
+    const weekMinHeight = weekMinHeightFromViewHeightPx(viewHeight);
+    if (weekMinHeight > 0) {
+      this.contentEl.style.setProperty("--tc-week-min-height", `${weekMinHeight}px`);
+    }
+  }
+
   async onClose(): Promise<void> {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
@@ -242,6 +269,8 @@ export class TaskCenterView extends ItemView {
       this.cacheUnsub();
       this.cacheUnsub = null;
     }
+    this.viewResizeObserver?.disconnect();
+    this.viewResizeObserver = null;
     this.dwellTracker.reset();
     if (this.mobileDrag) {
       this.mobileDrag.destroy();
@@ -449,6 +478,7 @@ export class TaskCenterView extends ItemView {
 
     this.renderFooter(el);
     this.renderMobileActionBar(el);
+    this.updateViewLayoutMetrics();
 
     // Restore scroll after layout settles
     if (savedScrollTop > 0) {
@@ -712,7 +742,9 @@ export class TaskCenterView extends ItemView {
 
     this.renderTagFilter(wrap);
 
-    this.renderDateFilter(wrap);
+    this.renderTimeFilter(wrap, PRIMARY_TIME_FIELD);
+
+    this.renderMoreTimeFilters(wrap);
 
     this.renderStatusFilter(wrap);
 
@@ -770,59 +802,147 @@ export class TaskCenterView extends ItemView {
     }
   }
 
-  private renderDateFilter(parent: HTMLElement): void {
+  private renderTimeFilter(parent: HTMLElement, field: SavedViewTimeField): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
-    const dateOptions = this.dateFilterOptions();
-    const label = this.dateFilterLabel(this.state.savedViewDate);
-    const trigger = container.createEl("button", { text: label || tr("savedViews.date"), cls: "bt-saved-view-filter bt-date-trigger" });
+    const options = this.timeFilterOptions(field);
+    const active = this.timeFilterValue(field);
+    const label = this.timeFilterLabel(field, active);
+    const popoverKey = this.timePopoverKey(field);
+    const trigger = container.createEl("button", { text: label, cls: "bt-saved-view-filter bt-date-trigger" });
     trigger.title = label;
-    trigger.dataset.savedViewFilter = "date";
+    trigger.dataset.savedViewFilter = `time-${field}`;
     trigger.setAttribute("aria-haspopup", "listbox");
-    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "date" ? "true" : "false");
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === popoverKey ? "true" : "false");
     trigger.addEventListener("click", () => {
-      const willOpen = this.filterPopoverOpen !== "date";
-      this.filterPopoverOpen = willOpen ? "date" : null;
+      const willOpen = this.filterPopoverOpen !== popoverKey;
+      this.filterPopoverOpen = willOpen ? popoverKey : null;
       if (willOpen) {
-        this.dateCalendarAnchorISO = this.dateCalendarAnchorForState();
+        this.dateCalendarAnchorISO = this.dateCalendarAnchorForField(field);
         this.pendingDateRangeStart = null;
       }
       this.render();
     });
-    if (this.filterPopoverOpen !== "date") return;
+    if (this.filterPopoverOpen !== popoverKey) return;
 
     const popover = container.createDiv({ cls: "bt-filter-popover bt-date-popover" });
     popover.setAttribute("role", "listbox");
-    const presetPanel = popover.createDiv({ cls: "bt-date-presets" });
-    presetPanel.createDiv({ text: tr("savedViews.datePreset"), cls: "bt-date-section-title" });
-    for (const [value, text] of dateOptions) {
-      const option = presetPanel.createEl("button", { cls: "bt-date-preset" });
-      option.createSpan({ text, cls: "bt-date-preset-label" });
-      option.dataset.dateOption = value || "all";
-      option.setAttribute("aria-selected", (this.state.savedViewDate || "") === value ? "true" : "false");
-      option.addEventListener("click", () => this.setDateFilter(value));
-    }
-
-    this.renderDateCalendar(popover);
+    this.renderTimeRangePopover(popover, field, options);
   }
 
-  private dateFilterOptions(): Array<readonly [string, string]> {
-    return [
-      ["", tr("savedViews.dateAll")],
+  private renderTimeRangePopover(parent: HTMLElement, field: SavedViewTimeField, options = this.timeFilterOptions(field)): void {
+    const presetPanel = parent.createDiv({ cls: "bt-date-presets" });
+    presetPanel.createDiv({ text: tr("savedViews.timePreset", { field: this.timeFieldLabel(field) }), cls: "bt-date-section-title" });
+    for (const [value, text] of options) {
+      const option = presetPanel.createEl("button", { cls: "bt-date-preset" });
+      option.createSpan({ text, cls: "bt-date-preset-label" });
+      option.dataset.timeOption = `${field}:${value || "all"}`;
+      option.setAttribute("aria-selected", (this.timeFilterValue(field) || "") === value ? "true" : "false");
+      option.addEventListener("click", () => this.setTimeFilter(field, value));
+    }
+
+    this.renderDateCalendar(parent, field);
+  }
+
+  private renderMoreTimeFilters(parent: HTMLElement): void {
+    const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
+    const count = SECONDARY_TIME_FIELDS.filter((field) => this.timeFilterValue(field)).length;
+    const text = count > 0 ? tr("savedViews.timeMoreActive", { count }) : tr("savedViews.timeMore");
+    const trigger = container.createEl("button", { text, cls: "bt-saved-view-filter bt-time-more-trigger" });
+    trigger.dataset.savedViewFilter = "time-more";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    const openForSecondary = this.filterPopoverOpen?.startsWith("time:")
+      && this.filterPopoverOpen !== this.timePopoverKey(PRIMARY_TIME_FIELD);
+    trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "time-more" || openForSecondary ? "true" : "false");
+    trigger.addEventListener("click", () => {
+      this.filterPopoverOpen = this.filterPopoverOpen === "time-more" ? null : "time-more";
+      this.pendingDateRangeStart = null;
+      this.render();
+    });
+
+    if (!(this.filterPopoverOpen === "time-more" || openForSecondary)) return;
+
+    const popover = container.createDiv({ cls: "bt-filter-popover bt-time-more-popover" });
+    popover.setAttribute("role", "listbox");
+    const activeField = this.timeFieldFromPopover(this.filterPopoverOpen);
+    if (activeField && activeField !== PRIMARY_TIME_FIELD) {
+      popover.addClass("bt-date-popover");
+      const back = popover.createEl("button", { text: tr("savedViews.timeBack"), cls: "bt-time-back" });
+      back.addEventListener("click", () => {
+        this.filterPopoverOpen = "time-more";
+        this.pendingDateRangeStart = null;
+        this.render();
+      });
+      this.renderTimeRangePopover(popover, activeField);
+      return;
+    }
+
+    for (const field of SECONDARY_TIME_FIELDS) {
+      const value = this.timeFilterValue(field);
+      const row = popover.createDiv({ cls: "bt-time-more-row" });
+      row.createSpan({ text: this.timeFieldLabel(field), cls: "bt-time-more-label" });
+      const pick = row.createEl("button", {
+        text: this.timeFilterLabel(field, value),
+        cls: "bt-time-more-pick",
+      });
+      pick.dataset.timeField = field;
+      pick.addEventListener("click", () => {
+        this.filterPopoverOpen = this.timePopoverKey(field);
+        this.dateCalendarAnchorISO = this.dateCalendarAnchorForField(field);
+        this.pendingDateRangeStart = null;
+        this.render();
+      });
+      const clear = row.createEl("button", { text: "×", cls: "bt-time-more-clear" });
+      clear.ariaLabel = tr("savedViews.clearTimeRange", { field: this.timeFieldLabel(field) });
+      clear.disabled = !value;
+      clear.addEventListener("click", () => this.setTimeFilter(field, ""));
+    }
+  }
+
+  private timeFilterOptions(field: SavedViewTimeField): Array<readonly [string, string]> {
+    const base: Array<readonly [string, string]> = [
+      ["", tr("savedViews.timeAll", { field: this.timeFieldLabel(field) })],
+    ];
+    if (field === "deadline") {
+      base.push(["overdue", tr("savedViews.dateOverdue")], ["next-7-days", tr("savedViews.dateNext7Days")]);
+    }
+    base.push(
       ["today", tr("savedViews.dateToday")],
       ["tomorrow", tr("savedViews.dateTomorrow")],
       ["week", tr("savedViews.dateWeek")],
       ["next-week", tr("savedViews.dateNextWeek")],
       ["month", tr("savedViews.dateMonth")],
-    ];
+    );
+    return base;
   }
 
-  private dateFilterLabel(value: string): string {
+  private timeFilterLabel(field: SavedViewTimeField, value: string): string {
     return formatDateFilterLabel(value, {
-      emptyLabel: tr("savedViews.date"),
+      emptyLabel: this.timeFieldLabel(field),
       openStartLabel: tr("savedViews.rangeOpenStart"),
       openEndLabel: tr("savedViews.rangeOpenEnd"),
-      presets: new Map(this.dateFilterOptions()),
+      presets: new Map(this.timeFilterOptions(field)),
     });
+  }
+
+  private timeFieldLabel(field: SavedViewTimeField): string {
+    if (field === "scheduled") return tr("savedViews.timeScheduled");
+    if (field === "deadline") return tr("savedViews.timeDeadline");
+    if (field === "completed") return tr("savedViews.timeCompleted");
+    return tr("savedViews.timeCreated");
+  }
+
+  private timeFilterValue(field: SavedViewTimeField): string {
+    return this.state.savedViewTime[field]?.trim() ?? "";
+  }
+
+  private timePopoverKey(field: SavedViewTimeField): FilterPopoverKey {
+    return `time:${field}`;
+  }
+
+  private timeFieldFromPopover(key: FilterPopoverKey | null): SavedViewTimeField | null {
+    if (!key?.startsWith("time:")) return null;
+    const field = key.slice("time:".length) as SavedViewTimeField;
+    return ["scheduled", "deadline", "completed", "created"].includes(field) ? field : null;
   }
 
   private parseDateFilterValue(value: string): { exact: string; from: string; to: string } {
@@ -836,14 +956,14 @@ export class TaskCenterView extends ItemView {
     return { exact: "", from: "", to: "" };
   }
 
-  private renderDateCalendar(parent: HTMLElement): void {
+  private renderDateCalendar(parent: HTMLElement, field: SavedViewTimeField): void {
     const calendar = parent.createDiv({ cls: "bt-date-calendar" });
     const head = calendar.createDiv({ cls: "bt-date-calendar-head" });
-    head.createSpan({ text: tr("savedViews.customRange"), cls: "bt-date-section-title" });
-    const clear = head.createEl("button", { text: tr("savedViews.clearDate"), cls: "bt-date-clear" });
-    clear.dataset.dateClear = "true";
-    clear.disabled = !this.state.savedViewDate && !this.pendingDateRangeStart;
-    clear.addEventListener("click", () => this.setDateFilter(""));
+    head.createSpan({ text: tr("savedViews.customTimeRange", { field: this.timeFieldLabel(field) }), cls: "bt-date-section-title" });
+    const clear = head.createEl("button", { text: tr("savedViews.clearTimeRange", { field: this.timeFieldLabel(field) }), cls: "bt-date-clear" });
+    clear.dataset.timeClear = field;
+    clear.disabled = !this.timeFilterValue(field) && !this.pendingDateRangeStart;
+    clear.addEventListener("click", () => this.setTimeFilter(field, ""));
 
     const nav = calendar.createDiv({ cls: "bt-date-calendar-nav" });
     const prev = nav.createEl("button", { text: "‹", cls: "bt-date-month-nav" });
@@ -861,7 +981,7 @@ export class TaskCenterView extends ItemView {
       weekdays.createSpan({ text: tr(WEEKDAY_KEYS[day]), cls: "bt-date-calendar-weekday" });
     }
 
-    const active = this.parseDateFilterValue(this.state.savedViewDate);
+    const active = this.parseDateFilterValue(this.timeFilterValue(field));
     const rangeFrom = active.from || active.exact || "";
     const rangeTo = active.to || active.exact || "";
     const monthStart = startOfMonth(this.dateCalendarAnchorISO);
@@ -880,31 +1000,30 @@ export class TaskCenterView extends ItemView {
       if (rangeFrom && rangeTo && iso >= rangeFrom && iso <= rangeTo) cell.addClass("in-range");
       if (iso === active.from) cell.addClass("range-start");
       if (iso === active.to) cell.addClass("range-end");
-      cell.addEventListener("click", () => this.handleDateCalendarDayClick(iso));
+      cell.addEventListener("click", () => this.handleDateCalendarDayClick(field, iso));
     }
   }
 
   private moveDateCalendarMonth(delta: number): void {
     this.dateCalendarAnchorISO = startOfMonth(shiftMonth(this.dateCalendarAnchorISO, delta));
-    this.filterPopoverOpen = "date";
     this.render();
   }
 
-  private handleDateCalendarDayClick(iso: string): void {
+  private handleDateCalendarDayClick(field: SavedViewTimeField, iso: string): void {
     if (!this.pendingDateRangeStart) {
       this.pendingDateRangeStart = iso;
-      this.filterPopoverOpen = "date";
+      this.filterPopoverOpen = this.timePopoverKey(field);
       this.render();
       return;
     }
     const from = this.pendingDateRangeStart <= iso ? this.pendingDateRangeStart : iso;
     const to = this.pendingDateRangeStart <= iso ? iso : this.pendingDateRangeStart;
     this.pendingDateRangeStart = null;
-    this.setDateFilter(`${from}..${to}`);
+    this.setTimeFilter(field, `${from}..${to}`);
   }
 
-  private dateCalendarAnchorForState(): string {
-    const parsed = this.parseDateFilterValue(this.state.savedViewDate);
+  private dateCalendarAnchorForField(field: SavedViewTimeField): string {
+    const parsed = this.parseDateFilterValue(this.timeFilterValue(field));
     return startOfMonth(parsed.exact || parsed.from || parsed.to || todayISO());
   }
 
@@ -1022,7 +1141,7 @@ export class TaskCenterView extends ItemView {
     return hasSavedViewFilters({
       search: this.state.filter,
       tag: this.state.savedViewTag,
-      date: this.state.savedViewDate,
+      time: this.state.savedViewTime,
       status: this.state.savedViewStatus,
     });
   }
@@ -1042,8 +1161,12 @@ export class TaskCenterView extends ItemView {
     });
   }
 
-  private setDateFilter(value: string): void {
-    this.state.savedViewDate = value === "all" ? "" : value;
+  private setTimeFilter(field: SavedViewTimeField, value: string): void {
+    const next = { ...this.state.savedViewTime };
+    const trimmed = value === "all" ? "" : value.trim();
+    if (trimmed) next[field] = trimmed;
+    else delete next[field];
+    this.state.savedViewTime = next;
     this.state.savedViewId = null;
     this.filterPopoverOpen = null;
     this.pendingDateRangeStart = null;
@@ -1829,9 +1952,8 @@ export class TaskCenterView extends ItemView {
 
   private renderUnscheduledBig(parent: HTMLElement) {
     const filter = this.getTextFilter();
-    const unscheduledAll = this.tasks
-      .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
-      .filter(filter);
+    const unscheduledBase = this.tasks.filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal);
+    const unscheduledAll = unscheduledBase.filter(filter);
     unscheduledAll.sort((a, b) => {
       if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
       if (a.deadline) return -1;
@@ -2190,8 +2312,11 @@ export class TaskCenterView extends ItemView {
     subCard.draggable = true;
     if (this.state.selectedTaskId === c.id) subCard.addClass("selected");
 
-    const check = subCard.createDiv({ cls: "bt-sub-check", text: statusIcon(c.status) });
-    check.title = "Toggle done";
+    const check = subCard.createEl("button", { cls: "bt-sub-check", text: statusIcon(c.status) });
+    check.type = "button";
+    check.dataset.cardAction = "done";
+    check.title = c.status === "done" ? tr("ctx.markTodo") : tr("ctx.markDone");
+    check.setAttr("aria-label", check.title);
     check.addEventListener("click", async (e) => {
       e.stopPropagation();
       await this.runWithRemoveAnim(c.id, async () => {
@@ -2201,6 +2326,7 @@ export class TaskCenterView extends ItemView {
     });
 
     const title = subCard.createDiv({ cls: "bt-subcard-title", text: c.title });
+    title.dataset.cardAction = "open";
     title.title = c.title;
 
     // (Previous `bt-sub-sched` badge for cross-day subtasks removed —
@@ -2494,18 +2620,30 @@ export class TaskCenterView extends ItemView {
   private getTextFilter(): (t: ParsedTask) => boolean {
     const q = this.state.filter.trim().toLowerCase();
     const tags = parseFilterTags(this.state.savedViewTag);
-    const date = this.state.savedViewDate.trim();
+    const time = this.state.savedViewTime;
     const status = this.state.savedViewStatus;
-    if (!q && tags.length === 0 && !date && status === "all") return () => true;
+    if (!q && tags.length === 0 && !this.hasTimeFilters(time) && status === "all") return () => true;
     return (t) => {
       if (q && !taskMatchesText(t, q)) return false;
       for (const tag of tags) {
         if (!taskHasTag(t, tag)) return false;
       }
-      if (date && !taskMatchesScheduleFilter(t, date, this.plugin.settings.weekStartsOn)) return false;
+      if (!this.taskMatchesTimeFilters(t, time)) return false;
       if (status !== "all" && t.status !== status) return false;
       return true;
     };
+  }
+
+  private hasTimeFilters(time: SavedViewTimeFilters): boolean {
+    return Object.values(time).some((value) => !!value?.trim());
+  }
+
+  private taskMatchesTimeFilters(task: ParsedTask, time: SavedViewTimeFilters): boolean {
+    for (const field of ["scheduled", "deadline", "completed", "created"] as SavedViewTimeField[]) {
+      const token = time[field]?.trim();
+      if (token && !taskMatchesTimeFilter(task, field, token, this.plugin.settings.weekStartsOn)) return false;
+    }
+    return true;
   }
 
   private quadrantClass(_tags: string[]): string | null {
@@ -2528,19 +2666,16 @@ export class TaskCenterView extends ItemView {
       }
     };
     const q = this.state.filter.trim().toLowerCase();
-    const date = this.state.savedViewDate.trim();
+    const time = this.state.savedViewTime;
     const status = this.state.savedViewStatus;
     for (const task of this.tasks) {
       if (q && !taskMatchesText(task, q)) continue;
-      if (date && !taskMatchesScheduleFilter(task, date, this.plugin.settings.weekStartsOn)) continue;
+      if (!this.taskMatchesTimeFilters(task, time)) continue;
       if (status !== "all" && task.status !== status) continue;
       for (const tag of task.tags) add(tag, 1);
     }
     for (const view of this.plugin.settings.savedViews) {
       for (const tag of parseFilterTags(view.tag)) add(tag);
-      // Backward compatibility: old saved views used `grouping` as a second
-      // tag filter. Keep those tags visible, but new UI no longer writes it.
-      if (view.grouping) add(view.grouping);
     }
     for (const tag of selected) add(tag);
     return Array.from(options.values()).sort((a, b) => {
@@ -2567,7 +2702,6 @@ export class TaskCenterView extends ItemView {
     }
     this.state.savedViewTag = out.join(",");
     this.state.savedViewId = null;
-    this.state.savedViewGrouping = "";
     this.filterPopoverOpen = "tag";
     this.render();
   }
@@ -2577,9 +2711,8 @@ export class TaskCenterView extends ItemView {
     this.state.savedViewId = filters.savedViewId;
     this.state.filter = filters.search;
     this.state.savedViewTag = filters.tag;
-    this.state.savedViewDate = filters.date;
+    this.state.savedViewTime = filters.time;
     this.state.savedViewStatus = filters.status;
-    this.state.savedViewGrouping = filters.grouping;
     this.filterPopoverOpen = null;
   }
 
@@ -2588,9 +2721,8 @@ export class TaskCenterView extends ItemView {
     this.state.savedViewId = filters.savedViewId;
     this.state.filter = filters.search;
     this.state.savedViewTag = filters.tag;
-    this.state.savedViewDate = filters.date;
+    this.state.savedViewTime = filters.time;
     this.state.savedViewStatus = filters.status;
-    this.state.savedViewGrouping = filters.grouping;
     this.filterPopoverOpen = null;
   }
 
@@ -2611,7 +2743,7 @@ export class TaskCenterView extends ItemView {
     const view = createSavedView(name, {
       search: this.state.filter,
       tag: this.state.savedViewTag,
-      date: this.state.savedViewDate,
+      time: this.state.savedViewTime,
       status: this.state.savedViewStatus,
     });
     this.plugin.settings.savedViews = upsertSavedView(this.plugin.settings.savedViews, view);

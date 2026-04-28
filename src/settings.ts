@@ -1,6 +1,8 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { t as tr } from "./i18n";
 import type TaskCenterPlugin from "./main";
+
+const SKILL_INSTALL_COMMAND = "npx skills add CorrectRoadH/obsidian-task-center";
 
 export class TaskCenterSettingTab extends PluginSettingTab {
   constructor(
@@ -104,6 +106,25 @@ export class TaskCenterSettingTab extends PluginSettingTab {
           }),
         );
     }
+
+    const skillInstall = new Setting(containerEl)
+      .setName(tr("settings.skillInstall.name"))
+      .setDesc(tr("settings.skillInstall.desc"))
+      .addButton((btn) =>
+        btn
+          .setButtonText(tr("settings.copy"))
+          .onClick(async () => {
+            await navigator.clipboard.writeText(SKILL_INSTALL_COMMAND);
+            new Notice(tr("settings.copied"));
+          }),
+      );
+    skillInstall.settingEl.dataset.skillInstall = "true";
+    skillInstall.descEl.empty();
+    skillInstall.descEl.createSpan({ text: tr("settings.skillInstall.desc") });
+    skillInstall.descEl.createEl("code", {
+      text: SKILL_INSTALL_COMMAND,
+      cls: "task-center-settings-command",
+    });
 
     containerEl.createEl("h3", { text: tr("settings.cliHeader") });
     const cliHelp = containerEl.createEl("div", { cls: "setting-item-description" });

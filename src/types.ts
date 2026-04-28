@@ -80,15 +80,16 @@ export interface TaskCenterSettings {
 }
 
 export type SavedViewStatus = "all" | TaskStatus;
+export type SavedViewTimeField = "scheduled" | "deadline" | "completed" | "created";
+export type SavedViewTimeFilters = Partial<Record<SavedViewTimeField, string>>;
 
 export interface SavedTaskView {
   id: string;
   name: string;
   search: string;
   tag: string;
-  date: string;
+  time: SavedViewTimeFilters;
   status: SavedViewStatus;
-  grouping: string;
 }
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {

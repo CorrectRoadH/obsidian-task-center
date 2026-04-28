@@ -1,15 +1,14 @@
-import type { SavedTaskView, SavedViewStatus } from "./types";
+import type { SavedTaskView, SavedViewStatus, SavedViewTimeFilters } from "./types";
 
 export interface SavedViewFilters {
   search: string;
   tag: string;
-  date: string;
+  time: SavedViewTimeFilters;
   status: SavedViewStatus;
 }
 
 export interface AppliedSavedViewFilters extends SavedViewFilters {
   savedViewId: string | null;
-  grouping: string;
 }
 
 export function createSavedView(
@@ -22,9 +21,8 @@ export function createSavedView(
     name: name.trim(),
     search: filters.search.trim(),
     tag: filters.tag.trim(),
-    date: filters.date.trim(),
+    time: normalizeTimeFilters(filters.time),
     status: filters.status,
-    grouping: "",
   };
 }
 
@@ -39,10 +37,9 @@ export function applySavedViewFilters(view: SavedTaskView): AppliedSavedViewFilt
   return {
     savedViewId: view.id,
     search: view.search,
-    tag: mergeLegacyGroupingTag(view.tag, view.grouping),
-    date: view.date,
+    tag: view.tag,
+    time: normalizeTimeFilters(view.time),
     status: view.status,
-    grouping: "",
   };
 }
 
@@ -51,9 +48,8 @@ export function clearSavedViewFilters(): AppliedSavedViewFilters {
     savedViewId: null,
     search: "",
     tag: "",
-    date: "",
+    time: {},
     status: "all",
-    grouping: "",
   };
 }
 
@@ -61,7 +57,7 @@ export function hasSavedViewFilters(filters: SavedViewFilters): boolean {
   return !!(
     filters.search.trim()
     || filters.tag.trim()
-    || filters.date.trim()
+    || Object.values(normalizeTimeFilters(filters.time)).some(Boolean)
     || filters.status !== "all"
   );
 }
@@ -72,9 +68,13 @@ export function suggestSavedViewName(filters: Pick<SavedViewFilters, "tag" | "st
   return fallback;
 }
 
-function mergeLegacyGroupingTag(tag: string, grouping: string): string {
-  const parts = [tag, grouping].map((part) => part.trim()).filter(Boolean);
-  return parts.join(",");
+function normalizeTimeFilters(time: SavedViewTimeFilters): SavedViewTimeFilters {
+  const out: SavedViewTimeFilters = {};
+  for (const [key, value] of Object.entries(time) as Array<[keyof SavedViewTimeFilters, string | undefined]>) {
+    const trimmed = value?.trim();
+    if (trimmed) out[key] = trimmed;
+  }
+  return out;
 }
 
 function defaultSavedViewId(): string {

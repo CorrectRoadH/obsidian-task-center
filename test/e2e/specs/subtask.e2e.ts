@@ -148,6 +148,52 @@ describe("Task Center - subtasks via source edit (US-141/162/168)", function () 
     );
   });
 
+  it("US-142a keeps subtask rows draggable while the status circle is a separate control", async function () {
+    const today = todayISO();
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Parent task ⏳ ${today}\n    - [ ] Child one\n`);
+
+    await openBoardToTask("Tasks/Inbox.md:L1");
+
+    const subcardSel = `.task-center-view .bt-subcard[data-task-id="Tasks/Inbox.md:L2"]`;
+    await $(subcardSel).waitForExist({ timeout: 5000 });
+    const shape = (await browser.execute((selector: string) => {
+      const subcard = document.querySelector<HTMLElement>(selector);
+      const check = subcard?.querySelector<HTMLElement>(".bt-sub-check");
+      if (!subcard || !check) return null;
+      return {
+        draggable: subcard.draggable,
+        rowCursor: getComputedStyle(subcard).cursor,
+        checkTag: check.tagName,
+        checkCursor: getComputedStyle(check).cursor,
+        checkAction: check.dataset.cardAction,
+        checkLabel: check.getAttribute("aria-label"),
+      };
+    }, subcardSel)) as {
+      draggable: boolean;
+      rowCursor: string;
+      checkTag: string;
+      checkCursor: string;
+      checkAction?: string;
+      checkLabel: string | null;
+    } | null;
+
+    expect(shape).not.toBeNull();
+    expect(shape?.draggable).toBe(true);
+    expect(["grab", "grabbing"]).not.toContain(shape?.rowCursor);
+    expect(shape?.checkTag).toBe("BUTTON");
+    expect(shape?.checkCursor).toBe("pointer");
+    expect(shape?.checkAction).toBe("done");
+    expect(shape?.checkLabel).toBeTruthy();
+
+    await $(`${subcardSel} .bt-sub-check`).click();
+    await forFlush();
+    await expect($("[data-source-edit-shell]")).not.toExist();
+    await browser.waitUntil(
+      async () => (await readFile("Tasks/Inbox.md")).includes("    - [x] Child one"),
+      { timeout: 3000, timeoutMsg: "subtask status circle did not toggle the child task" },
+    );
+  });
+
   it("adds a subtask when parent is in a past week's daily note through source edit", async function () {
     const pastDate = offsetISO(-14);
     const dailyPath = `Daily/${pastDate}.md`;

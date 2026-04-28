@@ -122,12 +122,12 @@ describe("Task Center — mobile filter UI (task #88)", function () {
     await expect($(".task-center-bottom-sheet [data-saved-views]")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-select]")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='tag']")).toExist();
-    await expect($(".task-center-bottom-sheet [data-saved-view-filter='date']")).toExist();
+    await expect($(".task-center-bottom-sheet [data-saved-view-filter='time-scheduled']")).toExist();
     await expect($(".task-center-bottom-sheet [data-saved-view-filter='status']")).toExist();
 
     const mobileShapes = await browser.execute(() => {
       const tag = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='tag']");
-      const date = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='date']");
+      const date = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='time-scheduled']");
       const status = document.querySelector(".task-center-bottom-sheet [data-saved-view-filter='status']");
       return {
         tagName: tag?.tagName,

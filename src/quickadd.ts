@@ -305,7 +305,6 @@ function savedViewTags(settings?: TaskCenterSettings): string[] {
   const out: string[] = [];
   for (const view of settings.savedViews) {
     if (view.tag) out.push(view.tag);
-    if (view.grouping) out.push(view.grouping);
   }
   return out;
 }

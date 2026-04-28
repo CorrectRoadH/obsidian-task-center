@@ -190,6 +190,25 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     });
   });
 
+  // US-503: mobile week 主体同样不能只露出一条很矮的列表。
+  it("US-503: mobile Week keeps at least half of the Task Center visible height", async function () {
+    const today = todayISO();
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Mobile week min-height task ⏳ ${today}\n`);
+    await openMobileBoardWeek();
+
+    await $(".task-center-view .bt-week").waitForExist({ timeout: 5000 });
+    const metrics = await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".task-center-view")!;
+      const week = document.querySelector<HTMLElement>(".task-center-view .bt-week")!;
+      return {
+        viewHeight: view.getBoundingClientRect().height,
+        weekHeight: week.getBoundingClientRect().height,
+      };
+    });
+
+    expect(metrics.weekHeight).toBeGreaterThanOrEqual(Math.floor(metrics.viewHeight / 2));
+  });
+
   // US-504: Month bottom-sheet tap-to-open day-tasks list — already
   // automated in mobile-force-layout.e2e.ts (task #42 fix). Marker test
   // makes the coverage map grep-able from this file.
