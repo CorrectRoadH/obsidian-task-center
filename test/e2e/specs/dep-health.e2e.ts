@@ -24,7 +24,7 @@ const VAULT = "test/e2e/vaults/simple";
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -93,7 +93,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
   it("US-701a: shows warning in status bar when Daily Notes plugin is disabled", async function () {
     await disableDailyNotes();
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Board must still open (plugin must not crash).
@@ -119,7 +119,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
       }
     });
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await expect($(".task-center-view")).toExist();
@@ -158,7 +158,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
     // valid `tasks-missing` warning would make `[data-dep-warning]` exist.
     await fakeEnableTasks();
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await expect($(".task-center-view")).toExist();

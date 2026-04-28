@@ -12,7 +12,7 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -77,7 +77,7 @@ describe("Task Center — IME composition guard (US-413)", function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] Original title ⏳ ${today}\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
@@ -104,7 +104,7 @@ describe("Task Center — IME composition guard (US-413)", function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] Date prompt task ⏳ ${today}\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;

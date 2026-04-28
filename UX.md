@@ -25,7 +25,7 @@
 
 | Surface | 形态 | 何时进入 | 主要故事 |
 | --- | --- | --- | --- |
-| **Task Center 主视图** | 一个全 tab 的 WorkspaceLeaf，标签 = `task-center` | 命令面板"Open Task Center" / `⌘/Ctrl+Shift+T` / ribbon icon / 状态栏点击 / `obsidian command id=obsidian-task-center:open` | US-101~149 / US-161~169 / US-720 |
+| **Task Center 主视图** | 一个全 tab 的 WorkspaceLeaf，标签 = `task-center` | 命令面板"Open Task Center" / `⌘/Ctrl+Shift+T` / ribbon icon / 状态栏点击 / `obsidian command id=task-center:open` | US-101~149 / US-161~169 / US-720 |
 | **状态栏小部件** | Obsidian 状态栏右下，文字徽标 | 启用插件即在 | US-106 / US-405 |
 | **Quick Add 浮窗** | Spotlight 风格紧凑输入；移动端为 bottom sheet | `⌘/Ctrl+T`（看板内）/ 看板上的 `+ Add` 按钮 / 命令面板 | US-163 / US-167 / US-169 |
 | **Obsidian CLI 动词** | 注册到 Obsidian 原生 CLI 的 `task-center:*` 命名空间 | shell：`obsidian task-center:<verb>` | US-201~215 / US-228 |

@@ -14,14 +14,14 @@ const VAULT = "test/e2e/vaults/simple";
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
 async function setMobileMode(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     if (typeof plugin.__setTestForceMobile === "function") {
       plugin.__setTestForceMobile(v);
     }
@@ -42,7 +42,7 @@ describe("Task Center — mobile explicit entry points (US-711)", function () {
   });
 
   it("US-711: mobile layout exposes Task Center, Quick Add, and first-use empty state", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await $(".task-center-view[data-mobile-layout='true']").waitForExist({

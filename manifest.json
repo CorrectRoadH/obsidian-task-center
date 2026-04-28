@@ -1,10 +1,10 @@
 {
-  "id": "obsidian-task-center",
+  "id": "task-center",
   "name": "Task Center",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "minAppVersion": "1.5.0",
   "description": "Task Center + CLI for energy-based task management. Full Task Center GUI + shell CLI on top of Obsidian Tasks syntax.",
-  "author": "maintainer",
-  "authorUrl": "",
+  "author": "CorrectRoadH",
+  "authorUrl": "https://github.com/CorrectRoadH",
   "isDesktopOnly": false
 }

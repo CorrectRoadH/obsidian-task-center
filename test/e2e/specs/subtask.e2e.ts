@@ -19,7 +19,7 @@ function offsetISO(deltaDays: number): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error - runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -81,7 +81,7 @@ async function switchToWeekTab() {
 }
 
 async function openBoardToTask(taskId: string) {
-  await browser.executeObsidianCommand("obsidian-task-center:open");
+  await browser.executeObsidianCommand("task-center:open");
   await forFlush();
   await $(".task-center-view").waitForExist({ timeout: 5000 });
   await switchToWeekTab();
@@ -199,7 +199,7 @@ describe("Task Center - subtasks via source edit (US-141/162/168)", function () 
     const dailyPath = `Daily/${pastDate}.md`;
     await writeAndWait(dailyPath, `- [ ] 用债务周期分析投资 ⏳ ${pastDate}\n    - [ ] 把cetus还有债务还清\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();

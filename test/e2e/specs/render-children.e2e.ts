@@ -12,7 +12,7 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -116,7 +116,7 @@ describe("US-125 / US-148 / US-149 — children render under parent (task #36)",
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
@@ -147,7 +147,7 @@ describe("US-125 / US-148 / US-149 — children render under parent (task #36)",
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();

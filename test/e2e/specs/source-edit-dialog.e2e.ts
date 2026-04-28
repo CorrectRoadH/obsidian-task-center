@@ -25,7 +25,7 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -71,7 +71,7 @@ async function openBoardWithTask(path = "Tasks/Inbox.md", line = "- [ ] Source e
       "",
     ].join("\n"),
   );
-  await browser.executeObsidianCommand("obsidian-task-center:open");
+  await browser.executeObsidianCommand("task-center:open");
   await forFlush();
   const card = $(`.task-center-view [data-task-id="${path}:L2"] .bt-card-meta`);
   await card.waitForExist({ timeout: 5000 });
@@ -272,7 +272,7 @@ describe("US-168 source edit panel replaces old source-preview paths", function 
       `- [ ] Today source edit target ⏳ ${today}\n    - [ ] Today child\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-tab="today"]').click();
 

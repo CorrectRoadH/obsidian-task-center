@@ -41,7 +41,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // US-167 chunk 1: layout shell. Modal carries the v2 class, no v1 h3,
   // close button hidden via CSS.
   it("US-167 chunk 1 — modal opens with v2 shell (no h3, no visible X)", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     const modal = $(".modal.task-center-quick-add-v2");
     await modal.waitForExist({ timeout: 3000 });
 
@@ -66,7 +66,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // US-167 chunk 2: inline parse hint updates when input contains a
   // recognized date phrase.
   it("US-167 chunk 2 — typing 'tomorrow' renders inline parse hint", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
 
     const input = $(".task-center-quick-add-v2 .task-center-quick-add-input");
@@ -102,7 +102,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // US-167 chunk 3: clicking the Today chip prefills the token at the
   // cursor; subsequent click is idempotent (no duplicate token).
   it("US-167 chunk 3 — clicking Today chip prefills '⏳ today' (idempotent)", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
 
     // Seed the input via DOM (avoids the same setValue input-event flake
@@ -153,7 +153,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // Path comes from `computeWriteTarget()` — Obsidian's built-in Daily
   // Notes core plugin folder when enabled and configured. No inbox fallback.
   it("US-167 chunk 4 — footer shows write target path and Esc marker", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
 
     const left = await $(".task-center-quick-add-v2 .tc-qa-footer-left").getText();
@@ -177,7 +177,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // NOT trigger submit. Without the guard the modal would close mid-
   // composition and write a half-formed task.
   it("US-413 chunk a — Quick Add Enter during IME composition must not submit", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
 
     // Seed the input with a value so submit() would otherwise proceed.
@@ -221,7 +221,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   // for PM to review. The screenshot hook is intentionally scoped to
   // this single case (per Reviewer's CI hygiene constraint).
   it("US-167 visual evidence — screenshot to /tmp/m20-chunk-4.png", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });
 
     // Seed input via DOM (same reason as chunk 2/3 — setValue's input

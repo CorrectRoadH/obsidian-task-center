@@ -56,7 +56,7 @@ function inWeekNeighbor(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -103,7 +103,7 @@ async function readFile(path: string): Promise<string> {
 async function setMobileForceLayout(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     plugin.settings.mobileForceLayout = v;
     await plugin.saveSettings();
   }, value);
@@ -112,7 +112,7 @@ async function setMobileForceLayout(value: boolean): Promise<void> {
 async function setTestForceMobile(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     if (typeof plugin.__setTestForceMobile === "function") {
       plugin.__setTestForceMobile(v);
     }
@@ -121,7 +121,7 @@ async function setTestForceMobile(value: boolean): Promise<void> {
 
 async function openMobileBoardWeek() {
   await setMobileForceLayout(true);
-  await browser.executeObsidianCommand("obsidian-task-center:open");
+  await browser.executeObsidianCommand("task-center:open");
   await forFlush();
   await browser.execute(() => {
     document
@@ -222,7 +222,7 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     await setTestForceMobile(true);
     await setMobileForceLayout(true);
 
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
 
     const opened = await browser.waitUntil(
       () =>
@@ -262,7 +262,7 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     const duration = (await browser.executeObsidian(
       ({ app }) =>
         // @ts-expect-error — runtime plugin
-        (app as any).plugins.plugins["obsidian-task-center"].settings
+        (app as any).plugins.plugins["task-center"].settings
           .mobileLongPressMs ?? 500,
     )) as unknown as number;
 

@@ -12,7 +12,7 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -57,7 +57,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
 
   // US-101: board opens
   it("opens the board view via command", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await expect($(".task-center-view")).toExist();
   });
 
@@ -66,7 +66,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] E2E smoke task ⏳ ${today}\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const card = $(`.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`);
@@ -79,7 +79,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] Week min-height task ⏳ ${today}\n`);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-tab="week"]').click();
     await $(".task-center-view .bt-week").waitForExist({ timeout: 5000 });
@@ -105,7 +105,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       `- [ ] ⏳ ${today}\n- [ ] Real task ⏳ ${today}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // The real task's card must appear.
@@ -125,7 +125,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       `- [ ] Overdue task 📅 2020-01-01\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Find the card — it may live in Unscheduled pool or any view tab.
@@ -156,7 +156,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       `- [ ] Near deadline task 📅 ${nearDate}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await browser.waitUntil(
@@ -180,7 +180,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       `- [ ] Tagged task #alpha #1象限 #alpha ⏳ ${today}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const weekTab = $('[data-tab="week"]');
@@ -224,7 +224,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
 
   // quick-add modal
   it("opens the quick-add modal via command", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:quick-add");
+    await browser.executeObsidianCommand("task-center:quick-add");
     await expect($(".task-center-quick-add")).toExist();
   });
 
@@ -243,7 +243,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
 
     // Open the board to prime the cache and ensure the status bar is mounted,
     // then __forFlush() also flushes the status bar's debounce.
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // The board confirms the cache saw both lines and applied US-107 to L1.

@@ -63,7 +63,7 @@ async function writeAndWait(path: string, body: string) {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -105,7 +105,7 @@ async function readFile(path: string): Promise<string> {
 }
 
 async function openBoardWeekView() {
-  await browser.executeObsidianCommand("obsidian-task-center:open");
+  await browser.executeObsidianCommand("task-center:open");
   await forFlush();
   // Switch to the week tab if not already there.
   await browser.execute(() => {

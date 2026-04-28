@@ -731,7 +731,7 @@ export class TaskCenterView extends ItemView {
     gear.addClass("bt-gear");
     gear.addEventListener("click", () => {
       (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
-      (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.openTabById("obsidian-task-center");
+      (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.openTabById("task-center");
     });
   }
 

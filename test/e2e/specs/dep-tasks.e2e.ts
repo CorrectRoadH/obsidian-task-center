@@ -26,7 +26,7 @@ const VAULT = "test/e2e/vaults/simple";
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -84,7 +84,7 @@ describe("US-701d/e/f dependency health check (Tasks plugin)", function () {
   it("US-701d: shows tasks-missing warning when Tasks plugin is not installed", async function () {
     await cleanupFakeTasks(); // ensure no manifest
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Board must still open (plugin must not crash).
@@ -101,7 +101,7 @@ describe("US-701d/e/f dependency health check (Tasks plugin)", function () {
   it("US-701e: shows tasks-disabled warning when Tasks plugin is installed but disabled", async function () {
     await fakeInstallTasksDisabled();
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await expect($(".task-center-view")).toExist();
@@ -117,7 +117,7 @@ describe("US-701d/e/f dependency health check (Tasks plugin)", function () {
   it("US-701f: no tasks warning when Tasks plugin is enabled", async function () {
     await fakeEnableTasks();
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await expect($(".task-center-view")).toExist();

@@ -35,7 +35,7 @@ function tomorrowISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -64,9 +64,9 @@ async function writeAndWait(path: string, body: string) {
   );
   await browser.executeObsidian(async ({ app }, p: string) => {
     // @ts-expect-error — runtime plugin test hook
-    await app.plugins.plugins["obsidian-task-center"].cache.invalidateFile(p);
+    await app.plugins.plugins["task-center"].cache.invalidateFile(p);
     // @ts-expect-error — runtime plugin test hook
-    await app.plugins.plugins["obsidian-task-center"].__forFlush();
+    await app.plugins.plugins["task-center"].__forFlush();
   }, path);
 }
 
@@ -76,14 +76,14 @@ async function resetTaskCacheForTest() {
     // events for files created by earlier specs. Clear the runtime cache so
     // this spec's "empty vault" assertion is based on the current fixture.
     // @ts-expect-error — runtime plugin test hook
-    const cache = app.plugins.plugins["obsidian-task-center"].cache as any;
+    const cache = app.plugins.plugins["task-center"].cache as any;
     cache.byPath?.clear?.();
     cache.byHash?.clear?.();
     cache.pending?.clear?.();
     cache.allLoaded = false;
     cache.allLoadingPromise = null;
     // @ts-expect-error — runtime plugin test hook
-    const plugin = app.plugins.plugins["obsidian-task-center"];
+    const plugin = app.plugins.plugins["task-center"];
     await plugin.refreshOpenViews();
     await plugin.__forFlush();
   });
@@ -97,7 +97,7 @@ describe("US-720 today execution view (task #63)", function () {
   // US-720a: today tab entry point must exist in the board.
   // FAIL until: board renders a [data-tab="today"] button.
   it("US-720a: today tab entry point exists in the board", async function () {
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await expect($(".task-center-view")).toExist();
@@ -120,7 +120,7 @@ describe("US-720 today execution view (task #63)", function () {
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Switch to today tab.
@@ -147,7 +147,7 @@ describe("US-720 today execution view (task #63)", function () {
       `- [ ] Today task ⏳ ${today}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const todayTab = $('[data-tab="today"]');
@@ -183,7 +183,7 @@ describe("US-720 today execution view (task #63)", function () {
     await writeAndWait("Tasks/Inbox.md", "- [ ] Future task ⏳ 2099-01-01\n");
     await resetTaskCacheForTest();
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const todayTab = $('[data-tab="today"]');
@@ -217,7 +217,7 @@ describe("US-720 today execution view (task #63)", function () {
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     const todayTab = $('[data-tab="today"]');
@@ -233,6 +233,6 @@ describe("US-720 today execution view (task #63)", function () {
       };
     });
     expect(metrics.offsetTop).toBeGreaterThanOrEqual(24);
-    await browser.saveScreenshot("/tmp/obsidian-task-center-us-720e-today-view.png");
+    await browser.saveScreenshot("/tmp/task-center-us-720e-today-view.png");
   });
 });

@@ -28,7 +28,7 @@ describe("Task Center settings — 0.3.0 breaking removal of dailyFolder (task #
       (app as any).setting.open();
       // Navigate to the plugin's settings tab.
       // @ts-expect-error — runtime API
-      (app as any).setting.openTabById("obsidian-task-center");
+      (app as any).setting.openTabById("task-center");
     });
 
     // Allow the settings tab to render.

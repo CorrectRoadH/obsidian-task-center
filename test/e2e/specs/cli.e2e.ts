@@ -46,7 +46,7 @@ async function writeAndWait(path: string, body: string) {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -87,7 +87,7 @@ async function callApi<T>(
 ): Promise<T> {
   return (await browser.executeObsidian(async ({ app }, fnSrc: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+    const plugin = (app as any).plugins?.getPlugin?.("task-center");
     if (!plugin?.api) throw new Error("plugin api not found");
     // eslint-disable-next-line no-new-func
     const callable = new Function("api", `return (${fnSrc})(api)`);
@@ -209,7 +209,7 @@ describe("Task Center — CLI API (US-201/203/204/208/214)", function () {
     const byHashActual = (await browser.executeObsidian(
       async ({ app }, h: string) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+        const plugin = (app as any).plugins?.getPlugin?.("task-center");
         return await plugin?.api?.show(`hash:${h}`);
       },
       hash,
@@ -238,7 +238,7 @@ describe("Task Center — CLI API (US-201/203/204/208/214)", function () {
       return (await browser.executeObsidian(
         async ({ app }, h: string) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+          const plugin = (app as any).plugins?.getPlugin?.("task-center");
           try {
             await plugin?.api?.show(`hash:${h}`);
             return { threw: false };

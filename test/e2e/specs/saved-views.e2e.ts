@@ -28,14 +28,14 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
 async function resetSavedViewTestState() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     plugin.settings.savedViews = [];
     await plugin.saveSettings();
     await Promise.all(app.workspace.getLeavesOfType("task-center-board").map((leaf) => leaf.detach()));
@@ -87,7 +87,7 @@ describe("US-724 saved views / custom filters", function () {
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await $('[data-saved-views]').waitForExist({ timeout: 5000 });
@@ -148,7 +148,7 @@ describe("US-724 saved views / custom filters", function () {
 
     const saved = await browser.executeObsidian(async ({ app }) => {
       // @ts-expect-error — runtime plugin
-      return (app as any).plugins.plugins["obsidian-task-center"].settings.savedViews;
+      return (app as any).plugins.plugins["task-center"].settings.savedViews;
     });
     expect(JSON.stringify(saved)).toContain("Alpha Today");
   });
@@ -163,7 +163,7 @@ describe("US-724 saved views / custom filters", function () {
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-saved-views]').waitForExist({ timeout: 5000 });
 
@@ -183,7 +183,7 @@ describe("US-724 saved views / custom filters", function () {
     await expect($('[data-saved-view-name-input]')).not.toExist();
     const savedJson = await browser.executeObsidian(async ({ app }) => {
       // @ts-expect-error — runtime plugin
-      return JSON.stringify((app as any).plugins.plugins["obsidian-task-center"].settings.savedViews);
+      return JSON.stringify((app as any).plugins.plugins["task-center"].settings.savedViews);
     });
     expect(savedJson).toContain('"name":"Focus"');
     expect(savedJson).toContain('"tag":"#gamma"');
@@ -199,7 +199,7 @@ describe("US-724 saved views / custom filters", function () {
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-saved-views]').waitForExist({ timeout: 5000 });
     await $('[data-saved-view-filter="tag"]').click();

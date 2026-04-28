@@ -12,7 +12,7 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -50,7 +50,7 @@ async function writeAndWait(path: string, body: string) {
 async function setMobileForceLayout(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     plugin.settings.mobileForceLayout = v;
     await plugin.saveSettings();
   }, value);
@@ -77,7 +77,7 @@ describe("Task Center — mobileForceLayout (task #42)", function () {
     // Force-mobile is the user's intent regardless of viewport width.
     await setMobileForceLayout(true);
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Switch to the Month tab.

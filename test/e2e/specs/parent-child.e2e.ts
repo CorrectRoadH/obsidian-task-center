@@ -82,7 +82,7 @@ async function writeAndWait(path: string, body: string) {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
@@ -104,7 +104,7 @@ async function callApi<T>(
 ): Promise<T> {
   return (await browser.executeObsidian(async ({ app }, fnSrc: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+    const plugin = (app as any).plugins?.getPlugin?.("task-center");
     if (!plugin?.api) throw new Error("plugin api not found");
     // Reconstruct the callable from serialised source — WDIO passes args by value.
     // eslint-disable-next-line no-new-func
@@ -131,7 +131,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Mark parent done via the API (UI-agnostic).
@@ -167,7 +167,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await callApi((api) => api.drop("Tasks/Inbox.md:L1"));
@@ -195,7 +195,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       `- [ ] Original title 🛫 2026-04-20 🔁 every week ⏫ [id:: abc-123]\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Rename via API — the UI rename path should also be tested separately,
@@ -203,7 +203,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await browser.executeObsidian(
       async ({ app }, p: string) => {
         // @ts-expect-error — runtime plugin access
-        const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+        const plugin = (app as any).plugins?.getPlugin?.("task-center");
         await plugin?.api?.rename("Tasks/Inbox.md:L1", "Renamed title");
       },
       path,
@@ -242,7 +242,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
@@ -286,7 +286,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
@@ -314,12 +314,12 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       `- [ ] Task with extras 🛫 2026-04-20 📅 2026-05-01 ⏫ [estimate:: 30m]\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await browser.executeObsidian(async ({ app }) => {
       // @ts-expect-error — runtime plugin access
-      const plugin = (app as any).plugins?.getPlugin?.("obsidian-task-center");
+      const plugin = (app as any).plugins?.getPlugin?.("task-center");
       await plugin?.api?.schedule("Tasks/Inbox.md:L1", "2026-04-28");
     });
 
@@ -350,7 +350,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
@@ -390,7 +390,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       ].join("\n") + "\n",
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     // Read the Unscheduled tab badge count.

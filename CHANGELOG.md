@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.7.0 — 2026-04-28
+
+- Prepare community plugin submission: rename the Obsidian plugin ID from `obsidian-task-center` to `task-center`, add the MIT license file, and sync install docs/tests with the new ID.
+
 ## 0.6.2 — 2026-04-28
 
 - Fix saved filter views so editing filters while a saved view is selected keeps that view selected and updates it in place via an “Update” action.
@@ -60,11 +64,10 @@ Initial release. Energy-aware Task Center + CLI on top of Obsidian Tasks syntax.
 - Zero runtime dependencies beyond Obsidian itself.
 - `README.md`, `SKILL.md` (AI-agent contract), `versions.json`.
 - `npm run dev` (esbuild watch), `npm run build` (production), `npm run typecheck`.
-- Recommended install during development: `ln -s $(pwd) <vault>/.obsidian/plugins/obsidian-task-center`, then `obsidian plugin:reload id=obsidian-task-center`.
+- Recommended install during development: `ln -s $(pwd) <vault>/.obsidian/plugins/task-center`, then `obsidian plugin:reload id=task-center`.
 
 ### Known limitations
 
-- Plugin `id` contains the substring `obsidian`, which blocks submission to the official Community Plugins catalog. Rename required for that flow.
 - Sub-task drag to another day changes `⏳` in place rather than creating a `[[parent]] > child` wikilink entry on the target day (spec left this as a design choice).
 - Settings changes don't hot-reload into open Task Center views; close and reopen Task Center after changing week-start, etc.
 - `window.prompt` is disabled in Electron; all date entry goes through the `DatePromptModal`.

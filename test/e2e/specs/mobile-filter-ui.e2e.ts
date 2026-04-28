@@ -18,14 +18,14 @@ function todayISO(): string {
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    await (app as any).plugins.plugins["obsidian-task-center"].__forFlush();
+    await (app as any).plugins.plugins["task-center"].__forFlush();
   });
 }
 
 async function resetSavedViewTestState() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     plugin.settings.savedViews = [];
     await plugin.saveSettings();
     await Promise.all(app.workspace.getLeavesOfType("task-center-board").map((leaf) => leaf.detach()));
@@ -35,7 +35,7 @@ async function resetSavedViewTestState() {
 async function setMobileMode(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
-    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    const plugin = (app as any).plugins.plugins["task-center"];
     if (typeof plugin.__setTestForceMobile === "function") {
       plugin.__setTestForceMobile(v);
     }
@@ -94,7 +94,7 @@ describe("Task Center — mobile filter UI (task #88)", function () {
       `- [ ] Mobile width fixture #alpha #1象限 ⏳ ${today}\n`,
     );
 
-    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await browser.executeObsidianCommand("task-center:open");
     await forFlush();
 
     await $(".task-center-view[data-mobile-layout='true']").waitForExist({
