@@ -56,6 +56,7 @@ type FilterPopoverKey = "view" | "tag" | "status" | "time-more" | `time:${SavedV
 
 const PRIMARY_TIME_FIELD: SavedViewTimeField = "scheduled";
 const SECONDARY_TIME_FIELDS: SavedViewTimeField[] = ["deadline", "completed", "created"];
+type FilterControlsRerender = () => void;
 
 interface ViewState {
   tab: TabKey;
@@ -734,19 +735,19 @@ export class TaskCenterView extends ItemView {
     });
   }
 
-  private renderSavedViewsToolbar(parent: HTMLElement) {
+  private renderSavedViewsToolbar(parent: HTMLElement, rerenderControls?: FilterControlsRerender) {
     const wrap = parent.createDiv({ cls: "bt-saved-views" });
     wrap.dataset.savedViews = "true";
 
-    this.renderSavedViewPicker(wrap);
+    this.renderSavedViewPicker(wrap, rerenderControls);
 
-    this.renderTagFilter(wrap);
+    this.renderTagFilter(wrap, rerenderControls);
 
-    this.renderTimeFilter(wrap, PRIMARY_TIME_FIELD);
+    this.renderTimeFilter(wrap, PRIMARY_TIME_FIELD, rerenderControls);
 
-    this.renderMoreTimeFilters(wrap);
+    this.renderMoreTimeFilters(wrap, rerenderControls);
 
-    this.renderStatusFilter(wrap);
+    this.renderStatusFilter(wrap, rerenderControls);
 
     const selectedView = this.selectedSavedView();
     const save = wrap.createEl("button", {
@@ -762,17 +763,17 @@ export class TaskCenterView extends ItemView {
       const latestSelectedView = this.selectedSavedView();
       if (latestSelectedView) {
         await this.updateCurrentSavedView(latestSelectedView);
-        this.render();
+        this.refreshFilterControls(rerenderControls);
         return;
       }
       const name = await this.askSavedViewName();
       if (!name || !name.trim()) return;
       await this.saveCurrentView(name.trim());
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
   }
 
-  private renderSavedViewPicker(parent: HTMLElement): void {
+  private renderSavedViewPicker(parent: HTMLElement, rerenderControls?: FilterControlsRerender): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
     const selected = this.selectedSavedView();
     const trigger = container.createEl("button", {
@@ -784,7 +785,7 @@ export class TaskCenterView extends ItemView {
     trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "view" ? "true" : "false");
     trigger.addEventListener("click", () => {
       this.filterPopoverOpen = this.filterPopoverOpen === "view" ? null : "view";
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
     if (this.filterPopoverOpen !== "view") return;
 
@@ -795,7 +796,7 @@ export class TaskCenterView extends ItemView {
     current.setAttribute("aria-selected", this.state.savedViewId ? "false" : "true");
     current.addEventListener("click", () => {
       this.clearSavedViewFilters();
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
     if (this.plugin.settings.savedViews.length === 0) {
       popover.createDiv({ text: tr("savedViews.emptyHint"), cls: "bt-menu-empty" });
@@ -807,12 +808,12 @@ export class TaskCenterView extends ItemView {
       option.setAttribute("aria-selected", view.id === this.state.savedViewId ? "true" : "false");
       option.addEventListener("click", () => {
         this.applySavedView(view);
-        this.render();
+        this.refreshFilterControls(rerenderControls);
       });
     }
   }
 
-  private renderTimeFilter(parent: HTMLElement, field: SavedViewTimeField): void {
+  private renderTimeFilter(parent: HTMLElement, field: SavedViewTimeField, rerenderControls?: FilterControlsRerender): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
     const options = this.timeFilterOptions(field);
     const active = this.timeFilterValue(field);
@@ -830,16 +831,21 @@ export class TaskCenterView extends ItemView {
         this.dateCalendarAnchorISO = this.dateCalendarAnchorForField(field);
         this.pendingDateRangeStart = null;
       }
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
     if (this.filterPopoverOpen !== popoverKey) return;
 
     const popover = container.createDiv({ cls: "bt-filter-popover bt-date-popover" });
     popover.setAttribute("role", "listbox");
-    this.renderTimeRangePopover(popover, field, options);
+    this.renderTimeRangePopover(popover, field, options, rerenderControls);
   }
 
-  private renderTimeRangePopover(parent: HTMLElement, field: SavedViewTimeField, options = this.timeFilterOptions(field)): void {
+  private renderTimeRangePopover(
+    parent: HTMLElement,
+    field: SavedViewTimeField,
+    options = this.timeFilterOptions(field),
+    rerenderControls?: FilterControlsRerender,
+  ): void {
     const presetPanel = parent.createDiv({ cls: "bt-date-presets" });
     presetPanel.createDiv({ text: tr("savedViews.timePreset", { field: this.timeFieldLabel(field) }), cls: "bt-date-section-title" });
     for (const [value, text] of options) {
@@ -847,13 +853,13 @@ export class TaskCenterView extends ItemView {
       option.createSpan({ text, cls: "bt-date-preset-label" });
       option.dataset.timeOption = `${field}:${value || "all"}`;
       option.setAttribute("aria-selected", (this.timeFilterValue(field) || "") === value ? "true" : "false");
-      option.addEventListener("click", () => this.setTimeFilter(field, value));
+      option.addEventListener("click", () => this.setTimeFilter(field, value, rerenderControls));
     }
 
-    this.renderDateCalendar(parent, field);
+    this.renderDateCalendar(parent, field, rerenderControls);
   }
 
-  private renderMoreTimeFilters(parent: HTMLElement): void {
+  private renderMoreTimeFilters(parent: HTMLElement, rerenderControls?: FilterControlsRerender): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
     const count = SECONDARY_TIME_FIELDS.filter((field) => this.timeFilterValue(field)).length;
     const text = count > 0 ? tr("savedViews.timeMoreActive", { count }) : tr("savedViews.timeMore");
@@ -866,7 +872,7 @@ export class TaskCenterView extends ItemView {
     trigger.addEventListener("click", () => {
       this.filterPopoverOpen = this.filterPopoverOpen === "time-more" ? null : "time-more";
       this.pendingDateRangeStart = null;
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
 
     if (!(this.filterPopoverOpen === "time-more" || openForSecondary)) return;
@@ -880,9 +886,9 @@ export class TaskCenterView extends ItemView {
       back.addEventListener("click", () => {
         this.filterPopoverOpen = "time-more";
         this.pendingDateRangeStart = null;
-        this.render();
+        this.refreshFilterControls(rerenderControls);
       });
-      this.renderTimeRangePopover(popover, activeField);
+      this.renderTimeRangePopover(popover, activeField, this.timeFilterOptions(activeField), rerenderControls);
       return;
     }
 
@@ -899,12 +905,12 @@ export class TaskCenterView extends ItemView {
         this.filterPopoverOpen = this.timePopoverKey(field);
         this.dateCalendarAnchorISO = this.dateCalendarAnchorForField(field);
         this.pendingDateRangeStart = null;
-        this.render();
+        this.refreshFilterControls(rerenderControls);
       });
       const clear = row.createEl("button", { text: "×", cls: "bt-time-more-clear" });
       clear.ariaLabel = tr("savedViews.clearTimeRange", { field: this.timeFieldLabel(field) });
       clear.disabled = !value;
-      clear.addEventListener("click", () => this.setTimeFilter(field, ""));
+      clear.addEventListener("click", () => this.setTimeFilter(field, "", rerenderControls));
     }
   }
 
@@ -966,23 +972,23 @@ export class TaskCenterView extends ItemView {
     return { exact: "", from: "", to: "" };
   }
 
-  private renderDateCalendar(parent: HTMLElement, field: SavedViewTimeField): void {
+  private renderDateCalendar(parent: HTMLElement, field: SavedViewTimeField, rerenderControls?: FilterControlsRerender): void {
     const calendar = parent.createDiv({ cls: "bt-date-calendar" });
     const head = calendar.createDiv({ cls: "bt-date-calendar-head" });
     head.createSpan({ text: tr("savedViews.customTimeRange", { field: this.timeFieldLabel(field) }), cls: "bt-date-section-title" });
     const clear = head.createEl("button", { text: tr("savedViews.clearTimeRange", { field: this.timeFieldLabel(field) }), cls: "bt-date-clear" });
     clear.dataset.timeClear = field;
     clear.disabled = !this.timeFilterValue(field) && !this.pendingDateRangeStart;
-    clear.addEventListener("click", () => this.setTimeFilter(field, ""));
+    clear.addEventListener("click", () => this.setTimeFilter(field, "", rerenderControls));
 
     const nav = calendar.createDiv({ cls: "bt-date-calendar-nav" });
     const prev = nav.createEl("button", { text: "‹", cls: "bt-date-month-nav" });
     prev.ariaLabel = tr("savedViews.datePreviousMonth");
-    prev.addEventListener("click", () => this.moveDateCalendarMonth(-1));
+    prev.addEventListener("click", () => this.moveDateCalendarMonth(-1, rerenderControls));
     nav.createSpan({ text: this.dateCalendarMonthLabel(), cls: "bt-date-month-label" });
     const next = nav.createEl("button", { text: "›", cls: "bt-date-month-nav" });
     next.ariaLabel = tr("savedViews.dateNextMonth");
-    next.addEventListener("click", () => this.moveDateCalendarMonth(1));
+    next.addEventListener("click", () => this.moveDateCalendarMonth(1, rerenderControls));
 
     const weekdays = calendar.createDiv({ cls: "bt-date-calendar-weekdays" });
     const weekStart = this.plugin.settings.weekStartsOn;
@@ -1010,26 +1016,26 @@ export class TaskCenterView extends ItemView {
       if (rangeFrom && rangeTo && iso >= rangeFrom && iso <= rangeTo) cell.addClass("in-range");
       if (iso === active.from) cell.addClass("range-start");
       if (iso === active.to) cell.addClass("range-end");
-      cell.addEventListener("click", () => this.handleDateCalendarDayClick(field, iso));
+      cell.addEventListener("click", () => this.handleDateCalendarDayClick(field, iso, rerenderControls));
     }
   }
 
-  private moveDateCalendarMonth(delta: number): void {
+  private moveDateCalendarMonth(delta: number, rerenderControls?: FilterControlsRerender): void {
     this.dateCalendarAnchorISO = startOfMonth(shiftMonth(this.dateCalendarAnchorISO, delta));
-    this.render();
+    this.refreshFilterControls(rerenderControls);
   }
 
-  private handleDateCalendarDayClick(field: SavedViewTimeField, iso: string): void {
+  private handleDateCalendarDayClick(field: SavedViewTimeField, iso: string, rerenderControls?: FilterControlsRerender): void {
     if (!this.pendingDateRangeStart) {
       this.pendingDateRangeStart = iso;
       this.filterPopoverOpen = this.timePopoverKey(field);
-      this.render();
+      this.refreshFilterControls(rerenderControls);
       return;
     }
     const from = this.pendingDateRangeStart <= iso ? this.pendingDateRangeStart : iso;
     const to = this.pendingDateRangeStart <= iso ? iso : this.pendingDateRangeStart;
     this.pendingDateRangeStart = null;
-    this.setTimeFilter(field, `${from}..${to}`);
+    this.setTimeFilter(field, `${from}..${to}`, rerenderControls);
   }
 
   private dateCalendarAnchorForField(field: SavedViewTimeField): string {
@@ -1042,7 +1048,7 @@ export class TaskCenterView extends ItemView {
     return new Intl.DateTimeFormat(getLocale(), { month: "long", year: "numeric" }).format(d);
   }
 
-  private renderStatusFilter(parent: HTMLElement): void {
+  private renderStatusFilter(parent: HTMLElement, rerenderControls?: FilterControlsRerender): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
     const label = this.state.savedViewStatus === "all"
       ? tr("savedViews.statusAll")
@@ -1057,7 +1063,7 @@ export class TaskCenterView extends ItemView {
     trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "status" ? "true" : "false");
     trigger.addEventListener("click", () => {
       this.filterPopoverOpen = this.filterPopoverOpen === "status" ? null : "status";
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
     if (this.filterPopoverOpen !== "status") return;
 
@@ -1068,7 +1074,7 @@ export class TaskCenterView extends ItemView {
       item.dataset.statusOption = option.value;
       item.setAttribute("aria-selected", this.state.savedViewStatus === option.value ? "true" : "false");
       item.createSpan({ text: option.label, cls: "bt-status-option-label" });
-      item.addEventListener("click", () => this.setStatusFilter(option.value));
+      item.addEventListener("click", () => this.setStatusFilter(option.value, rerenderControls));
     }
   }
 
@@ -1081,7 +1087,7 @@ export class TaskCenterView extends ItemView {
     ];
   }
 
-  private renderTagFilter(parent: HTMLElement): void {
+  private renderTagFilter(parent: HTMLElement, rerenderControls?: FilterControlsRerender): void {
     const selected = parseFilterTags(this.state.savedViewTag);
     const selectedSet = new Set(selected);
     const container = parent.createDiv({ cls: "bt-tag-filter" });
@@ -1094,7 +1100,7 @@ export class TaskCenterView extends ItemView {
     trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "tag" ? "true" : "false");
     trigger.addEventListener("click", () => {
       this.filterPopoverOpen = this.filterPopoverOpen === "tag" ? null : "tag";
-      this.render();
+      this.refreshFilterControls(rerenderControls);
     });
 
     if (this.filterPopoverOpen !== "tag") return;
@@ -1108,7 +1114,7 @@ export class TaskCenterView extends ItemView {
     });
     const clear = popover.createEl("button", { text: tr("savedViews.clearTags"), cls: "bt-tag-clear" });
     clear.dataset.tagClear = "true";
-    clear.addEventListener("click", () => this.setSelectedTags([]));
+    clear.addEventListener("click", () => this.setSelectedTags([], rerenderControls));
 
     const list = popover.createDiv({ cls: "bt-tag-options" });
     const rows: HTMLElement[] = [];
@@ -1126,7 +1132,7 @@ export class TaskCenterView extends ItemView {
         const next = !isSelected
           ? [...selected, option.tag]
           : selected.filter((tag) => tag !== option.tag.toLowerCase());
-        this.setSelectedTags(next);
+        this.setSelectedTags(next, rerenderControls);
       });
       rows.push(row);
     }
@@ -1171,7 +1177,7 @@ export class TaskCenterView extends ItemView {
     });
   }
 
-  private setTimeFilter(field: SavedViewTimeField, value: string): void {
+  private setTimeFilter(field: SavedViewTimeField, value: string, rerenderControls?: FilterControlsRerender): void {
     const next = { ...this.state.savedViewTime };
     const trimmed = value === "all" ? "" : value.trim();
     if (trimmed) next[field] = trimmed;
@@ -1179,21 +1185,28 @@ export class TaskCenterView extends ItemView {
     this.state.savedViewTime = next;
     this.filterPopoverOpen = null;
     this.pendingDateRangeStart = null;
-    this.render();
+    this.refreshFilterControls(rerenderControls);
   }
 
-  private setStatusFilter(value: SavedViewStatus): void {
+  private setStatusFilter(value: SavedViewStatus, rerenderControls?: FilterControlsRerender): void {
     this.state.savedViewStatus = value;
     this.filterPopoverOpen = null;
-    this.render();
+    this.refreshFilterControls(rerenderControls);
   }
 
   private openMobileFilterSheet(): void {
+    let body: HTMLElement;
+    const rerenderControls = () => {
+      this.render();
+      if (!body) return;
+      body.empty();
+      this.renderSavedViewsToolbar(body, rerenderControls);
+    };
     const sheet = new BottomSheet(this.app, {
       title: tr("savedViews.mobileTitle"),
       populate: (el) => {
-        const body = el.createDiv({ cls: "bt-mobile-filter-sheet" });
-        this.renderSavedViewsToolbar(body);
+        body = el.createDiv({ cls: "bt-mobile-filter-sheet" });
+        this.renderSavedViewsToolbar(body, rerenderControls);
       },
     });
     sheet.open();
@@ -2699,7 +2712,7 @@ export class TaskCenterView extends ItemView {
     return this.collectTagOptions().map((option) => option.tag);
   }
 
-  private setSelectedTags(tags: string[]): void {
+  private setSelectedTags(tags: string[], rerenderControls?: FilterControlsRerender): void {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const raw of tags) {
@@ -2710,7 +2723,7 @@ export class TaskCenterView extends ItemView {
     }
     this.state.savedViewTag = out.join(",");
     this.filterPopoverOpen = "tag";
-    this.render();
+    this.refreshFilterControls(rerenderControls);
   }
 
   private clearSavedViewFilters(): void {
@@ -2776,6 +2789,11 @@ export class TaskCenterView extends ItemView {
 
   private selectedSavedView(): SavedTaskView | null {
     return this.plugin.settings.savedViews.find((view) => view.id === this.state.savedViewId) ?? null;
+  }
+
+  private refreshFilterControls(rerenderControls?: FilterControlsRerender): void {
+    if (rerenderControls) rerenderControls();
+    else this.render();
   }
 
   // ---------- Footer / Add ----------

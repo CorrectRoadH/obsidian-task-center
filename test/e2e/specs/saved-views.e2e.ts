@@ -32,6 +32,16 @@ async function forFlush() {
   });
 }
 
+async function resetSavedViewTestState() {
+  await browser.executeObsidian(async ({ app }) => {
+    // @ts-expect-error — runtime plugin
+    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    plugin.settings.savedViews = [];
+    await plugin.saveSettings();
+    await Promise.all(app.workspace.getLeavesOfType("task-center-board").map((leaf) => leaf.detach()));
+  });
+}
+
 async function writeAndWait(path: string, body: string) {
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
@@ -60,6 +70,7 @@ async function writeAndWait(path: string, body: string) {
 describe("US-724 saved views / custom filters", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
+    await resetSavedViewTestState();
   });
 
   it("US-109d/e/f: filters visible cards by tags/date/status and saves/restores the view", async function () {

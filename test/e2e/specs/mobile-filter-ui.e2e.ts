@@ -22,6 +22,16 @@ async function forFlush() {
   });
 }
 
+async function resetSavedViewTestState() {
+  await browser.executeObsidian(async ({ app }) => {
+    // @ts-expect-error — runtime plugin
+    const plugin = (app as any).plugins.plugins["obsidian-task-center"];
+    plugin.settings.savedViews = [];
+    await plugin.saveSettings();
+    await Promise.all(app.workspace.getLeavesOfType("task-center-board").map((leaf) => leaf.detach()));
+  });
+}
+
 async function setMobileMode(value: boolean): Promise<void> {
   await browser.executeObsidian(async ({ app }, v: boolean) => {
     // @ts-expect-error — runtime plugin
@@ -69,6 +79,7 @@ async function writeAndWait(path: string, body: string) {
 describe("Task Center — mobile filter UI (task #88)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
+    await resetSavedViewTestState();
     await setMobileMode(true);
   });
 
