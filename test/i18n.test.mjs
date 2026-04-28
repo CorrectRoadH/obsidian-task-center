@@ -160,6 +160,8 @@ test("task #108 — toolbar, Today, and saved-view control labels are localized"
   const keys = [
     { key: "toolbar.add", vars: undefined, mustDifferFromEnInZh: true },
     { key: "toolbar.filter", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "filters.empty", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "filters.clear", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupOverdue", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupToday", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupRec", vars: undefined, mustDifferFromEnInZh: true },
@@ -170,9 +172,12 @@ test("task #108 — toolbar, Today, and saved-view control labels are localized"
     { key: "savedViews.current", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.tag", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.date", vars: undefined, mustDifferFromEnInZh: false },
+    { key: "savedViews.dateAll", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.statusAll", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.statusAny", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.groupingAll", vars: undefined, mustDifferFromEnInZh: true },
     { key: "savedViews.save", vars: undefined, mustDifferFromEnInZh: true },
+    { key: "savedViews.saveDisabled", vars: undefined, mustDifferFromEnInZh: true },
   ];
 
   mockStorage.clear();

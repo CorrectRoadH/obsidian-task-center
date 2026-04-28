@@ -35,10 +35,12 @@ import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
 import { openTaskSourceEditShell } from "./view/source-dialog";
 import { taskDisplayTags } from "./tags";
+import { formatDateFilterLabel } from "./date-filter";
 import {
   applySavedViewFilters,
   clearSavedViewFilters as emptySavedViewFilters,
   createSavedView,
+  hasSavedViewFilters,
   suggestSavedViewName as suggestSavedViewNameForFilters,
   upsertSavedView,
 } from "./saved-views";
@@ -746,7 +748,11 @@ export class TaskCenterView extends ItemView {
 
     const save = wrap.createEl("button", { text: tr("savedViews.save"), cls: "bt-saved-view-save" });
     save.dataset.action = "save-current-view";
+    const canSave = this.hasSaveableFilters();
+    save.disabled = !canSave;
+    if (!canSave) save.title = tr("savedViews.saveDisabled");
     save.addEventListener("click", async () => {
+      if (!this.hasSaveableFilters()) return;
       const name = await this.askSavedViewName();
       if (!name || !name.trim()) return;
       await this.saveCurrentView(name.trim());
@@ -799,6 +805,7 @@ export class TaskCenterView extends ItemView {
     const dateOptions = this.dateFilterOptions();
     const label = this.dateFilterLabel(this.state.savedViewDate);
     const trigger = container.createEl("button", { text: label || tr("savedViews.date"), cls: "bt-saved-view-filter bt-date-trigger" });
+    trigger.title = label;
     trigger.dataset.savedViewFilter = "date";
     trigger.setAttribute("aria-haspopup", "listbox");
     trigger.setAttribute("aria-expanded", this.filterPopoverOpen === "date" ? "true" : "false");
@@ -842,15 +849,12 @@ export class TaskCenterView extends ItemView {
   }
 
   private dateFilterLabel(value: string): string {
-    const token = value.trim();
-    if (!token) return tr("savedViews.date");
-    const preset = this.dateFilterOptions().find(([option]) => option === token)?.[1];
-    if (preset) return preset;
-    if (token.includes("..")) {
-      const [from, to] = token.split("..", 2);
-      return `${from || tr("savedViews.rangeOpenStart")} - ${to || tr("savedViews.rangeOpenEnd")}`;
-    }
-    return token;
+    return formatDateFilterLabel(value, {
+      emptyLabel: tr("savedViews.date"),
+      openStartLabel: tr("savedViews.rangeOpenStart"),
+      openEndLabel: tr("savedViews.rangeOpenEnd"),
+      presets: new Map(this.dateFilterOptions()),
+    });
   }
 
   private parseDateFilterValue(value: string): { exact: string; from: string; to: string } {
@@ -868,6 +872,10 @@ export class TaskCenterView extends ItemView {
     const calendar = parent.createDiv({ cls: "bt-date-calendar" });
     const head = calendar.createDiv({ cls: "bt-date-calendar-head" });
     head.createSpan({ text: tr("savedViews.customRange"), cls: "bt-date-section-title" });
+    const clear = head.createEl("button", { text: tr("savedViews.clearDate"), cls: "bt-date-clear" });
+    clear.dataset.dateClear = "true";
+    clear.disabled = !this.state.savedViewDate && !this.pendingDateRangeStart;
+    clear.addEventListener("click", () => this.setDateFilter(""));
 
     const nav = calendar.createDiv({ cls: "bt-date-calendar-nav" });
     const prev = nav.createEl("button", { text: "‹", cls: "bt-date-month-nav" });
@@ -939,8 +947,10 @@ export class TaskCenterView extends ItemView {
 
   private renderStatusFilter(parent: HTMLElement): void {
     const container = parent.createDiv({ cls: "bt-filter-popover-wrap" });
-    const label = this.statusFilterOptions().find((option) => option.value === this.state.savedViewStatus)?.label
-      ?? tr("savedViews.statusAll");
+    const label = this.state.savedViewStatus === "all"
+      ? tr("savedViews.statusAll")
+      : this.statusFilterOptions().find((option) => option.value === this.state.savedViewStatus)?.label
+        ?? tr("savedViews.statusAll");
     const trigger = container.createEl("button", {
       text: label,
       cls: "bt-saved-view-filter bt-status-trigger",
@@ -967,7 +977,7 @@ export class TaskCenterView extends ItemView {
 
   private statusFilterOptions(): Array<{ value: SavedViewStatus; label: string }> {
     return [
-      { value: "all", label: tr("savedViews.statusAll") },
+      { value: "all", label: tr("savedViews.statusAny") },
       { value: "todo", label: tr("savedViews.statusTodo") },
       { value: "done", label: tr("savedViews.statusDone") },
       { value: "dropped", label: tr("savedViews.statusDropped") },
@@ -1040,6 +1050,30 @@ export class TaskCenterView extends ItemView {
     return `${first} +${selected.length - 1}`;
   }
 
+  private hasSaveableFilters(): boolean {
+    return hasSavedViewFilters({
+      search: this.state.filter,
+      tag: this.state.savedViewTag,
+      date: this.state.savedViewDate,
+      status: this.state.savedViewStatus,
+    });
+  }
+
+  private hasActiveFilters(): boolean {
+    return this.hasSaveableFilters();
+  }
+
+  private renderFilterEmptyState(parent: HTMLElement): void {
+    const empty = parent.createDiv({ cls: "bt-filter-empty" });
+    empty.createSpan({ text: tr("filters.empty"), cls: "bt-filter-empty-text" });
+    const clear = empty.createEl("button", { text: tr("filters.clear"), cls: "bt-filter-empty-clear" });
+    clear.dataset.action = "clear-filters";
+    clear.addEventListener("click", () => {
+      this.clearSavedViewFilters();
+      this.render();
+    });
+  }
+
   private setDateFilter(value: string): void {
     this.state.savedViewDate = value === "all" ? "" : value;
     this.state.savedViewId = null;
@@ -1092,8 +1126,24 @@ export class TaskCenterView extends ItemView {
     const days: string[] = [];
     for (let i = 0; i < 7; i++) days.push(addDays(weekStart, i));
 
-    const wrapper = parent.createDiv({ cls: "bt-week" });
     const filter = this.getTextFilter();
+    if (this.hasActiveFilters()) {
+      const unfilteredCount = days.reduce(
+        (sum, day) => sum + this.hideChildrenOfVisibleParents(
+          this.tasks.filter((t) => taskDateColumn(t) === day),
+        ).length,
+        0,
+      );
+      const filteredCount = days.reduce(
+        (sum, day) => sum + this.hideChildrenOfVisibleParents(
+          this.tasks.filter((t) => taskDateColumn(t) === day).filter(filter),
+        ).length,
+        0,
+      );
+      if (unfilteredCount > 0 && filteredCount === 0) this.renderFilterEmptyState(parent);
+    }
+
+    const wrapper = parent.createDiv({ cls: "bt-week" });
 
     for (const day of days) {
       // Mobile collapsible per-day rows (UX-mobile §3.1): `today` always
@@ -1255,9 +1305,24 @@ export class TaskCenterView extends ItemView {
       header.createDiv({ text: weekdayLabel(d.getDay()), cls: "bt-month-dow" });
     }
 
-    const grid = wrapper.createDiv({ cls: "bt-month-grid" });
     const filter = this.getTextFilter();
+    if (this.hasActiveFilters()) {
+      const unfilteredCount = gridDays.reduce(
+        (sum, day) => sum + this.hideChildrenOfVisibleParents(
+          this.tasks.filter((t) => taskDateColumn(t) === day),
+        ).length,
+        0,
+      );
+      const filteredCount = gridDays.reduce(
+        (sum, day) => sum + this.hideChildrenOfVisibleParents(
+          this.tasks.filter((t) => taskDateColumn(t) === day).filter(filter),
+        ).length,
+        0,
+      );
+      if (unfilteredCount > 0 && filteredCount === 0) this.renderFilterEmptyState(wrapper);
+    }
 
+    const grid = wrapper.createDiv({ cls: "bt-month-grid" });
     for (const day of gridDays) {
       const dObj = fromISO(day);
       const isCurMonth = day >= first && day <= last;
@@ -1417,12 +1482,16 @@ export class TaskCenterView extends ItemView {
 
   private renderCompleted(parent: HTMLElement) {
     const filter = this.getTextFilter();
-    const completed = this.tasks
-      .filter((t) => t.status === "done" && t.completed)
+    const completedAll = this.tasks.filter((t) => t.status === "done" && t.completed);
+    const completed = completedAll
       .filter(filter)
       .sort((a, b) => (b.completed! < a.completed! ? -1 : 1));
 
     const wrap = parent.createDiv({ cls: "bt-completed" });
+    if (completed.length === 0 && completedAll.length > 0 && this.hasActiveFilters()) {
+      this.renderFilterEmptyState(wrap);
+      return;
+    }
 
     // US-303: 7-day estimate-accuracy headline + top-tag minutes preset.
     // Mirrors the CLI `stats days=7` summary so the GUI user gets the same
@@ -1549,9 +1618,8 @@ export class TaskCenterView extends ItemView {
   // see USER_STORIES.md
   private renderUnscheduledPool(parent: HTMLElement) {
     const filter = this.getTextFilter();
-    const unscheduledAll = this.tasks
-      .filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal)
-      .filter(filter);
+    const unscheduledBase = this.tasks.filter((t) => !t.scheduled && t.status === "todo" && !t.inheritsTerminal);
+    const unscheduledAll = unscheduledBase.filter(filter);
     // Sort for triage: deadline ascending first (nearest deadline is urgent),
     // tasks without deadline fall to the end; tie-break by created date desc
     // (newer tasks first). Children-of-visible-parents dedup happens after.
@@ -1819,7 +1887,11 @@ export class TaskCenterView extends ItemView {
 
     const grid = wrap.createDiv({ cls: "bt-unscheduled-grid" });
     const col = grid.createDiv({ cls: "bt-unscheduled-col" });
-    for (const t of unscheduled) this.renderCard(col, t);
+    if (unscheduled.length === 0 && unscheduledBase.length > 0 && this.hasActiveFilters()) {
+      this.renderFilterEmptyState(col);
+    } else {
+      for (const t of unscheduled) this.renderCard(col, t);
+    }
 
     this.renderTrashZone(wrap);
   }

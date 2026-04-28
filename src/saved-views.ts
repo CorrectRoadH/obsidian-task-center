@@ -57,6 +57,15 @@ export function clearSavedViewFilters(): AppliedSavedViewFilters {
   };
 }
 
+export function hasSavedViewFilters(filters: SavedViewFilters): boolean {
+  return !!(
+    filters.search.trim()
+    || filters.tag.trim()
+    || filters.date.trim()
+    || filters.status !== "all"
+  );
+}
+
 export function suggestSavedViewName(filters: Pick<SavedViewFilters, "tag" | "status">, fallback: string): string {
   if (filters.tag.trim()) return filters.tag.trim().replace(/^#/, "");
   if (filters.status !== "all") return filters.status;

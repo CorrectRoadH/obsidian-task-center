@@ -28,6 +28,7 @@ const {
   applySavedViewFilters,
   clearSavedViewFilters,
   createSavedView,
+  hasSavedViewFilters,
   suggestSavedViewName,
   upsertSavedView,
 } = await import("../test/.compiled/saved-views.js");
@@ -141,4 +142,12 @@ test("US-109c: suggestSavedViewName prefers tag, then status, then fallback", ()
   assert.equal(suggestSavedViewName({ tag: " #alpha,#beta ", status: "all" }, "Saved view"), "alpha,#beta");
   assert.equal(suggestSavedViewName({ tag: "", status: "done" }, "Saved view"), "done");
   assert.equal(suggestSavedViewName({ tag: "", status: "all" }, "Saved view"), "Saved view");
+});
+
+test("US-109c: empty filters are not a saveable filter view", () => {
+  assert.equal(hasSavedViewFilters({ search: "", tag: "", date: "", status: "all" }), false);
+  assert.equal(hasSavedViewFilters({ search: "alpha", tag: "", date: "", status: "all" }), true);
+  assert.equal(hasSavedViewFilters({ search: "", tag: "#alpha", date: "", status: "all" }), true);
+  assert.equal(hasSavedViewFilters({ search: "", tag: "", date: "week", status: "all" }), true);
+  assert.equal(hasSavedViewFilters({ search: "", tag: "", date: "", status: "done" }), true);
 });
