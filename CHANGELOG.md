@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.6.1 — 2026-04-28
+
+- Fix filters to match US-109: tag is a multi-select, date is a condition select, and the toolbar search placeholder is explicit instead of a generic filter label.
+
 ## 0.6.0 — 2026-04-28
 
 - CLI: add `task-center:abandon` as the preferred verb for `[-] ❌`. `task-center:drop` is kept as a deprecated alias (same behavior, output text unchanged for backward compat).
