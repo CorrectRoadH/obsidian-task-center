@@ -1,8 +1,9 @@
 name: CI
 
-# CI runs on PRs and main pushes — verifies build/test before merge.
+# CI runs on PRs and main pushes — same pre-flight gate as tag releases,
+# without publishing assets.
 # Tag pushes are handled by .github/workflows/release.yml (US-601~605),
-# which has its own pre-flight gate covering typecheck/lint/unit/e2e.
+# which repeats this gate before creating a GitHub Release.
 on:
   push:
     branches: [main]
@@ -24,11 +25,13 @@ jobs:
           cache: "pnpm"
       - name: Install deps
         run: pnpm install --frozen-lockfile
-      - name: Lint
-        run: pnpm run lint
       - name: Typecheck
         run: pnpm run typecheck
-      - name: Build
-        run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
       - name: Unit tests
-        run: pnpm test
+        run: pnpm run test:unit
+      - name: E2E tests
+        env:
+          OBSIDIAN_VERSIONS: latest/latest
+        run: pnpm run test:e2e
