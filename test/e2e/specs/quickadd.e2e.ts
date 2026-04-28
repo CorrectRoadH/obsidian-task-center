@@ -11,7 +11,7 @@ const VAULT = "test/e2e/vaults/simple";
  *   3. Quick chips row (Today / Tomorrow / 周六 / recent tags) — click prefills token
  *   4. Footer (`↵ <write target>` / `Esc`) + inline error slot
  *
- * Visual evidence per chunk-by-chunk cadence (Leo / Rally agreed):
+ * Visual evidence per chunk-by-chunk cadence (PM / Reviewer agreed):
  * the last test in this file calls `browser.saveScreenshot()` to
  * `/tmp/m20-chunk-4.png`. This screenshot hook only fires inside the
  * dedicated `US-167 visual evidence` case, never against other specs —
@@ -218,8 +218,8 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
   });
 
   // US-167 visual evidence — saves a screenshot to /tmp/m20-chunk-4.png
-  // for Leo to review. The screenshot hook is intentionally scoped to
-  // this single case (per Rally's CI hygiene constraint).
+  // for PM to review. The screenshot hook is intentionally scoped to
+  // this single case (per Reviewer's CI hygiene constraint).
   it("US-167 visual evidence — screenshot to /tmp/m20-chunk-4.png", async function () {
     await browser.executeObsidianCommand("obsidian-task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });

@@ -5,7 +5,7 @@ description: Read and write tasks in an Obsidian vault through the Task Center p
 
 # Obsidian Task Center — CLI skill
 
-This skill is the AI interface to the [obsidian-task-center](https://github.com/CorrectRoadH/obsidian-task-center) plugin. The plugin registers its verbs to Obsidian's native CLI (1.12.2+), so calls go `obsidian task-center:<verb> key=value …`.
+This skill is the AI interface to the obsidian-task-center plugin. The plugin registers its verbs to Obsidian's native CLI (1.12.2+), so calls go `obsidian task-center:<verb> key=value …`.
 
 Data stays inline markdown. Syntax:
 
@@ -58,7 +58,7 @@ obsidian task-center:list scheduled=today
 obsidian task-center:list scheduled=unscheduled tag='#2象限'
 obsidian task-center:list done=2026-04-01..2026-04-30
 obsidian task-center:list overdue
-obsidian task-center:list status=todo search=携号
+obsidian task-center:list status=todo search=示例
 ```
 
 `scheduled=` / `done=` vocabulary:
@@ -109,7 +109,7 @@ obsidian task-center:drop   ref=…                        # [-] + ❌, cascades
 obsidian task-center:tag    ref=… tag='#基建'            # add
 obsidian task-center:tag    ref=… tag='#基建' remove     # remove
 
-obsidian task-center:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26 [to=<path>] [deadline=…] [estimate=30m] [parent=<id>]
+obsidian task-center:add text="处理示例任务" tag='#3象限' scheduled=2026-04-26 [to=<path>] [deadline=…] [estimate=30m] [parent=<id>]
 ```
 
 `task-center:add` target priority: explicit `to=` → parent's file (if `parent=` given) → today's daily note → settings inbox path. Default stamps `➕ today` unless `stamp-created=false`.

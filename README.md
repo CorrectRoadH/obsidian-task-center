@@ -7,7 +7,7 @@
 
 Data is plain markdown. No custom file format, no lock-in — Obsidian Tasks plugin, Dataview, and anything else that reads `- [ ] task 📅 2026-04-25 ⏳ 2026-04-24 [estimate:: 30m]` keeps working.
 
-<!-- TODO @ctrdh: drop hero screenshots into docs/assets/ -->
+<!-- TODO: drop hero screenshots into docs/assets/ -->
 ![Task Center board view (week tab)](docs/assets/board-week.png)
 ![Quick Add Spotlight panel](docs/assets/quickadd-spotlight.png)
 
@@ -29,9 +29,7 @@ Obsidian Tasks owns the data model. Task Center adds presentation layers and a p
 
 ## Energy quadrants
 
-Default tag convention: `#1象限 / #2象限 / #3象限 / #4象限` map to Covey's 4-quadrant prioritization (Important × Urgent). The "unscheduled" tab groups by quadrant by default, so the next-action picker honors Important-Not-Urgent ahead of Urgent-Not-Important.
-
-*Custom grouping tag sets (e.g. `#now / #next / #later / #waiting`) planned for 0.3.x.*
+Default tag convention examples such as `#1象限 / #2象限 / #3象限 / #4象限` can map to Covey's 4-quadrant prioritization, but Task Center treats them as ordinary markdown tags. Use the tag filter and saved views (for example “Q1” or “本周 Q1”) to work with those sets; the app does not maintain a separate grouping taxonomy.
 
 ## Syntax
 
@@ -88,15 +86,15 @@ Select a card (click), then:
 | `⌘/Ctrl+Z` | Undo the last drag/date mutation made in this view (stack depth 20) |
 | `/` | Focus the filter input |
 
-Click the title text to rename in place (Enter commits, Escape reverts). All metadata (tags, emojis, inline fields) is preserved.
+Click a card to open its source Markdown editor shell. All metadata (tags, emojis, inline fields) is preserved.
 
 ## Quick Add
 
 `⌘/Ctrl+T` in the board, or the `+ Add` button, opens a Spotlight-style command palette anchored at the top-30% of the viewport — a single transparent input, an inline parse hint that previews the resolved `⏳` / `📅` date as you type, a row of one-click prefill chips (`Today` / `Tomorrow` / `周六` / recent tags), and a footer that shows the exact Daily Note write-target file before you press Enter.
 
 ```
-去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]    →  ⏳ 04-26 (Sat)
-[Today]  [Tomorrow]  [周六]  [#work]  [#writing]
+处理示例任务 #3象限 ⏳ 周六 [estimate:: 25m]        →  ⏳ 04-26 (Sat)
+[Today]  [Tomorrow]  [周六]  [#alpha]  [#beta]
 ↵ Daily/2026-04-26.md                                  Esc
 ```
 
@@ -144,7 +142,7 @@ obsidian task-center:stats days=7 group=象限
 obsidian task-center:review days=7
 obsidian task-center:review days=7 format=json
 
-obsidian task-center:add text="去营业厅问携号转网" tag='#3象限' scheduled=2026-04-26
+obsidian task-center:add text="处理示例任务" tag='#3象限' scheduled=2026-04-26
 obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
 obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23
 obsidian task-center:abandon ref=Tasks/Inbox.md:L42   # alias: task-center:drop
@@ -174,9 +172,9 @@ Today · 2026-04-26
         #1象限  done=2 dropped=0 delayed_open=1 actual=90m estimate=60m delta=+30m
         #3象限  done=1 dropped=1 delayed_open=1 actual=60m estimate=60m delta=0m
     samples
-        done: Daily/2026-04-26.md:L5 发版 #1象限 done=2026-04-26 est=1h actual=1h 30m
-        dropped: Tasks/Inbox.md:L12 不做低价值任务 #3象限
-        delayed_open: Tasks/Inbox.md:L18 逾期电话 #1象限 deadline=2026-04-25
+        done: Daily/2026-04-26.md:L5 完成示例任务 #1象限 done=2026-04-26 est=1h actual=1h 30m
+        dropped: Tasks/Inbox.md:L12 放弃示例任务 #3象限
+        delayed_open: Tasks/Inbox.md:L18 逾期示例任务 #1象限 deadline=2026-04-25
 ```
 
 Use `format=json` for agents or scripts that need the same review as structured
@@ -351,7 +349,7 @@ Why: the previous setting was a parallel source of truth that the writer (`write
 
 ## Support
 
-If Task Center saves you time, [sponsor on GitHub](https://github.com/sponsors/CorrectRoadH).
+If Task Center saves you time, consider sponsoring the maintainers.
 
 ## License
 

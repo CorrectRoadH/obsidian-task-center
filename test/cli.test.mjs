@@ -384,30 +384,30 @@ test("US-722: formatReviewSummary is readable and grep-friendly", () => {
         path: "Tasks/Done.md",
         status: "done",
         checkbox: "x",
-        title: "finish report",
+        title: "finish fixture",
         completed: "2026-04-26",
         estimate: 45,
         actual: 30,
-        tags: ["#work"],
+        tags: ["#alpha"],
       }),
       mkTask({
         id: "Tasks/Drop.md:L10",
         path: "Tasks/Drop.md",
         status: "dropped",
         checkbox: "-",
-        title: "skip optional",
-        rawLine: "- [-] skip optional #life ❌ 2026-04-26",
-        tags: ["#life"],
+        title: "skip fixture",
+        rawLine: "- [-] skip fixture #gamma ❌ 2026-04-26",
+        tags: ["#gamma"],
       }),
       mkTask({
         id: "Tasks/Late.md:L11",
         path: "Tasks/Late.md",
-        title: "overdue call",
+        title: "overdue fixture",
         deadline: "2026-04-25",
-        tags: ["#work"],
+        tags: ["#alpha"],
       }),
     ],
-    { today: "2026-04-26", groupingTags: ["#work", "#life"] },
+    { today: "2026-04-26", groupingTags: ["#alpha", "#gamma"] },
   );
   const out = formatReviewSummary(review);
   assert.match(out, /^Review · 2026-04-26/);
@@ -415,8 +415,8 @@ test("US-722: formatReviewSummary is readable and grep-friendly", () => {
   assert.match(out, /Week · 2026-04-20 → 2026-04-26/);
   assert.match(out, /done=1 dropped=1 delayed_open=1/);
   assert.match(out, /estimate actual=30m estimate=45m delta=-15m/);
-  assert.match(out, /#work\s+done=1 dropped=0 delayed_open=1/);
-  assert.match(out, /dropped: Tasks\/Drop\.md:L10 skip optional #life/);
+  assert.match(out, /#alpha\s+done=1 dropped=0 delayed_open=1/);
+  assert.match(out, /dropped: Tasks\/Drop\.md:L10 skip fixture #gamma/);
 });
 
 test("formatError — greppable code + message shape", () => {

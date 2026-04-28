@@ -23,7 +23,7 @@ export const config: WebdriverIO.Config = {
   // task #48 (0.3.x): default to 1 worker. Two parallel workers share the
   // same vault directory (`test/e2e/vaults/simple`), so race conditions
   // surface in `obsidianPage.resetVault` + concurrent `metadataCache.changed`
-  // — the subtask and mobile-coverage specs were the canaries Wood saw
+  // — the subtask and mobile-coverage specs were the canaries Engineer saw
   // intermittently fail in `pnpm test:e2e`. Stable serial runs are worth
   // the ~2s wall-clock loss vs flakey parallel. Maintainers wanting the
   // old behavior can opt back in with `WDIO_MAX_INSTANCES=2 pnpm test:e2e`,

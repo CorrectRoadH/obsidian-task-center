@@ -115,7 +115,7 @@ export class TaskCenterSettingTab extends PluginSettingTab {
         "obsidian task-center:list scheduled=unscheduled tag='#tag'",
         "obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25",
         "obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23",
-        "obsidian task-center:add text=\"去营业厅问携号转网\" tag=\"#tag\" scheduled=2026-04-26",
+        "obsidian task-center:add text=\"处理示例任务\" tag=\"#tag\" scheduled=2026-04-26",
         "obsidian task-center:stats days=7 group=象限",
       ].join("\n"),
     );

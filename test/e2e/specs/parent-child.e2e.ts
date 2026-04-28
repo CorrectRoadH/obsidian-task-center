@@ -6,7 +6,7 @@
  *         (🛫 start, 🔁 recurrence, ⏫🔺🔼🔽⏬ priority, [id::] inline fields)
  *
  * All assertions are against the markdown file content — no CSS class coupling.
- * The only DOM coupling is `data-task-id` (stable identifier agreed with Tiger).
+ * The only DOM coupling is `data-task-id` (stable identifier agreed with CTO).
  */
 import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
@@ -374,8 +374,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
   // US-105: tab counter must equal the count of top-level cards rendered
   // when the user switches to that tab. Without dedup the badge would
   // include children that ride with a visible parent and never appear as
-  // their own card (the bug from ctrdh's "Unscheduled 15 vs body (1)"
-  // screenshot).
+  // their own card (the reported "tab count vs body count" mismatch).
   it("US-105: tab counter equals visible top-level card count post-dedup", async function () {
     const path = "Tasks/Inbox.md";
     // 1 unscheduled parent with 3 unscheduled children. Children ride

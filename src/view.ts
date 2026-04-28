@@ -230,7 +230,7 @@ export class TaskCenterView extends ItemView {
     // Subscribe to the cache — and ONLY the cache. Vault and metadataCache
     // events are handled in one place (cache.bind in main.ts); the view reads
     // a settled snapshot via flatten() after each `cache.changed`. This is
-    // the structural fix for BUG.md #3 (double subscription → event flood).
+    // the structural fix for #3 large-vault event-flood regression (double subscription → event flood).
     this.cacheUnsub = this.plugin.cache.on("changed", () => this.scheduleRefresh());
 
     // Keyboard

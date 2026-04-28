@@ -1,9 +1,9 @@
 // Unit + integration tests for TaskCache.
 //
-// Architecture invariants that block the BUG.md regression:
+// Architecture invariants that block the large-vault startup regression:
 //   - hasTaskListItem null-cache rule: parse when metadata is unindexed,
 //     skip only when metadata explicitly says "no task list items".
-//   - ensureAll() never opens task-free files (BUG.md root cause).
+//   - ensureAll() never opens task-free files (large-vault regression root cause).
 //   - Write-path resolveRef goes single-file (no implicit ensureAll).
 //   - cache.changed fires AFTER reparse settles, so flatten() in the callback
 //     is post-state.
@@ -49,7 +49,7 @@ const { TaskCache, TFile } = await import("../test/.compiled/cache.bundle.js");
 //   - metaIndexed: has metadata been indexed at all? null/undefined = not yet
 //
 // `hasTask=false, metaIndexed=true` → confirmed task-free. cache must skip.
-// `metaIndexed=false` → not yet indexed. cache must parse (BUG.md #1).
+// `metaIndexed=false` → not yet indexed. cache must parse (#1 large-vault regression).
 // ----------------------------------------------------------------------------
 
 function mkFile(spec) {
@@ -135,7 +135,7 @@ function makeApp(specs) {
 // Tests
 // ----------------------------------------------------------------------------
 
-test("ensureAll: skips metadata-confirmed task-free files (BUG.md #1 fix)", async () => {
+test("ensureAll: skips metadata-confirmed task-free files (#1 large-vault regression fix)", async () => {
   // 6500 daily notes Obsidian has indexed and confirmed task-free, plus 50
   // task-bearing files. The pre-Phase-1 path read all 6550; the post-fix
   // path must only read 50.
@@ -178,7 +178,7 @@ test("ensureAll: skips metadata-confirmed task-free files (BUG.md #1 fix)", asyn
 
 test("ensureAll: parses files where metadata is not yet indexed (no false skip)", async () => {
   // metadata not yet indexed must NOT be treated as task-free — parser must
-  // still see the bytes (BUG.md #1 corollary).
+  // still see the bytes (#1 large-vault regression corollary).
   const app = makeApp([
     { path: "Tasks/t1.md", hasTask: true, metaIndexed: false, content: "- [ ] X\n" },
     { path: "Tasks/t2.md", hasTask: false, metaIndexed: false, content: "no tasks\n" },

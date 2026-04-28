@@ -81,15 +81,14 @@ async function findInParent(parentSel: string, fragment: string): Promise<boolea
 }
 
 /**
- * US-125 / US-148 / US-149 — task #36. ctrdh reported on 0.2.2 that a
- * child task (`买廉价的AI会员` with ➕ + ⏳ same-day stamps) is missing
- * from the parent's card even after the 0.2.1 CRLF fix shipped.
+ * US-125 / US-148 / US-149 — task #36. Sanitized regression fixture: a
+ * child task with ➕ + ⏳ same-day stamps is missing from the parent's card
+ * even after the 0.2.1 CRLF fix shipped.
  *
- * Two test layouts based on Leo's analysis (msg `3f563978`):
- *   1. EXACT-SCREENSHOT: 5 direct children, last one has ➕ + ⏳ matching
- *      parent's date. (Wood ran this in earlier sessions and it passed —
- *      retrying on current main HEAD.)
- *   2. GRANDCHILD: Leo's hypothesis — top parent has ⏳, middle child has
+ * Two sanitized test layouts:
+ *   1. DIRECT-CHILD: 5 direct children, last one has ➕ + ⏳ matching
+ *      parent's date.
+ *   2. GRANDCHILD: top parent has ⏳, middle child has
  *      NO ⏳, grandchild has ⏳ same as top. renderSubcard's recursive
  *      filter compares grandchild.scheduled to middle-child.scheduled,
  *      so a same-as-top grandchild is dropped as "cross-day" because the
@@ -100,20 +99,20 @@ describe("US-125 / US-148 / US-149 — children render under parent (task #36)",
     await obsidianPage.resetVault(VAULT);
   });
 
-  // Layout 1 — exact screenshot replay.
-  it("EXACT — 5 direct children, last has ➕+⏳ matching parent's ⏳", async function () {
+  // Layout 1 — sanitized direct-child replay.
+  it("DIRECT-CHILD — 5 direct children, last has ➕+⏳ matching parent's ⏳", async function () {
     const today = todayISO();
     const path = "Daily/2026-04-19.md";
     await writeAndWait(
       path,
       [
-        `- [ ] AI-Native的人生 ⏳ ${today}`,
-        `    - [ ] 由AI告诉我应该去做什么工作与内容`,
-        `        - [ ] 搞cron，ai主动对于问题进行分析并处理`,
-        `    - [ ] 由AI与我一起计划与组织生活`,
-        `    - [x] 由AI告诉我应该看什么，比如Source是 [[Follow|folo]] ✅ 2026-04-24`,
-        `    - [ ] 用AI整理笔记、浏览器书签、目录、1password`,
-        `    - [ ] 买廉价的AI会员(GPT Plus\\Kimi) ➕ ${today} ⏳ ${today}`,
+        `- [ ] Fixture parent ⏳ ${today}`,
+        `    - [ ] Fixture child one`,
+        `        - [ ] Fixture grandchild`,
+        `    - [ ] Fixture child two`,
+        `    - [x] Fixture completed child ✅ 2026-04-24`,
+        `    - [ ] Fixture child four`,
+        `    - [ ] Fixture child with same-day metadata ➕ ${today} ⏳ ${today}`,
       ].join("\n") + "\n",
     );
 
@@ -126,16 +125,16 @@ describe("US-125 / US-148 / US-149 — children render under parent (task #36)",
     await $(parentSel).waitForExist({ timeout: 5000 });
 
     await browser.waitUntil(
-      async () => findInParent(parentSel, "买廉价的AI会员"),
+      async () => findInParent(parentSel, "Fixture child with same-day metadata"),
       {
         timeout: 2000,
         timeoutMsg:
-          "EXACT layout fail — 5th child (买廉价的AI会员) missing from parent's card",
+          "DIRECT-CHILD layout fail — 5th child with same-day metadata missing from parent's card",
       },
     );
   });
 
-  // Layout 2 — Leo's grandchild hypothesis (msg `3f563978`).
+  // Layout 2 — sanitized grandchild regression.
   it("GRANDCHILD — top P (⏳ today) → middle C (no ⏳) → grandchild G (⏳ today) renders under P", async function () {
     const today = todayISO();
     const path = "Tasks/Inbox.md";
@@ -161,7 +160,7 @@ describe("US-125 / US-148 / US-149 — children render under parent (task #36)",
       {
         timeout: 2000,
         timeoutMsg:
-          "GRANDCHILD layout fail — grandchild with ⏳ matching top parent (but middle has no ⏳) was filtered out by renderSubcard recursive cross-day check (Leo hypothesis msg 3f563978)",
+          "GRANDCHILD layout fail — grandchild with ⏳ matching top parent (but middle has no ⏳) was filtered out by renderSubcard recursive cross-day check",
       },
     );
   });

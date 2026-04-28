@@ -131,7 +131,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
 
     // Restore folder setting. Use `in` check because the original value may
     // be undefined (unset property), which would cause `!== undefined` to
-    // always skip the restore block — the bug Wood caught in the first draft.
+    // always skip the restore block — the bug Engineer caught in the first draft.
     await browser.executeObsidian(async ({ app }) => {
       const dn = (app as any).internalPlugins?.plugins?.["daily-notes"];
       const opts = dn?.instance?.options;

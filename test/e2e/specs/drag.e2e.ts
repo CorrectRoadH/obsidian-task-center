@@ -2,7 +2,7 @@
  * US-121: Dragging a card to a different day column rewrites ⏳ in the markdown file.
  * US-123: Dragging a card to the abandon zone marks it dropped ([-] ❌) in the markdown file.
  *
- * DOM coupling is limited to stable data-attributes agreed with Tiger:
+ * DOM coupling is limited to stable data-attributes agreed with CTO:
  *   [data-task-id="path:LN"]    — task card stable identifier
  *   [data-date="YYYY-MM-DD"]    — day-column drop target
  *   [data-drop-zone="abandon"]  — abandon area drop target

@@ -523,8 +523,8 @@ test("planCrossFileNest — destination insertion appears right after parent's l
   assert.deepEqual(plan.newChildLines, ["- [ ] stays"]);
 });
 
-// task #57 (P1 regression): ctrdh's actual repro — drag a task from
-// `Daily/2026-04-26.md` into `AI-Native的人生` in `Daily/2026-04-19.md`.
+// task #57 (P1 regression): sanitized mixed-indent repro — drag a task from
+// one daily note into a parent task in another daily note.
 // The destination parent uses TAB-indented children; current
 // `planCrossFileNest` hard-codes `parentIndent + "    "` (4 spaces) for
 // the new child, which Obsidian's markdown list parser then nests under
@@ -532,21 +532,18 @@ test("planCrossFileNest — destination insertion appears right after parent's l
 // new-child indent from the parent's existing first-child indent style
 // when present, else fall back to "    ".
 //
-// This test reproduces the exact mixed-indent shape from
-// /Users/ctrdh/LifeSystem/Daily/2026-04-19.md:69-75 (one 4-space-indented
-// outlier among otherwise tab-indented children, plus a deeper
-// grandchild). The dragged subtree mirrors
-// /Users/ctrdh/LifeSystem/Daily/2026-04-26.md:5-6 (a task with one
-// 4-space-indented subchild).
+// This test reproduces the mixed-indent shape without carrying over any
+// real vault path or task title: one 4-space-indented outlier among otherwise
+// tab-indented children, plus a deeper grandchild. The dragged subtree is a
+// top-level task with one 4-space-indented subchild.
 test("planCrossFileNest — task #57: parent has TAB-indented children → new child must use TAB to stay parent's direct child, not Obsidian's 'last tab-indented sibling''s child", () => {
-  // Mirrors `给Slock添加更多的AI CLI` + `让omar有管理这些cli skill的能力`.
+  // Sanitized source subtree.
   const childFileLines = [
     "- [ ] C_top ➕ 2026-04-26",
     "    - [ ] C_subchild",
   ];
 
-  // Mirrors `AI-Native的人生` subtree at /…/2026-04-19.md:69-75 verbatim
-  // for indent shape:
+  // Sanitized target subtree for indent shape:
   //   L0: A_parent           — indent="" (root)
   //   L1: A_child_1          — indent="\t"
   //   L2:   A_grandchild     — indent="\t    "
@@ -617,7 +614,7 @@ test("planCrossFileNest — task #57 corollary: parent with NO children falls ba
   assert.deepEqual(plan.newChildLines, []);
 });
 
-// task #57 v2: Jerry's mandatory review (msg `1e4304ab`) caught that the
+// task #57 v2: reviewer's mandatory review (msg `1e4304ab`) caught that the
 // production cross-file `nestUnder()` runtime path duplicates the
 // planner's indent decision INLINE (writer.ts:865 `parent.indent +
 // "    "`) instead of delegating to `planCrossFileNest`. So the
@@ -625,13 +622,13 @@ test("planCrossFileNest — task #57 corollary: parent with NO children falls ba
 // vault-touching nestUnder cross-file write still emits 4-space.
 //
 // This test imports the runtime `nestUnder` and drives it through a
-// minimal in-memory vault stub mirroring ctrdh's real setup. Asserts
+// minimal in-memory vault stub mirroring the sanitized mixed-indent setup. Asserts
 // the parent file ends with `\t- [ ] C_top` (matching its existing
 // TAB-indented children), not `    - [ ] C_top`.
 const { addTask, nestUnder, TFile } = await import("../test/.compiled/writer.bundle.js");
 
 test("nestUnder cross-file — task #57 runtime: production path also matches existing TAB-indented children", async () => {
-  // ctrdh's real shape: parent file has TAB children with one 4-space
+  // Sanitized shape: parent file has TAB children with one 4-space
   // outlier; source file has a top-level task with one 4-space subchild.
   const parentInitial =
     "- [ ] A_parent ⏳ 2026-04-26\n" +

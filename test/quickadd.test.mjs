@@ -43,8 +43,8 @@ const { parseQuickAdd, computeWriteTarget, quickChips } = await import(
 const { resolveDateInput } = await import("../test/.compiled/dateprompt.bundle.js");
 
 test("parseQuickAdd — plain text, no metadata", () => {
-  const r = parseQuickAdd("去营业厅问携号转网", "2026-04-23");
-  assert.equal(r.text, "去营业厅问携号转网");
+  const r = parseQuickAdd("处理示例任务", "2026-04-23");
+  assert.equal(r.text, "处理示例任务");
   assert.equal(r.scheduled, undefined);
   assert.equal(r.deadline, undefined);
   assert.equal(r.estimate, undefined);

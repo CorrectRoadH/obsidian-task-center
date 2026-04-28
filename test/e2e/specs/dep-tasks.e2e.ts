@@ -16,7 +16,7 @@
  *   data-dep-warning="tasks-disabled"  — Tasks plugin installed but disabled
  *
  * All tests currently FAIL — no such warning element is rendered yet.
- * This is the Rally-first red commit for task #71.
+ * This is the Reviewer-first red commit for task #71.
  */
 import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";

@@ -4,7 +4,7 @@ import { obsidianPage } from "wdio-obsidian-service";
 /**
  * task #44 (US-501–510): mobile e2e coverage gap-fill.
  *
- * Six mobile-only surfaces Jerry's QA pass called out:
+ * Six mobile-only surfaces reviewer's QA pass called out:
  *   ✅ Week 折叠/展开 (US-503)
  *   ✅ Month bottom sheet (US-504, also covered in mobile-force-layout.e2e.ts)
  *   ✅ Quick Add bottom-sheet styling (US-509)

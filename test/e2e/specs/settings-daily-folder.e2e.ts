@@ -6,7 +6,7 @@ import { obsidianPage } from "wdio-obsidian-service";
  * is removed in 0.3.0.
  *
  * This spec FAILS on current main (the input still exists) and PASSES
- * after Wood's green commit deletes the `new Setting(...)` block in
+ * after Engineer's green commit deletes the `new Setting(...)` block in
  * src/settings.ts.
  *
  * Predicted CI failure: "US-32: settings panel must not render a Daily folder input"

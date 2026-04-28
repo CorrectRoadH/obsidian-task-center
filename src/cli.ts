@@ -25,7 +25,7 @@ import { cliGroupingLabel, normalizeGroupingTags } from "./grouping";
 // REMINDER: this module must NOT call `parseVaultTasks` or
 // `app.vault.getMarkdownFiles()` directly. All parse work goes through
 // `TaskCache`. Write verbs resolve refs via `cache.resolveRef`, which is
-// single-file for `path:Lnnn`. (ARCHITECTURE.md §3.3 / §5.1, BUG.md #2)
+// single-file for `path:Lnnn`. (ARCHITECTURE.md §3.3 / §5.1, #2 large-vault regression)
 
 export interface ListFilters {
   scheduled?: string;

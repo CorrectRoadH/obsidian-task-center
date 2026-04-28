@@ -59,7 +59,7 @@ test("task #45 — OBSIDIAN_USE_BETA=1 but beta not cached → still no beta (av
   assert.equal(v, "latest/latest");
 });
 
-// Leo PM HOLD on first review (msg 28a18aa9): the original truthy check
+// PM PM HOLD on first review (msg 28a18aa9): the original truthy check
 // `if (env.OBSIDIAN_USE_BETA && betaCached)` accidentally enabled beta
 // for `OBSIDIAN_USE_BETA="0"` (and "false", and any non-empty string)
 // because every non-empty JS string is truthy. The README and helper

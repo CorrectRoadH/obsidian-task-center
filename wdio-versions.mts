@@ -28,7 +28,7 @@ export function pickWdioVersions(env: PickEnv, betaCached: boolean): string {
   let v = "latest/latest";
   // Only the literal "1" enables beta. A bare truthy check (`if (env.X)`)
   // would also accept "0" / "false" since every non-empty JS string is
-  // truthy — that surprised a user once and earned a Leo HOLD on first
+  // truthy — that surprised a user once and earned a PM HOLD on first
   // review (msg 28a18aa9).
   if (env.OBSIDIAN_USE_BETA === "1" && betaCached) v += " latest-beta/latest";
   return v;

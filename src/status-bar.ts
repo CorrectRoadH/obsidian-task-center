@@ -1,7 +1,7 @@
 // Status bar — shows the active todo count.
 //
 // Subscribes to `cache.on("changed")` only — never to vault events or to
-// `metadataCache.on("resolved")` (BUG.md #3 / #4: those flooded the main
+// `metadataCache.on("resolved")` (#3 large-vault event-flood regression / #4: those flooded the main
 // thread on large vaults and froze Obsidian even when the board was never
 // opened). The cache populates passively from `metadataCache.changed`
 // single-file callbacks; the status-bar count grows as files are indexed.

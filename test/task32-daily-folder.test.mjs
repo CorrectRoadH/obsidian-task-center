@@ -1,7 +1,7 @@
 // task #32 red tests (US-32) — 0.3.0 breaking removal of settings.dailyFolder.
 //
 // These tests FAIL on current main (dailyFolder still in DEFAULT_SETTINGS /
-// i18n tables) and PASS after Wood's green commit removes the field.
+// i18n tables) and PASS after Engineer's green commit removes the field.
 //
 // Predicted failing test names:
 //   "US-32: DEFAULT_SETTINGS must not expose dailyFolder"
@@ -9,13 +9,13 @@
 //   "US-32: i18n EN table must not contain settings.dailyFolder keys"
 //   "US-32: i18n ZH table must not contain settings.dailyFolder keys"
 //
-// Why the tests are designed this way (per Jerry red commit requirements):
+// Why the tests are designed this way (per reviewer red commit requirements):
 //   - DEFAULT_SETTINGS tests → verify the TypeScript interface and runtime
 //     constant no longer carry the field; this is the single ground-truth
 //     that all call-sites depend on.
 //   - i18n tests → settings UI can only be removed cleanly if the i18n keys
 //     driving its label/description are also gone; leaving dead i18n keys
-//     is a half-removal (Wood's green commit checklist includes both).
+//     is a half-removal (Engineer's green commit checklist includes both).
 //   - Root of predicted failure: src/types.ts:L46 `dailyFolder: string` and
 //     L73 `dailyFolder: "Daily"` still present; src/i18n.ts still has
 //     `settings.dailyFolder.name` / `settings.dailyFolder.desc` in EN+ZH.
@@ -138,7 +138,7 @@ test("US-32: i18n ZH table must not contain settings.dailyFolder keys — dead i
 test("US-32: README must document the 0.3.0 breaking change with migration guide for dailyFolder removal", async () => {
   // Predicted failure: README.md has no 0.3.0 breaking change section for dailyFolder.
   // Root: migration note has not been written yet.
-  // Fix (green): Wood/Jerry adds a 0.3.0 breaking change section to README.md with
+  // Fix (green): Engineer/reviewer adds a 0.3.0 breaking change section to README.md with
   //   - "settings.dailyFolder" (the removed setting name)
   //   - "Daily Notes" (the replacement SSOT)
   //   - "Breaking" or "Migration" heading

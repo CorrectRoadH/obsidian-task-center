@@ -885,7 +885,7 @@ export async function nestUnder(
   // existing children's indent style (TAB vs 4-space) instead of
   // hard-coding `parent.indent + "    "`. This was the runtime
   // duplicate path that the planner-only fix in 087fcbc missed —
-  // Jerry caught it in mandatory review (msg `1e4304ab`).
+  // reviewer caught it in mandatory review (msg `1e4304ab`).
   let parentInsertIndex = -1;
   let reindented: string[] = [];
   await app.vault.process(parentFile, (data) => {

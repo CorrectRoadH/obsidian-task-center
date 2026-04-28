@@ -7,7 +7,7 @@
 //
 // The architecture forbids any other module from subscribing to
 // `metadataCache.on("resolved")` — it triggers a vault-wide flood on large
-// vaults and was the root cause of BUG.md.
+// vaults and was the root cause of large-vault regression.
 
 import { App, EventRef, TFile } from "obsidian";
 import { ParsedTask } from "./types";
@@ -56,7 +56,7 @@ export class TaskCache {
    *   - `metadataCache.on("changed", file)` — single-file invalidation.
    *     This fires once per file as Obsidian indexes it (including during
    *     startup), AND on every subsequent edit. We do NOT subscribe to
-   *     `metadataCache.on("resolved")` (BUG.md #3 / ARCHITECTURE.md §3.1).
+   *     `metadataCache.on("resolved")` (#3 large-vault event-flood regression / ARCHITECTURE.md §3.1).
    *   - `vault.on("delete" | "rename")` — keep `byPath` in sync.
    */
   bind(): EventRef[] {
@@ -127,7 +127,7 @@ export class TaskCache {
     const hasTaskListItem =
       meta !== null
         ? (meta.listItems?.some((li) => li.task !== undefined) ?? false)
-        : true; // metadata not yet indexed — must parse to be safe (BUG.md #1)
+        : true; // metadata not yet indexed — must parse to be safe (#1 large-vault regression)
     if (meta !== null && !hasTaskListItem) {
       this.replaceEntry(path, {
         mtime: af.stat.mtime,
@@ -207,7 +207,7 @@ export class TaskCache {
 
   /**
    * Force the named file's entry to be present and up-to-date. Used by CLI
-   * write verbs that just need ONE file (BUG.md #2: writes must not rescan
+   * write verbs that just need ONE file (#2 large-vault regression: writes must not rescan
    * the whole vault).
    */
   async ensureFile(path: string): Promise<FileEntry | null> {
@@ -224,7 +224,7 @@ export class TaskCache {
    * cache-hit and synchronous-fast.
    *
    * Only files where `metadataCache` confirms `listItems[].task !== undefined`
-   * are parsed (BUG.md root cause: a 6589-file vault parsed serially froze
+   * are parsed (large-vault regression root cause: a ~6500-file vault parsed serially froze
    * the main thread). Files where metadata is not yet indexed are parsed
    * (we cannot prove no-task without bytes) — this is the eventual-consistency
    * guarantee from `metadataCache.changed`.
@@ -243,7 +243,7 @@ export class TaskCache {
     const files = this.app.vault.getMarkdownFiles();
     const candidates: TFile[] = [];
     // US-404: skip files whose metadataCache confirms zero task list items.
-    // Big vaults (6589-file regression in BUG.md #1) parse-flooded the
+    // Big vaults (~6500-file regression in #1 large-vault regression) parse-flooded the
     // main thread; this cheap filter keeps board-open snappy. Files with
     // metadata not yet indexed must still be parsed (we cannot prove
     // empty without bytes), so the skip is conservative.

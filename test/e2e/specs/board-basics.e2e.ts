@@ -112,7 +112,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       async () => {
         const count = await browser.execute(() => {
           // Accept either a CSS class or a data-attribute as the marker —
-          // the exact implementation is Tiger's call.
+          // the exact implementation is CTO's call.
           return document.querySelectorAll(
             ".task-center-view .bt-overdue, .task-center-view [data-overdue='true']",
           ).length;
@@ -155,7 +155,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     const today = todayISO();
     await writeAndWait(
       "Tasks/Inbox.md",
-      `- [ ] Tagged task #work #1象限 #work ⏳ ${today}\n`,
+      `- [ ] Tagged task #alpha #1象限 #alpha ⏳ ${today}\n`,
     );
 
     await browser.executeObsidianCommand("obsidian-task-center:open");
@@ -179,7 +179,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       };
     }, cardSel);
     expect(weekCard.titleText).toBe("Tagged task");
-    expect(weekCard.tags).toEqual(["#work", "#1象限"]);
+    expect(weekCard.tags).toEqual(["#alpha", "#1象限"]);
     expect(weekCard.tagsAreBelowTitle).toBe(true);
 
     const todayTab = $('[data-tab="today"]');
@@ -196,7 +196,7 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
         tagsAreBelowTitle: tags.top >= title.bottom,
       };
     });
-    expect(todayCard.tags).toEqual(["#work", "#1象限"]);
+    expect(todayCard.tags).toEqual(["#alpha", "#1象限"]);
     expect(todayCard.tagsAreBelowTitle).toBe(true);
   });
 
