@@ -9,7 +9,7 @@
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc -noEmit",
     "test": "pnpm run test:unit",
-    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs test/cache.test.mjs test/i18n.test.mjs test/wdio-versions.test.mjs test/task32-daily-folder.test.mjs test/source-dialog-api.test.mjs test/tags.test.mjs test/saved-views.test.mjs test/date-filter.test.mjs",
+    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs test/cache.test.mjs test/i18n.test.mjs test/wdio-versions.test.mjs test/task32-daily-folder.test.mjs test/source-dialog-api.test.mjs test/tags.test.mjs test/saved-views.test.mjs test/date-filter.test.mjs test/schedule-filter.test.mjs",
     "test:e2e": "pnpm run build && wdio run ./wdio.conf.mts",
     "e2e": "pnpm run test:e2e",
     "lint": "eslint src",

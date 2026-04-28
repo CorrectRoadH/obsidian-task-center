@@ -1,4 +1,4 @@
-// Unit tests for US-109e: date filter button labels stay compact.
+// Unit tests for US-109e: schedule range button labels stay compact.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,7 +28,7 @@ const { formatDateFilterLabel } = await import("../test/.compiled/date-filter.js
 
 test("US-109e: range label is compact enough for the toolbar", () => {
   const label = formatDateFilterLabel("2026-04-08..2026-04-23", {
-    emptyLabel: "日期",
+    emptyLabel: "排期",
     openStartLabel: "开始",
     openEndLabel: "结束",
     presets: new Map(),
@@ -39,7 +39,7 @@ test("US-109e: range label is compact enough for the toolbar", () => {
 
 test("US-109e: open range labels still explain the missing side", () => {
   const label = formatDateFilterLabel("..2026-04-23", {
-    emptyLabel: "日期",
+    emptyLabel: "排期",
     openStartLabel: "开始",
     openEndLabel: "结束",
     presets: new Map(),

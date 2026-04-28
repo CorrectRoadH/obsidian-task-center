@@ -90,9 +90,9 @@ export function isoWeekNumber(iso: string): number {
   );
 }
 
-// US-207: CLI / API natural-language date keywords. Accepts:
+// US-207: CLI / API natural-language schedule keywords. Range accepts:
 //   today / tomorrow / yesterday / week / next-week / month / next-month
-//   / unscheduled / YYYY-MM-DD / FROM..TO range
+//   / YYYY-MM-DD / FROM..TO. "unscheduled" is a schedule state, not a range.
 // see USER_STORIES.md
 export function resolveWhen(
   when: string,

@@ -36,6 +36,7 @@ import { isMobileMode } from "./platform";
 import { openTaskSourceEditShell } from "./view/source-dialog";
 import { taskDisplayTags } from "./tags";
 import { formatDateFilterLabel } from "./date-filter";
+import { taskMatchesScheduleToken } from "./schedule-filter";
 import {
   applySavedViewFilters,
   clearSavedViewFilters as emptySavedViewFilters,
@@ -115,40 +116,9 @@ function taskMatchesText(t: ParsedTask, q: string): boolean {
   return false;
 }
 
-function taskMatchesDate(t: ParsedTask, date: string): boolean {
-  return t.scheduled === date || t.deadline === date || t.completed === date || t.created === date;
-}
-
-function taskMatchesDateToken(t: ParsedTask, token: string, weekStartsOn: 0 | 1): boolean {
-  if (!token || token === "all") return true;
-  const today = todayISO();
-  if (token === "overdue") return t.status === "todo" && !t.inheritsTerminal && !!t.deadline && t.deadline < today;
-  if (token === "unscheduled") return t.status === "todo" && !t.inheritsTerminal && !t.scheduled;
-
-  const effective = taskDateColumn(t) ?? t.scheduled ?? t.deadline ?? t.completed ?? t.created;
-  if (!effective) return false;
-  if (token === "today") return effective === today;
-  if (token === "tomorrow") return effective === addDays(today, 1);
-  if (token === "week") {
-    const start = startOfWeek(today, weekStartsOn);
-    const end = addDays(start, 6);
-    return effective >= start && effective <= end;
-  }
-  if (token === "next-week") {
-    const start = addDays(startOfWeek(today, weekStartsOn), 7);
-    const end = addDays(start, 6);
-    return effective >= start && effective <= end;
-  }
-  if (token === "month") {
-    const start = startOfMonth(today);
-    const end = endOfMonth(today);
-    return effective >= start && effective <= end;
-  }
-  if (token.includes("..")) {
-    const [from, to] = token.split("..", 2);
-    return (!from || effective >= from) && (!to || effective <= to);
-  }
-  return taskMatchesDate(t, token);
+function taskMatchesScheduleFilter(t: ParsedTask, token: string, weekStartsOn: 0 | 1): boolean {
+  if (t.inheritsTerminal) return !token || token === "all";
+  return taskMatchesScheduleToken(t.scheduled, token, weekStartsOn);
 }
 
 function taskDateColumn(t: ParsedTask): string | null {
@@ -838,13 +808,11 @@ export class TaskCenterView extends ItemView {
   private dateFilterOptions(): Array<readonly [string, string]> {
     return [
       ["", tr("savedViews.dateAll")],
-      ["overdue", tr("savedViews.dateOverdue")],
       ["today", tr("savedViews.dateToday")],
       ["tomorrow", tr("savedViews.dateTomorrow")],
       ["week", tr("savedViews.dateWeek")],
       ["next-week", tr("savedViews.dateNextWeek")],
       ["month", tr("savedViews.dateMonth")],
-      ["unscheduled", tr("savedViews.dateUnscheduled")],
     ];
   }
 
@@ -2534,7 +2502,7 @@ export class TaskCenterView extends ItemView {
       for (const tag of tags) {
         if (!taskHasTag(t, tag)) return false;
       }
-      if (date && !taskMatchesDateToken(t, date, this.plugin.settings.weekStartsOn)) return false;
+      if (date && !taskMatchesScheduleFilter(t, date, this.plugin.settings.weekStartsOn)) return false;
       if (status !== "all" && t.status !== status) return false;
       return true;
     };
@@ -2564,7 +2532,7 @@ export class TaskCenterView extends ItemView {
     const status = this.state.savedViewStatus;
     for (const task of this.tasks) {
       if (q && !taskMatchesText(task, q)) continue;
-      if (date && !taskMatchesDateToken(task, date, this.plugin.settings.weekStartsOn)) continue;
+      if (date && !taskMatchesScheduleFilter(task, date, this.plugin.settings.weekStartsOn)) continue;
       if (status !== "all" && task.status !== status) continue;
       for (const tag of task.tags) add(tag, 1);
     }
