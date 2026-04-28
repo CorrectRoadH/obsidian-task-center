@@ -137,8 +137,8 @@ describe("Task Center — mobile filter UI (task #88)", function () {
     });
     expect(mobileShapes).toEqual({ tagName: "SELECT", tagMultiple: true, dateTagName: "SELECT" });
 
-    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").selectByAttribute("value", "#missing");
-    await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).not.toExist();
+    await $(".task-center-bottom-sheet [data-saved-view-filter='tag']").selectByAttribute("value", "#work");
+    await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).toExist();
 
     await browser.pause(200);
     const png = await browser.takeScreenshot();

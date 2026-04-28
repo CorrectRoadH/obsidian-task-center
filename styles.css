@@ -186,8 +186,10 @@
   min-width: 112px;
   padding: 4px 10px;
 }
-.task-center-view input.bt-saved-view-filter {
-  min-width: 124px;
+.task-center-view select.bt-saved-view-filter[multiple] {
+  min-width: 148px;
+  height: 32px;
+  overflow: hidden;
 }
 
 /* Body */

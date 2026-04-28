@@ -100,6 +100,7 @@ describe("US-724 saved views / custom filters", function () {
     await expect($('[data-task-id="Tasks/Inbox.md:L3"]')).not.toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L4"]')).not.toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L5"]')).not.toExist();
+    await expect($('[data-task-id="Tasks/Inbox.md:L6"]')).not.toExist();
 
     await browser.execute(() => {
       window.prompt = () => "Work Today";
@@ -117,6 +118,7 @@ describe("US-724 saved views / custom filters", function () {
 
     await expect($('[data-task-id="Tasks/Inbox.md:L1"]')).toExist();
     await expect($('[data-task-id="Tasks/Inbox.md:L2"]')).not.toExist();
+    await expect($('[data-task-id="Tasks/Inbox.md:L6"]')).not.toExist();
 
     const saved = await browser.executeObsidian(async ({ app }) => {
       // @ts-expect-error — runtime plugin

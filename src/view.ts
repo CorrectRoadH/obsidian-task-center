@@ -80,6 +80,18 @@ function normalizeFilterTag(value: string): string {
   return trimmed.startsWith("#") ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`;
 }
 
+function parseFilterTags(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of value.split(",")) {
+    const tag = normalizeFilterTag(part);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+  }
+  return out;
+}
+
 function taskHasTag(t: ParsedTask, tag: string): boolean {
   const wanted = normalizeFilterTag(tag);
   return t.tags.some((existing) => existing.toLowerCase() === wanted);
@@ -93,6 +105,38 @@ function taskMatchesText(t: ParsedTask, q: string): boolean {
 
 function taskMatchesDate(t: ParsedTask, date: string): boolean {
   return t.scheduled === date || t.deadline === date || t.completed === date || t.created === date;
+}
+
+function taskMatchesDateToken(t: ParsedTask, token: string, weekStartsOn: 0 | 1): boolean {
+  if (!token || token === "all") return true;
+  const today = todayISO();
+  if (token === "overdue") return t.status === "todo" && !t.inheritsTerminal && !!t.deadline && t.deadline < today;
+  if (token === "unscheduled") return t.status === "todo" && !t.inheritsTerminal && !t.scheduled;
+
+  const effective = taskDateColumn(t) ?? t.scheduled ?? t.deadline ?? t.completed ?? t.created;
+  if (!effective) return false;
+  if (token === "today") return effective === today;
+  if (token === "tomorrow") return effective === addDays(today, 1);
+  if (token === "week") {
+    const start = startOfWeek(today, weekStartsOn);
+    const end = addDays(start, 6);
+    return effective >= start && effective <= end;
+  }
+  if (token === "next-week") {
+    const start = addDays(startOfWeek(today, weekStartsOn), 7);
+    const end = addDays(start, 6);
+    return effective >= start && effective <= end;
+  }
+  if (token === "month") {
+    const start = startOfMonth(today);
+    const end = endOfMonth(today);
+    return effective >= start && effective <= end;
+  }
+  if (token.includes("..")) {
+    const [from, to] = token.split("..", 2);
+    return (!from || effective >= from) && (!to || effective <= to);
+  }
+  return taskMatchesDate(t, token);
 }
 
 function taskDateColumn(t: ParsedTask): string | null {
@@ -696,22 +740,39 @@ export class TaskCenterView extends ItemView {
       this.render();
     });
 
-    const tag = wrap.createEl("input", { type: "text", placeholder: tr("savedViews.tag") });
-    tag.addClass("bt-saved-view-filter");
+    const tag = wrap.createEl("select", { cls: "bt-saved-view-filter" });
     tag.dataset.savedViewFilter = "tag";
-    tag.value = this.state.savedViewTag;
+    tag.multiple = true;
+    tag.ariaLabel = tr("savedViews.tag");
+    for (const tagName of this.collectKnownTags()) {
+      const option = tag.createEl("option", { value: tagName, text: tagName });
+      option.selected = parseFilterTags(this.state.savedViewTag).includes(tagName.toLowerCase());
+    }
     tag.addEventListener("change", () => {
-      this.state.savedViewTag = tag.value.trim();
+      this.state.savedViewTag = Array.from(tag.selectedOptions).map((option) => option.value).join(",");
       this.state.savedViewId = null;
       this.render();
     });
 
-    const date = wrap.createEl("input", { type: "text", placeholder: tr("savedViews.date") });
-    date.addClass("bt-saved-view-filter");
+    const date = wrap.createEl("select", { cls: "bt-saved-view-filter" });
     date.dataset.savedViewFilter = "date";
+    const dateOptions = [
+      ["", tr("savedViews.dateAll")],
+      ["overdue", tr("savedViews.dateOverdue")],
+      ["today", tr("savedViews.dateToday")],
+      ["tomorrow", tr("savedViews.dateTomorrow")],
+      ["week", tr("savedViews.dateWeek")],
+      ["next-week", tr("savedViews.dateNextWeek")],
+      ["month", tr("savedViews.dateMonth")],
+      ["unscheduled", tr("savedViews.dateUnscheduled")],
+    ] as const;
+    for (const [value, text] of dateOptions) date.createEl("option", { value, text });
+    if (this.state.savedViewDate && !dateOptions.some(([value]) => value === this.state.savedViewDate)) {
+      date.createEl("option", { value: this.state.savedViewDate, text: this.state.savedViewDate });
+    }
     date.value = this.state.savedViewDate;
     date.addEventListener("change", () => {
-      this.state.savedViewDate = date.value.trim();
+      this.state.savedViewDate = date.value;
       this.state.savedViewId = null;
       this.render();
     });
@@ -2155,16 +2216,18 @@ export class TaskCenterView extends ItemView {
 
   private getTextFilter(): (t: ParsedTask) => boolean {
     const q = this.state.filter.trim().toLowerCase();
-    const tag = normalizeFilterTag(this.state.savedViewTag);
+    const tags = parseFilterTags(this.state.savedViewTag);
     const grouping = normalizeFilterTag(this.state.savedViewGrouping);
     const date = this.state.savedViewDate.trim();
     const status = this.state.savedViewStatus;
-    if (!q && !tag && !grouping && !date && status === "all") return () => true;
+    if (!q && tags.length === 0 && !grouping && !date && status === "all") return () => true;
     return (t) => {
       if (q && !taskMatchesText(t, q)) return false;
-      if (tag && !taskHasTag(t, tag)) return false;
+      for (const tag of tags) {
+        if (!taskHasTag(t, tag)) return false;
+      }
       if (grouping && !taskHasTag(t, grouping)) return false;
-      if (date && !taskMatchesDate(t, date)) return false;
+      if (date && !taskMatchesDateToken(t, date, this.plugin.settings.weekStartsOn)) return false;
       if (status !== "all" && t.status !== status) return false;
       return true;
     };
@@ -2189,7 +2252,7 @@ export class TaskCenterView extends ItemView {
       for (const tag of task.tags) add(tag);
     }
     for (const view of this.plugin.settings.savedViews) {
-      if (view.tag) add(view.tag);
+      for (const tag of parseFilterTags(view.tag)) add(tag);
       if (view.grouping) add(view.grouping);
     }
     return out.sort((a, b) => a.localeCompare(b));
