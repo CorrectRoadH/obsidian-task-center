@@ -4,24 +4,34 @@ import { t as tr } from "./i18n";
 import { parseDurationToMinutes } from "./parser";
 import { todayISO, addDays, isValidISO, fromISO } from "./dates";
 import { isMobileMode } from "./platform";
-import { groupingChipLabel, normalizeGroupingTags } from "./grouping";
 import type { TaskCenterSettings } from "./types";
 
 // US-167-3: prefill chips. Token strings must match parseQuickAdd's
-// existing recognizers (resolveRelativeDate / tagRe). Grouping tag chips
-// are appended from settings by `quickChips`.
+// existing recognizers (resolveRelativeDate / tagRe). Tag chips come from
+// saved views / currently visible markdown tags, not a dedicated grouping
+// setting (US-108 / US-301).
 const BASE_QUICK_CHIPS: ReadonlyArray<{ label: string; token: string }> = [
   { label: "Today", token: "⏳ today" },
   { label: "Tomorrow", token: "⏳ tomorrow" },
   { label: "周六", token: "⏳ 周六" },
 ];
 
-export function quickChips(settings?: Pick<TaskCenterSettings, "groupingTags">): ReadonlyArray<{ label: string; token: string }> {
-  const groups = normalizeGroupingTags(settings?.groupingTags);
+export function quickChips(tags: ReadonlyArray<string> = []): ReadonlyArray<{ label: string; token: string }> {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const raw of tags) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const tag = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    normalized.push(tag);
+    if (normalized.length >= 4) break;
+  }
   return [
     ...BASE_QUICK_CHIPS,
-    ...groups.map((tag, index) => ({
-      label: groupingChipLabel(tag, index),
+    ...normalized.map((tag) => ({
+      label: tag.replace(/^#/, ""),
       token: tag,
     })),
   ];
@@ -32,6 +42,7 @@ export class QuickAddModal extends Modal {
   private api: TaskCenterApi;
   private onDone?: () => void;
   private settings?: TaskCenterSettings;
+  private tagChips: ReadonlyArray<string>;
   // visualViewport listeners for soft-keyboard avoidance (US-509). Stored so
   // we can detach in onClose; visualViewport is a singleton so leaks would
   // accumulate across modal reopens.
@@ -40,11 +51,18 @@ export class QuickAddModal extends Modal {
   // ⚠ lines on repeated failures. Only created on desktop v2.
   private errorEl: HTMLElement | null = null;
 
-  constructor(app: App, api: TaskCenterApi, onDone?: () => void, settings?: TaskCenterSettings) {
+  constructor(
+    app: App,
+    api: TaskCenterApi,
+    onDone?: () => void,
+    settings?: TaskCenterSettings,
+    tagChips: ReadonlyArray<string> = [],
+  ) {
     super(app);
     this.api = api;
     this.onDone = onDone;
     this.settings = settings;
+    this.tagChips = tagChips;
   }
 
   onOpen() {
@@ -139,11 +157,10 @@ export class QuickAddModal extends Modal {
     if (!Platform.isMobile) {
       // US-167-3: quick chips row replaces the v1 prose hint. Click =
       // append token at cursor (idempotent — already-present tokens are
-      // not duplicated). Date chips are fixed; grouping chips come from
-      // settings.groupingTags (US-301). Inbox + 下周 omitted: Inbox token
-      // semantics are not defined in parser.ts, 下周 is rarer than 周六.
+      // not duplicated). Date chips are fixed; tag chips come from saved
+      // views / current markdown tags, not app-level grouping config.
       const chipsRow = contentEl.createDiv({ cls: "tc-qa-chips" });
-      for (const c of quickChips(this.settings)) {
+      for (const c of quickChips(this.tagChips.length > 0 ? this.tagChips : savedViewTags(this.settings))) {
         const chip = chipsRow.createSpan({ cls: "tc-qa-chip", text: c.label });
         chip.setAttr("role", "button");
         chip.setAttr("tabindex", "0");
@@ -171,14 +188,14 @@ export class QuickAddModal extends Modal {
       // US-167-4 footer: `↵ <write target path>` left, `Esc` right.
       // Static — write target is computed at modal open via
       // `computeWriteTarget()` below: it reads Obsidian's built-in
-      // Daily Notes core plugin's "New file location" config when
-      // enabled, else falls back to `settings.inboxPath`. task #32
-      // (0.3.0 breaking) removed the previous `settings.dailyFolder`
-      // setting; the resolver is now the single source of truth.
+      // Daily Notes core plugin's "New file location" config. If Daily
+      // Notes is unavailable or unconfigured, the footer shows an error
+      // and submit fails without writing an inbox fallback.
       const footer = contentEl.createDiv({ cls: "tc-qa-footer" });
+      const target = computeWriteTarget(this.app);
       footer.createSpan({
         cls: "tc-qa-footer-left",
-        text: `↵ ${computeWriteTarget(this.app, this.settings)}`,
+        text: target ? `↵ ${target}` : tr("qa.noDailyTarget"),
       });
       footer.createSpan({ cls: "tc-qa-footer-right", text: "Esc" });
     } else {
@@ -258,7 +275,6 @@ export class QuickAddModal extends Modal {
       await this.api.add({
         ...parsed,
         stampCreated: this.settings?.stampCreated ?? true,
-        inboxFallback: this.settings?.inboxPath,
       });
       this.close();
       if (this.onDone) this.onDone();
@@ -283,6 +299,16 @@ function contentErr(e: unknown): string {
   return String(e);
 }
 
+function savedViewTags(settings?: TaskCenterSettings): string[] {
+  if (!settings) return [];
+  const out: string[] = [];
+  for (const view of settings.savedViews) {
+    if (view.tag) out.push(view.tag);
+    if (view.grouping) out.push(view.grouping);
+  }
+  return out;
+}
+
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // US-167-2: format an ISO date as `MM-DD (Day)` for the inline parse hint.
@@ -299,18 +325,18 @@ function formatHintDate(iso: string): string {
 // US-167-4 + US-31a: compute the footer's `↵ <path>` preview to MIRROR
 // writer.ts:addTask's actual write target so the preview never lies.
 // Resolution order (must match src/writer.ts:addTask exactly):
-//   1. Obsidian's built-in daily-notes plugin enabled →
+//   1. Obsidian's built-in daily-notes plugin enabled and folder set →
 //      `<dnOpts.folder>/<today filename per dnOpts.format>`
-//   2. Otherwise → `settings.inboxPath` (default "Tasks/Inbox.md")
+//   2. Otherwise → null (creation is blocked; no inbox fallback)
 //
 // task #32 (0.3.0 breaking): the previous `settings.dailyFolder` legacy
 // setting has been removed. Daily-note path now reads exclusively from
-// the Daily Notes core plugin (or falls back to `settings.inboxPath`).
+// the Daily Notes core plugin.
 // Exported for unit testing.
 export function computeWriteTarget(
   app: App | null | undefined,
   settings?: TaskCenterSettings,
-): string {
+): string | null {
   const dnOpts = (app as unknown as {
     internalPlugins?: {
       plugins?: Record<
@@ -319,8 +345,9 @@ export function computeWriteTarget(
       >;
     };
   })?.internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
-  if (dnOpts) return formatDailyFilename(dnOpts.folder ?? "", dnOpts.format);
-  return settings?.inboxPath ?? "Tasks/Inbox.md";
+  void settings;
+  if (!dnOpts || !dnOpts.folder) return null;
+  return formatDailyFilename(dnOpts.folder, dnOpts.format);
 }
 
 // Mirror of src/writer.ts:todayFilename — same moment-token subset.

@@ -1,9 +1,19 @@
 {
   "inboxPath": "Tasks/Inbox.md",
-  "dailyFolder": "Daily",
+  "groupingTags": [
+    "#1象限",
+    "#2象限",
+    "#3象限",
+    "#4象限"
+  ],
+  "savedViews": [],
   "defaultView": "week",
   "openOnStartup": false,
   "weekStartsOn": 1,
   "stampCreated": true,
-  "lastTab": "week"
+  "lastTab": "week",
+  "mobileLongPressMs": 500,
+  "mobileSwipeEnabled": true,
+  "mobileForceLayout": false,
+  "dailyFolder": "Daily"
 }

@@ -609,7 +609,6 @@ export default class TaskCenterPlugin extends Plugin {
       estimate,
       parent: args.parent,
       stampCreated,
-      inboxFallback: this.settings.inboxPath,
     });
     this.refreshOpenViews().catch((e) => console.warn("[task-center] refresh:", e));
     return formatAdd(r);

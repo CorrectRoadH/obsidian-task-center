@@ -275,7 +275,6 @@ export class TaskCenterApi {
     estimate?: number;
     parent?: string;
     stampCreated?: boolean;
-    inboxFallback?: string;
   }) {
     let parent: ParsedTask | null = null;
     if (opts.parent) {
@@ -291,7 +290,6 @@ export class TaskCenterApi {
       estimate: opts.estimate ?? null,
       parent,
       stampCreated: opts.stampCreated,
-      inboxFallback: opts.inboxFallback,
     });
   }
 

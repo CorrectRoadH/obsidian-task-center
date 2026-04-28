@@ -44,6 +44,16 @@ async function enableDailyNotes(): Promise<void> {
   });
 }
 
+async function configureDailyNotesFolder(folder = "Daily"): Promise<void> {
+  await browser.executeObsidian(async ({ app }, folder) => {
+    const dn = (app as any).internalPlugins?.plugins?.["daily-notes"];
+    if (!dn?.enabled) await dn?.enable?.();
+    if (dn?.instance?.options) {
+      dn.instance.options.folder = folder;
+    }
+  }, folder);
+}
+
 async function fakeEnableTasks(): Promise<void> {
   await browser.executeObsidian(async ({ app }) => {
     const p = (app as any).plugins;
@@ -142,6 +152,7 @@ describe("US-701 dependency health check (Daily Notes)", function () {
   // false positives (always-visible warnings).
   it("US-701c: no dep warning when Daily Notes is enabled and configured", async function () {
     await enableDailyNotes();
+    await configureDailyNotesFolder();
     // task #71 adds Tasks-plugin warnings to the same status-bar surface.
     // This Daily Notes healthy-state test needs all deps healthy, otherwise a
     // valid `tasks-missing` warning would make `[data-dep-warning]` exist.

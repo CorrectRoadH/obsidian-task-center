@@ -1,5 +1,4 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import { normalizeGroupingTags, parseGroupingTagsInput } from "./grouping";
 import { t as tr } from "./i18n";
 import type TaskCenterPlugin from "./main";
 
@@ -16,41 +15,9 @@ export class TaskCenterSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: tr("settings.header") });
 
-    new Setting(containerEl)
-      .setName(tr("settings.inbox.name"))
-      .setDesc(tr("settings.inbox.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("Tasks/Inbox.md")
-          .setValue(this.plugin.settings.inboxPath)
-          .onChange(async (v) => {
-            this.plugin.settings.inboxPath = v || "Tasks/Inbox.md";
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    // task #32 (0.3.0 breaking): the previous "Daily folder" setting was
-    // removed. The daily-note write target now reads exclusively from
-    // Obsidian's built-in Daily Notes core plugin's "New file location"
-    // config. See README "Breaking changes (0.3.0)" for migration details.
-
-    // US-301: configurable group tag set. Defaults preserve the legacy
-    // `#1象限`~`#4象限` behavior; clearing the field intentionally disables
-    // grouping shortcuts/chips instead of silently re-adding defaults.
-    // see USER_STORIES.md
-    new Setting(containerEl)
-      .setName(tr("settings.groupingTags.name"))
-      .setDesc(tr("settings.groupingTags.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("#1象限, #2象限, #3象限, #4象限")
-          .setValue(normalizeGroupingTags(this.plugin.settings.groupingTags).join(", "))
-          .onChange(async (v) => {
-            this.plugin.settings.groupingTags = parseGroupingTagsInput(v);
-            await this.plugin.saveSettings();
-            await this.plugin.refreshOpenViews();
-          }),
-      );
+    // US-118: removed legacy Inbox path / grouping tag settings. Quick Add
+    // writes only to Obsidian Daily Notes; tags are ordinary markdown data
+    // surfaced through filters and saved views.
 
     // US-111: default-tab setting decides which view first-open lands on
     // (week / month / completed / unscheduled). `lastTab` (US-405)
@@ -105,6 +72,16 @@ export class TaskCenterSettingTab extends PluginSettingTab {
         }),
       );
 
+    new Setting(containerEl)
+      .setName(tr("settings.stampCreated.name"))
+      .setDesc(tr("settings.stampCreated.desc"))
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.stampCreated).onChange(async (v) => {
+          this.plugin.settings.stampCreated = v;
+          await this.plugin.saveSettings();
+        }),
+      );
+
     // US-510: mobile-specific settings. Always rendered so cross-device
     // syncs (desktop user configuring their phone behaviour) work; the
     // values are no-ops on desktop. Heading is shown unconditionally.
@@ -113,30 +90,6 @@ export class TaskCenterSettingTab extends PluginSettingTab {
     // see USER_STORIES.md
     {
       containerEl.createEl("h3", { text: tr("settings.mobileHeader") });
-
-      new Setting(containerEl)
-        .setName(tr("settings.mobileLongPress.name"))
-        .setDesc(tr("settings.mobileLongPress.desc"))
-        .addSlider((s) =>
-          s
-            .setLimits(200, 1000, 50)
-            .setValue(this.plugin.settings.mobileLongPressMs)
-            .setDynamicTooltip()
-            .onChange(async (v) => {
-              this.plugin.settings.mobileLongPressMs = v;
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(tr("settings.mobileSwipe.name"))
-        .setDesc(tr("settings.mobileSwipe.desc"))
-        .addToggle((tg) =>
-          tg.setValue(this.plugin.settings.mobileSwipeEnabled).onChange(async (v) => {
-            this.plugin.settings.mobileSwipeEnabled = v;
-            await this.plugin.saveSettings();
-          }),
-        );
 
       new Setting(containerEl)
         .setName(tr("settings.mobileForceLayout.name"))
@@ -156,16 +109,13 @@ export class TaskCenterSettingTab extends PluginSettingTab {
     const cliHelp = containerEl.createEl("div", { cls: "setting-item-description" });
     cliHelp.createEl("p", { text: tr("settings.cliHelp") });
     const pre = cliHelp.createEl("pre");
-    const groupingTags = normalizeGroupingTags(this.plugin.settings.groupingTags);
-    const sampleListTag = groupingTags[1] ?? groupingTags[0] ?? "#tag";
-    const sampleAddTag = groupingTags[2] ?? groupingTags[0] ?? "#tag";
     pre.setText(
       [
         "obsidian task-center:list scheduled=today",
-        `obsidian task-center:list scheduled=unscheduled tag='${sampleListTag}'`,
+        "obsidian task-center:list scheduled=unscheduled tag='#tag'",
         "obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25",
         "obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-23",
-        `obsidian task-center:add text="去营业厅问携号转网" tag="${sampleAddTag}" scheduled=2026-04-26`,
+        "obsidian task-center:add text=\"去营业厅问携号转网\" tag=\"#tag\" scheduled=2026-04-26",
         "obsidian task-center:stats days=7 group=象限",
       ].join("\n"),
     );

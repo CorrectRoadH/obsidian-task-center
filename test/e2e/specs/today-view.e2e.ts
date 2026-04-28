@@ -13,8 +13,6 @@
  *   data-today-group="unscheduled-rec" — unscheduled recommendation
  *   data-action="reschedule-tomorrow"  — reschedule button per card
  *   data-today-empty             — empty-state element
- *
- * All tests currently FAIL — none of these elements exist yet.
  */
 import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
@@ -193,5 +191,48 @@ describe("US-720 today execution view (task #63)", function () {
     await todayTab.click();
 
     await expect($('[data-today-empty]')).toExist();
+    const metrics = await browser.execute(() => {
+      const body = document.querySelector(".task-center-view .bt-body")!.getBoundingClientRect();
+      const empty = document.querySelector("[data-today-empty]")!.getBoundingClientRect();
+      return {
+        bodyHeight: body.height,
+        bodyCenter: body.top + body.height / 2,
+        emptyHeight: empty.height,
+        emptyCenter: empty.top + empty.height / 2,
+      };
+    });
+    expect(metrics.emptyHeight).toBeGreaterThan(metrics.bodyHeight * 0.3);
+    expect(Math.abs(metrics.emptyCenter - metrics.bodyCenter)).toBeLessThan(metrics.bodyHeight * 0.25);
+  });
+
+  // US-720e: with tasks present, the Today groups should still have a stable
+  // first-screen visual center instead of sticking to the first row.
+  it("US-720e: today groups keep breathing room at the top of the first screen", async function () {
+    const today = todayISO();
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      [
+        `- [ ] Today task ⏳ ${today}`,
+        `- [ ] Inbox recommendation`,
+      ].join("\n") + "\n",
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    const todayTab = $('[data-tab="today"]');
+    await todayTab.waitForExist({ timeout: 5000 });
+    await todayTab.click();
+    await $('[data-today-group="today"]').waitForExist({ timeout: 3000 });
+
+    const metrics = await browser.execute(() => {
+      const body = document.querySelector(".task-center-view .bt-body")!.getBoundingClientRect();
+      const firstGroup = document.querySelector('[data-view="today"] [data-today-group]')!.getBoundingClientRect();
+      return {
+        offsetTop: firstGroup.top - body.top,
+      };
+    });
+    expect(metrics.offsetTop).toBeGreaterThanOrEqual(24);
+    await browser.saveScreenshot("/tmp/obsidian-task-center-us-720e-today-view.png");
   });
 });

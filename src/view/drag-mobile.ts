@@ -20,7 +20,7 @@
 //   onMove(x, y)  -- called by gesture controller per pointermove
 //     ├─ position clone at (x, y)
 //     ├─ hide clone → elementFromPoint → restore clone
-//     ├─ classify hit: tab head | day cell | trash | card body | nothing
+//     ├─ classify hit: tab head | day cell | abandon | card body | nothing
 //     ├─ drive TabDwellTracker (mobile mode 800ms)
 //     └─ paint visual hover state on hit el (data-tc-drop-hover attr)
 //
@@ -186,7 +186,7 @@ export class MobileDragController<TabKey extends string> {
     }
 
     if (!committed || !taskId) return;
-    if (hit.dropZone === "trash") {
+    if (hit.dropZone === "abandon") {
       this.opts.onTrashDrop(taskId);
     } else if (hit.date) {
       this.opts.onScheduleDrop(taskId, hit.date);
@@ -222,7 +222,7 @@ export class MobileDragController<TabKey extends string> {
     const dateEl = raw.closest<HTMLElement>("[data-date]");
     const cardEl = raw.closest<HTMLElement>("[data-task-id]:not(.bt-subcard)");
 
-    // Priority is intentional: trash > date column > card body > tab head.
+    // Priority is intentional: abandon target > card body > date surface > tab head.
     // If the user's pointer lands on a card *inside* a day column, we treat
     // the inner card as the target (nest), matching desktop semantics where
     // dragover on a card stopPropagation()s upward.
@@ -254,8 +254,8 @@ export class MobileDragController<TabKey extends string> {
 
   private paintHover(hit: DragHitState): void {
     let candidate: HTMLElement | null = null;
-    if (hit.dropZone === "trash") {
-      candidate = hit.el?.closest<HTMLElement>("[data-drop-zone='trash']") ?? null;
+    if (hit.dropZone === "abandon") {
+      candidate = hit.el?.closest<HTMLElement>("[data-drop-zone='abandon']") ?? null;
     } else if (hit.cardId) {
       candidate = hit.el?.closest<HTMLElement>("[data-task-id]:not(.bt-subcard)") ?? null;
     } else if (hit.date) {

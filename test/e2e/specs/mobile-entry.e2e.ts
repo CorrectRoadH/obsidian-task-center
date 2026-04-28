@@ -68,13 +68,13 @@ describe("Task Center — mobile explicit entry points (US-711)", function () {
       document.querySelector<HTMLElement>(".modal-close-button")?.click();
     });
 
-    await $("[data-action='open-plan-today']").click();
-    await $('[data-view="plan-today"]').waitForExist({ timeout: 3000 });
+    await $("[data-tab='week']").click();
+    await $('[data-tab="week"].active').waitForExist({ timeout: 3000 });
     await $("[data-mobile-action='open-task-center']").click();
     await $('[data-tab="today"].active').waitForExist({
       timeout: 3000,
       timeoutMsg: "US-711: mobile Task Center entry did not return to Today",
     });
-    await expect($("[data-view='plan-today']")).not.toExist();
+    await expect($(".bt-onboarding[data-mobile-empty-state='true']")).toExist();
   });
 });

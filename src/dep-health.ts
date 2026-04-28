@@ -3,8 +3,8 @@
 // The plugin depends on a couple of other plugins to behave well:
 //   1. Obsidian's built-in Daily Notes plugin (folder + format options) —
 //      Quick Add / addTask resolve their write target through it. When
-//      it's disabled or has its folder explicitly cleared, the writer
-//      silently falls back to `settings.inboxPath`.
+//      it's disabled or has no configured folder, Quick Add / add fail
+//      without writing to an inbox fallback.
 //   2. The Obsidian Tasks community plugin — when present, our parser
 //      stays format-compatible with what Tasks renders. When absent,
 //      Tasks-format extensions in the user's notes may not display the
@@ -32,11 +32,9 @@ interface InternalPluginShape {
 
 /** Pure check: returns the worst-currently-true Daily Notes warning, or null.
  *
- * Only an *explicit* empty-string folder is treated as "not configured" —
- * `undefined` / `null` mean the user has never opened the Daily Notes
- * settings page and Obsidian is happily writing to the vault root, which
- * is a valid (if minimal) configuration. Warning on undefined would noise
- * up vaults that never enabled the plugin at all.
+ * A missing or empty folder is treated as "not configured" because task
+ * creation now requires a Daily Notes folder rather than falling back to an
+ * inbox file.
  */
 export function checkDailyNotes(app: App | null | undefined): DepWarningCode | null {
   const dn = (app as unknown as {
@@ -44,7 +42,7 @@ export function checkDailyNotes(app: App | null | undefined): DepWarningCode | n
   })?.internalPlugins?.plugins?.["daily-notes"];
   if (!dn?.enabled) return "daily-notes-disabled";
   const folder = dn.instance?.options?.folder;
-  if (folder === "") return "daily-notes-no-folder";
+  if (!folder) return "daily-notes-no-folder";
   return null;
 }
 

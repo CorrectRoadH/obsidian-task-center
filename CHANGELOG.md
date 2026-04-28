@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 — 2026-04-28
+
 - CLI: add `task-center:abandon` as the preferred verb for `[-] ❌`. `task-center:drop` is kept as a deprecated alias (same behavior, output text unchanged for backward compat).
 - GUI: every card has an inline `+ 子任务` / `+ subtask` affordance — click to add a child without keyboard shortcuts; subtask inherits the parent's `⏳`.
 - GUI: card-removal actions (drag to trash / different day, mark done, abandon, date prompt, ←/→ shift, Space, Delete) now fade + collapse via Web Animations API so neighbours slide up smoothly. No-op moves skip the animation.

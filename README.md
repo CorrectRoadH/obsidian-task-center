@@ -2,7 +2,7 @@
 
 **Built on top of [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks)** — a kanban board, mobile experience, and AI-agent CLI that consumes your existing Obsidian Tasks markdown. No new format, no migration: install Tasks, install Task Center, your `- [ ]` lines just gain a board view and shell verbs.
 
-- **GUI** — a full-tab kanban view with week/month/completed/unscheduled tabs, drag-to-schedule, trash bin, keyboard shortcuts
+- **GUI** — a full-tab kanban view with today/week/month/completed/unscheduled tabs, drag-to-schedule, abandon target, keyboard shortcuts
 - **CLI** — verbs registered to Obsidian's native CLI (1.12.2+) so you (and an AI like Claude Code) can read/write tasks from the shell
 
 Data is plain markdown. No custom file format, no lock-in — Obsidian Tasks plugin, Dataview, and anything else that reads `- [ ] task 📅 2026-04-25 ⏳ 2026-04-24 [estimate:: 30m]` keeps working.
@@ -57,14 +57,15 @@ Default tag convention: `#1象限 / #2象限 / #3象限 / #4象限` map to Covey
 
 ## GUI
 
-Open Task Center — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Center", or `obsidian command id=obsidian-task-center:open`. Four tabs at the top (`⌃1–4`), each shows an active-todo badge:
+Open Task Center — ribbon icon, `⌘/Ctrl+Shift+T`, command palette "Open Task Center", or `obsidian command id=obsidian-task-center:open`. Five tabs at the top (`⌃1–5`), each shows an active-todo badge:
 
+- **今日 / Today** — focused execution view with overdue, today, and unscheduled recommendation groups plus quick actions.
 - **本周 / Week** — 7 columns Mon–Sun, today highlighted. Drag cards between columns to change `⏳`.
 - **本月 / Month** — calendar grid. Each cell is a drop zone.
 - **已完成 / Completed** — timeline grouped by week, with per-week accuracy `sum(actual)/sum(estimate)`.
 - **未排期 / Unscheduled** — grouped by quadrant, masonry layout.
 
-Below the week/month view, a masonry pool of unscheduled tasks + a sticky trash bin. Drag cards into the trash to mark `[-] ❌ today`; dropping a parent cascades to its subtasks (already-done subtasks are left alone).
+Below the week/month view, a masonry pool of unscheduled tasks + a sticky abandon target. Drag cards there to mark `[-] ❌ today`; dropping a parent cascades to its subtasks (already-done subtasks are left alone).
 
 The **Completed** tab has a 7-day stats header (accuracy ratio + top 4 tag minutes) and collapsible per-week groups — past weeks default collapsed.
 
@@ -91,15 +92,15 @@ Click the title text to rename in place (Enter commits, Escape reverts). All met
 
 ## Quick Add
 
-`⌘/Ctrl+T` in the board, or the `+ Add` button, opens a Spotlight-style command palette anchored at the top-30% of the viewport — a single transparent input, an inline parse hint that previews the resolved `⏳` / `📅` date as you type, a row of one-click prefill chips (`Today` / `Tomorrow` / `周六` / `Q1` ~ `Q4`), and a footer that shows the exact write-target file before you press Enter.
+`⌘/Ctrl+T` in the board, or the `+ Add` button, opens a Spotlight-style command palette anchored at the top-30% of the viewport — a single transparent input, an inline parse hint that previews the resolved `⏳` / `📅` date as you type, a row of one-click prefill chips (`Today` / `Tomorrow` / `周六` / recent tags), and a footer that shows the exact Daily Note write-target file before you press Enter.
 
 ```
 去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]    →  ⏳ 04-26 (Sat)
-[Today]  [Tomorrow]  [周六]  [Q1]  [Q2]  [Q3]  [Q4]
+[Today]  [Tomorrow]  [周六]  [#work]  [#writing]
 ↵ Daily/2026-04-26.md                                  Esc
 ```
 
-Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to real ISO dates. No date = goes to your inbox.
+Natural language dates (`今天/today/tomorrow/明天/周六/Mon`) resolve to real ISO dates. No date = unscheduled, still written to today's Daily Note.
 
 ## Mobile
 
@@ -264,8 +265,8 @@ obsidian task-center:add text="新冒出来的事" tag='#3象限' scheduled=2026
 ```bash
 git clone <this repo>
 cd obsidian-task-center
-npm install
-npm run dev          # esbuild watch mode
+pnpm install
+pnpm dev            # esbuild watch mode
 
 # Symlink into your dev vault (recommended):
 ln -s $(pwd) /path/to/vault/.obsidian/plugins/obsidian-task-center
@@ -287,12 +288,12 @@ notes.
 Maintainer flow:
 
 ```bash
-# 1. Bump the version. The npm `version` lifecycle script (`version-bump.mjs`)
+# 1. Bump the version. The pnpm `version` lifecycle script (`version-bump.mjs`)
 #    syncs manifest.json + versions.json and git-adds them, so the bump
 #    commit + tag both contain the full version triple in one shot.
-npm version patch    # 0.2.0 → 0.2.1 (bug fixes only)
-npm version minor    # 0.2.0 → 0.3.0 (new features, back-compat)
-npm version major    # 0.2.0 → 1.0.0 (breaking)
+pnpm version patch   # 0.2.0 → 0.2.1 (bug fixes only)
+pnpm version minor   # 0.2.0 → 0.3.0 (new features, back-compat)
+pnpm version major   # 0.2.0 → 1.0.0 (breaking)
 
 # 2. Push main + the new tag together.
 git push origin main --follow-tags
@@ -301,12 +302,12 @@ git push origin main --follow-tags
 Notes:
 - Tags must match `[0-9]+.[0-9]+.[0-9]+` exactly — no `v` prefix, no
   pre-release suffix. The repo `.npmrc` sets `tag-version-prefix=` so
-  `npm version` produces tags in the correct shape automatically.
+  `pnpm version` produces tags in the correct shape automatically.
 - Build artifacts (`main.js`) are NEVER committed back to `main`. They
   live only on the GitHub Release.
 - The workflow refuses to release if the tag does not match `manifest.json`
   or if `versions.json` is missing the entry — both safety guards exist
-  to catch a maintainer who tagged manually instead of using `npm version`.
+  to catch a maintainer who tagged manually instead of using `pnpm version`.
 - Until the plugin is listed in Obsidian's community plugin browser, release
   notes should remind mobile users to install/sync the three release assets
   (`main.js`, `manifest.json`, `styles.css`) into
@@ -317,7 +318,6 @@ Notes:
 
 | Setting | Default | Description |
 |---|---|---|
-| Default inbox path | `Tasks/Inbox.md` | Where `add` writes when `to=` omitted AND Obsidian's built-in **Daily Notes** core plugin is disabled. When Daily Notes is enabled, `add` follows its folder/format/template — Task Center never overrides that. |
 | Default view | Week | Which tab opens first |
 | Week starts on | Monday | ISO vs US-style |
 | Open Task Center on startup | off | Auto-open Task Center on vault launch |
@@ -329,7 +329,7 @@ All UI strings (tab names, settings labels, empty states, toasts) follow Obsidia
 
 ## Daily Notes
 
-Task Center reads Obsidian's built-in **Daily Notes** core plugin configuration for daily-note paths — folder, date format, and template all come from there. Disable that plugin and `add` falls back to the inbox path above. Same add-on principle as everywhere else: we consume what's already configured, we don't introduce a parallel source of truth.
+Task Center reads Obsidian's built-in **Daily Notes** core plugin configuration for daily-note paths — folder, date format, and template all come from there. Disable or misconfigure that plugin and `add` fails with an actionable warning instead of writing to an inbox fallback. Same add-on principle as everywhere else: we consume what's already configured, we don't introduce a parallel source of truth.
 
 ## Breaking Changes
 
@@ -337,7 +337,7 @@ Task Center reads Obsidian's built-in **Daily Notes** core plugin configuration 
 
 The legacy plugin setting `settings.dailyFolder` is **removed in 0.3.0**. The daily-note write target now reads exclusively from Obsidian's built-in **Daily Notes** core plugin's "New file location" config.
 
-**Migration**: enable the **Daily Notes** core plugin (Settings → Core plugins → Daily Notes) and set "New file location" to your preferred folder. The previous default `Daily/` matches the obsidian-task-center 0.2.x default — set the same value if you want zero behavior change. If Daily Notes stays disabled, Quick Add falls back to `settings.inboxPath` (`Tasks/Inbox.md` by default), shown in the Quick Add footer chip.
+**Migration**: enable the **Daily Notes** core plugin (Settings → Core plugins → Daily Notes) and set "New file location" to your preferred folder. The previous default `Daily/` matches the obsidian-task-center 0.2.x default — set the same value if you want zero behavior change. If Daily Notes stays disabled, Quick Add refuses to submit and keeps your input so you can fix the configuration.
 
 Why: the previous setting was a parallel source of truth that the writer (`writer.ts:addTask`) already ignored — it consulted the Daily Notes core plugin directly. Keeping the dead setting visible misled users when they edited it and saw no change in behavior. 0.3.0 deletes it cleanly so the path resolver has a single source.
 
@@ -345,7 +345,7 @@ Why: the previous setting was a parallel source of truth that the writer (`write
 
 旧版插件设置 `settings.dailyFolder` 在 **0.3.0 已移除**。每日笔记的写入目标现在完全由 Obsidian 内置 **Daily Notes** 核心插件的 "New file location" 配置决定。
 
-**迁移**：启用 **Daily Notes** 核心插件（设置 → 核心插件 → Daily Notes），并把 "New file location" 设置为你想要的文件夹。obsidian-task-center 0.2.x 的默认值是 `Daily/`——保持一致即可零行为差。如果 Daily Notes 没启用，Quick Add 会回落到 `settings.inboxPath`（默认 `Tasks/Inbox.md`），写入目标也会显示在 Quick Add 底部的 footer chip 上。
+**迁移**：启用 **Daily Notes** 核心插件（设置 → 核心插件 → Daily Notes），并把 "New file location" 设置为你想要的文件夹。obsidian-task-center 0.2.x 的默认值是 `Daily/`——保持一致即可零行为差。如果 Daily Notes 没启用，Quick Add 会拒绝提交并保留输入，提示你先修复 Daily Notes 配置。
 
 原因：旧设置是与写入路径解析器并行的第二个数据源——但 `writer.ts:addTask` 早就直接读 Daily Notes 核心插件的配置了，根本没读这个设置。把它留在 UI 里只会误导用户。0.3.0 干净删除，让路径解析器只剩一个 SSOT。
 

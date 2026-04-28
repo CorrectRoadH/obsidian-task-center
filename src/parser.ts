@@ -7,14 +7,6 @@ const START_RE = /🛫\s*(\d{4}-\d{2}-\d{2})/;
 const DONE_RE = /✅\s*(\d{4}-\d{2}-\d{2})/;
 const CANCELLED_RE = /❌\s*(\d{4}-\d{2}-\d{2})/;
 const CREATED_RE = /➕\s*(\d{4}-\d{2}-\d{2})/;
-// US-302: `[estimate:: 90m]` / `[actual:: 75m]` are the default convention
-// for time-budgeting (1h / 1h30m / Nm units). The parser pulls them as
-// inline-field tokens; the renderer / stats sum them. Renaming the fields
-// in user docs (e.g. `[planned::]` / `[spent::]`) is a `summary` config
-// concern, not a code change — see US-108.
-// see USER_STORIES.md
-const ESTIMATE_RE = /\[estimate::\s*([^\]]+)\]/i;
-const ACTUAL_RE = /\[actual::\s*([^\]]+)\]/i;
 // US-406: accept optional callout prefix (`> ` or `>> ` etc. with
 // interleaved whitespace) so tasks living inside Obsidian callouts are
 // first-class citizens — parsed, rendered on the board, and written
@@ -35,16 +27,12 @@ const TAG_RE = /#([^\s#\[\]()]+)/g;
 // (`🔁 every week` style — consumed greedily to the next metadata boundary).
 const META_STRIP_RE = /🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|(⏳|📅|🛫|✅|❌|⌛|🔺|⏫|🔼|🔽|⏬|➕)\s*(\d{4}-\d{2}-\d{2})?/gu;
 // US-108: inline-field syntax is `[fieldname:: value]` (Dataview-
-// compatible). The strip pattern below intentionally lists only the
-// known meta names we want hidden from the rendered title — user-
-// defined inline fields (anything beyond this allow-list) survive into
-// the title cleanup so users can extend metadata without code changes.
-// The application layer never hard-codes user tag / field literals
-// (`#1象限`, `[estimate::]` are defaults / examples only); grouping,
-// stats, and quadrant logic all read user configuration / current
-// markdown rather than baked-in literals.
+// compatible). Field names are user data, not application knowledge, so
+// cleanTitle strips every inline field from the rendered title while
+// parseInlineFields preserves the exact field names for summaries.
 // see USER_STORIES.md
-const INLINE_FIELD_STRIP_RE = /\[(estimate|actual|priority|id|recurrence)::\s*[^\]]+\]/gi;
+const INLINE_FIELD_RE = /\[([^\[\]\n:]+)::\s*([^\]]*)\]/g;
+const INLINE_FIELD_STRIP_RE = /\[[^\[\]\n:]+::\s*[^\]]*\]/g;
 const TAG_STRIP_RE = /(?:^|\s)#[^\s#\[\]()]+/g;
 // Obsidian block reference anchors: `^blockid` at a word boundary
 const BLOCK_REF_STRIP_RE = /(?:^|\s)\^[A-Za-z0-9_-]+(?=\s|$)/g;
@@ -70,6 +58,28 @@ export function formatMinutes(m: number): string {
   const h = Math.floor(m / 60);
   const rem = m - h * 60;
   return rem === 0 ? `${h}h` : `${h}h${rem}m`;
+}
+
+export function parseInlineFields(content: string): {
+  inlineFields: Record<string, string[]>;
+  durationFields: Record<string, number>;
+} {
+  const inlineFields: Record<string, string[]> = {};
+  const durationFields: Record<string, number> = {};
+  let match: RegExpExecArray | null;
+  INLINE_FIELD_RE.lastIndex = 0;
+  while ((match = INLINE_FIELD_RE.exec(content)) !== null) {
+    const name = match[1].trim();
+    const value = match[2].trim();
+    if (!name) continue;
+    if (!inlineFields[name]) inlineFields[name] = [];
+    inlineFields[name].push(value);
+    const minutes = parseDurationToMinutes(value);
+    if (minutes !== null) {
+      durationFields[name] = (durationFields[name] ?? 0) + minutes;
+    }
+  }
+  return { inlineFields, durationFields };
 }
 
 export function parseTaskLine(line: string): {
@@ -146,8 +156,9 @@ export function parseTaskFromLine(
   const completed = content.match(DONE_RE)?.[1] ?? null;
   const cancelled = content.match(CANCELLED_RE)?.[1] ?? null;
   const created = content.match(CREATED_RE)?.[1] ?? null;
-  const estimate = parseDurationToMinutes(content.match(ESTIMATE_RE)?.[1] ?? null);
-  const actual = parseDurationToMinutes(content.match(ACTUAL_RE)?.[1] ?? null);
+  const { inlineFields, durationFields } = parseInlineFields(content);
+  const estimate = durationFields.estimate ?? null;
+  const actual = durationFields.actual ?? null;
 
   const cleaned = cleanTitle(content);
   const status = statusFromCheckbox(parsed.checkbox);
@@ -170,6 +181,8 @@ export function parseTaskFromLine(
     completed,
     cancelled,
     created,
+    inlineFields,
+    durationFields,
     estimate,
     actual,
     parentLine: null,

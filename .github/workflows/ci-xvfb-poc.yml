@@ -47,10 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: "pnpm"
 
       # Per Tiger msg `da1efa28` accepting Jerry's correction (msg
       # `469d4b3a`): Electron / Obsidian on Linux needs more than just
@@ -72,11 +77,11 @@ jobs:
             libgtk-3-0t64 \
             libasound2t64
 
-      - name: Install npm deps
-        run: npm ci
+      - name: Install pnpm deps
+        run: pnpm install --frozen-lockfile
 
       - name: Build plugin
-        run: npm run build
+        run: pnpm run build
 
       # Single spec, single worker — ONLY board-basics (chosen per
       # Jerry msg `ec86573d`: not mobile / drag / subtask, those are
@@ -90,5 +95,5 @@ jobs:
           # `--auto-servernum` picks a free :N. `--server-args` keeps
           # the display config minimal (1920x1080x24, no GLX needed).
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-            npx wdio run ./wdio.conf.mts \
+            pnpm exec wdio run ./wdio.conf.mts \
               --spec test/e2e/specs/board-basics.e2e.ts

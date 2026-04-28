@@ -30,8 +30,8 @@ import { BottomSheet } from "./view/bottom-sheet";
 import { attachCardGestures } from "./view/touch";
 import { MobileDragController } from "./view/drag-mobile";
 import { isMobileMode } from "./platform";
-import { findGroupingTag, groupingTagForKey, groupingTagIndex, normalizeGroupingTags } from "./grouping";
 import { openTaskSourceEditShell } from "./view/source-dialog";
+import { taskDisplayTags } from "./tags";
 import type { SavedTaskView, SavedViewStatus } from "./types";
 import type TaskCenterPlugin from "./main";
 
@@ -39,7 +39,6 @@ type TabKey = "today" | "week" | "month" | "completed" | "unscheduled";
 
 interface ViewState {
   tab: TabKey;
-  planToday: boolean;
   anchorISO: string; // For week/month nav
   selectedTaskId: string | null;
   filter: string;
@@ -138,7 +137,6 @@ export class TaskCenterView extends ItemView {
     this.state = {
       // Priority: last-closed tab → defaultView setting → "week"
       tab: plugin.settings.lastTab ?? plugin.settings.defaultView ?? "week",
-      planToday: false,
       anchorISO: todayISO(),
       selectedTaskId: null,
       filter: "",
@@ -373,7 +371,6 @@ export class TaskCenterView extends ItemView {
   // see USER_STORIES.md
   setTab(tab: TabKey) {
     this.state.tab = tab;
-    this.state.planToday = false;
     this.plugin.settings.lastTab = tab;
     this.plugin.saveSettings().catch(() => undefined);
     this.render();
@@ -397,9 +394,7 @@ export class TaskCenterView extends ItemView {
     this.renderToolbar(header);
 
     const body = el.createDiv({ cls: "bt-body" });
-    if (this.state.planToday) {
-      this.renderPlanToday(body);
-    } else if (this.tasks.length === 0) {
+    if (this.tasks.length === 0) {
       this.renderOnboarding(body);
     } else {
       switch (this.state.tab) {
@@ -458,10 +453,10 @@ export class TaskCenterView extends ItemView {
   }
 
   /**
-   * US-502 mobile sticky action bar: 🗑 (drop = drop task) on the left,
+   * US-502 mobile sticky action bar: abandon target on the left,
    * ➕ Add (open Quick Add) on the right. Always rendered; styles.css
    * hides it on ≥600px viewports. Drop semantics share the same wiring
-   * as the desktop pool trash zone via `wireTrashDropTarget`.
+   * as the desktop pool abandon zone via `wireTrashDropTarget`.
    */
   private renderMobileActionBar(parent: HTMLElement) {
     const bar = parent.createDiv({ cls: "bt-mobile-action-bar" });
@@ -474,10 +469,11 @@ export class TaskCenterView extends ItemView {
     home.dataset.mobileAction = "open-task-center";
     home.addEventListener("click", () => this.setTab("today"));
 
-    const trash = bar.createDiv({ cls: "bt-mobile-trash" });
-    trash.dataset.dropZone = "trash";
-    trash.createSpan({ cls: "bt-mobile-trash-icon", text: "🗑" });
-    this.wireTrashDropTarget(trash);
+    const abandon = bar.createDiv({ cls: "bt-mobile-trash" });
+    abandon.dataset.dropZone = "abandon";
+    abandon.createSpan({ cls: "bt-mobile-trash-icon", text: "⏹" });
+    abandon.createSpan({ cls: "bt-mobile-trash-label", text: tr("trash.title") });
+    this.wireTrashDropTarget(abandon);
 
     const add = bar.createEl("button", {
       text: tr("toolbar.add"),
@@ -498,7 +494,7 @@ export class TaskCenterView extends ItemView {
       wrap.dataset.mobileEmptyState = "true";
     }
     wrap.createEl("h2", { text: tr("onboarding.title") });
-    // UX-mobile §10: desktop body mentions Cmd/Ctrl+T which doesn't apply.
+    // UX-mobile §10: mobile body avoids desktop keyboard language.
     wrap.createEl("p", { text: tr(isMobileMode() ? "onboarding.mobileBody" : "onboarding.body") });
     const btn = wrap.createEl("button", { text: tr("onboarding.cta"), cls: "bt-onboarding-cta" });
     btn.dataset.mobileAction = "empty-quick-add";
@@ -670,14 +666,6 @@ export class TaskCenterView extends ItemView {
     add.addClass("bt-add-btn");
     add.addEventListener("click", () => this.openQuickAdd());
 
-    // US-721: explicit planning entry point. Kept in the global toolbar so
-    // users can jump from any tab into the "pick from unscheduled → schedule"
-    // workflow, and e2e has a stable always-visible selector.
-    const planToday = bar.createEl("button", { text: tr("plan.entry") });
-    planToday.dataset.action = "open-plan-today";
-    planToday.addClass("bt-plan-today-btn");
-    planToday.addEventListener("click", () => void this.openPlanToday());
-
     // settings gear
     const gear = bar.createEl("button", { text: "⚙" });
     gear.addClass("bt-gear");
@@ -749,7 +737,7 @@ export class TaskCenterView extends ItemView {
     const grouping = wrap.createEl("select", { cls: "bt-saved-view-filter" });
     grouping.dataset.savedViewFilter = "grouping";
     grouping.createEl("option", { value: "", text: tr("savedViews.groupingAll") });
-    for (const tagName of this.getGroupingTags()) {
+    for (const tagName of this.collectKnownTags()) {
       grouping.createEl("option", { value: tagName, text: tagName });
     }
     grouping.value = this.state.savedViewGrouping;
@@ -1303,18 +1291,20 @@ export class TaskCenterView extends ItemView {
     this.renderTrashZone(wrap);
   }
 
-  // US-123: bottom trash drop zone — dragging a card here marks it
+  // US-123: bottom abandon target — dragging a card here marks it
   // `[-] ❌ today` (abandoned), and by US-124 cascades to its `todo`
   // descendants while preserving already-done children as history.
+  // `data-drop-zone="abandon"` is the selector contract; the visible UI
+  // intentionally avoids trash/delete wording.
   // see USER_STORIES.md
   private renderTrashZone(parent: HTMLElement) {
     const trash = parent.createDiv({ cls: "bt-trash" });
-    // e2e drop-zone selector: `[data-drop-zone="trash"]`. Stable across the
+    // e2e drop-zone selector: `[data-drop-zone="abandon"]`. Stable across the
     // visible icon / label / theme. (The mobile action bar carries the
     // same data attribute on a different element; styles.css hides one
     // or the other based on viewport width — see UX-mobile.md §2 / §13.)
-    trash.dataset.dropZone = "trash";
-    trash.createDiv({ cls: "bt-trash-icon", text: "🗑" });
+    trash.dataset.dropZone = "abandon";
+    trash.createDiv({ cls: "bt-trash-icon", text: "⏹" });
     const label = trash.createDiv({ cls: "bt-trash-label" });
     label.createSpan({ text: tr("trash.title"), cls: "bt-trash-title" });
     label.createSpan({
@@ -1326,8 +1316,8 @@ export class TaskCenterView extends ItemView {
 
   /**
    * Wires `dragover` / `dragleave` / `drop` for any element acting as a
-   * trash drop target. Drop = `api.drop(id)` (mark `[-] ❌`). Used by both
-   * the desktop pool trash zone (UX.md §6) and the mobile sticky action
+   * abandon drop target. Drop = `api.drop(id)` (mark `[-] ❌`). Used by both
+   * the desktop pool abandon zone (UX.md §6) and the mobile sticky action
    * bar (UX-mobile.md §2). Single helper so semantics never diverge.
    */
   private wireTrashDropTarget(el: HTMLElement) {
@@ -1451,6 +1441,7 @@ export class TaskCenterView extends ItemView {
 
     const main = card.createDiv({ cls: "bt-today-card-main" });
     main.createDiv({ cls: "bt-today-card-title", text: t.title });
+    this.renderTaskTags(main, t.tags, "bt-today-card-tags");
     const meta = main.createDiv({ cls: "bt-today-card-meta" });
     const metaParts: string[] = [];
     metaParts.push(t.path);
@@ -1502,102 +1493,6 @@ export class TaskCenterView extends ItemView {
     this.render();
   }
 
-  private async openPlanToday(): Promise<void> {
-    await this.reloadTasks();
-    this.state.planToday = true;
-    this.render();
-  }
-
-  // US-721 (task #64): today planning mode.
-  //
-  // Scope intentionally matches `test/e2e/specs/today-plan.e2e.ts`: provide
-  // an entry button, list unscheduled candidates, show total estimate, and
-  // schedule a candidate to today/tomorrow/this week. It does not implement
-  // the broader saved-plan / capacity-planning product surface.
-  private renderPlanToday(parent: HTMLElement) {
-    const wrap = parent.createDiv({ cls: "bt-plan-today" });
-    wrap.dataset.view = "plan-today";
-
-    const today = todayISO();
-    const tomorrow = addDays(today, 1);
-    const weekEnd = addDays(startOfWeek(today, this.plugin.settings.weekStartsOn), 6);
-    const candidates = this.planTodayCandidates();
-    const totalEstimate = candidates.reduce((sum, task) => sum + (task.estimate ?? 0), 0);
-    const capacityMinutes = 8 * 60;
-
-    const head = wrap.createDiv({ cls: "bt-plan-head" });
-    head.createDiv({ cls: "bt-plan-title", text: tr("plan.title") });
-    const total = head.createDiv({ cls: "bt-plan-total-est" });
-    total.dataset.planTotalEst = String(totalEstimate);
-    total.setText(tr("plan.totalEst", { dur: formatMinutes(totalEstimate) }));
-    if (totalEstimate > capacityMinutes) {
-      const overload = head.createDiv({ cls: "bt-plan-overload" });
-      overload.dataset.planOverload = "true";
-      overload.setText(tr("plan.overload", { dur: formatMinutes(totalEstimate - capacityMinutes) }));
-    }
-
-    if (candidates.length === 0) {
-      wrap.createDiv({ cls: "bt-plan-empty", text: tr("plan.empty") });
-      return;
-    }
-
-    const list = wrap.createDiv({ cls: "bt-plan-list" });
-    for (const task of candidates) {
-      this.renderPlanCandidate(list, task, today, tomorrow, weekEnd);
-    }
-  }
-
-  private planTodayCandidates(): ParsedTask[] {
-    const candidates = this.tasks
-      .filter((t) => t.status === "todo" && !t.inheritsTerminal && !t.scheduled && t.title.trim() !== "")
-      .sort((a, b) => {
-        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
-        if (a.deadline) return -1;
-        if (b.deadline) return 1;
-        if (a.created && b.created) return b.created.localeCompare(a.created);
-        if (a.created) return -1;
-        if (b.created) return 1;
-        return a.title.localeCompare(b.title);
-      });
-    return this.hideChildrenOfVisibleParents(candidates);
-  }
-
-  private renderPlanCandidate(
-    parent: HTMLElement,
-    task: ParsedTask,
-    today: string,
-    tomorrow: string,
-    weekEnd: string,
-  ) {
-    const row = parent.createDiv({ cls: "bt-plan-candidate" });
-    row.dataset.planCandidate = "true";
-    row.dataset.taskId = task.id;
-
-    const main = row.createDiv({ cls: "bt-plan-candidate-main" });
-    main.createDiv({ cls: "bt-plan-candidate-title", text: task.title });
-    const meta: string[] = [compactPath(task.path)];
-    if (task.deadline) meta.push(`📅 ${task.deadline}`);
-    if (typeof task.estimate === "number") meta.push(`⏱ ${formatMinutes(task.estimate)}`);
-    main.createDiv({ cls: "bt-plan-candidate-meta", text: meta.join(" · ") });
-
-    const actions = row.createDiv({ cls: "bt-plan-actions" });
-    const mkSchedule = (label: string, action: "schedule-today" | "schedule-tomorrow" | "schedule-week", date: string) => {
-      const btn = actions.createEl("button", { text: label, cls: `bt-plan-action bt-plan-action-${action}` });
-      btn.dataset.planAction = action;
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.api.schedule(task.id, date)
-          .then(() => this.refreshAfterAction())
-          .catch((err) => console.warn("[task-center US-721] schedule failed:", err));
-      });
-    };
-
-    mkSchedule(tr("plan.scheduleToday"), "schedule-today", today);
-    mkSchedule(tr("plan.scheduleTomorrow"), "schedule-tomorrow", tomorrow);
-    mkSchedule(tr("plan.scheduleWeek"), "schedule-week", weekEnd);
-  }
-
   private renderUnscheduledBig(parent: HTMLElement) {
     const filter = this.getTextFilter();
     const unscheduledAll = this.tasks
@@ -1624,29 +1519,9 @@ export class TaskCenterView extends ItemView {
     // UX-mobile §10: shortcut hint is desktop-only.
     hint.setText(tr(Platform.isMobile ? "unscheduled.mobileHint" : "unscheduled.hint"));
 
-    // US-301: grouping tags are configurable. The legacy `#1象限`~`#4象限`
-    // convention remains the default, while custom sets such as
-    // `#now / #next / #later / #waiting` group the same way.
-    // see USER_STORIES.md
-    const groupingTags = this.getGroupingTags();
-    const otherLabel = tr("pool.other");
-    const groups: Record<string, ParsedTask[]> = { [otherLabel]: [] };
-    for (const tag of groupingTags) groups[tag] = [];
-    for (const task of unscheduled) {
-      const tag = findGroupingTag(task.tags, groupingTags);
-      groups[tag ?? otherLabel].push(task);
-    }
     const grid = wrap.createDiv({ cls: "bt-unscheduled-grid" });
-    for (const label of [...groupingTags, otherLabel]) {
-      const list = groups[label] ?? [];
-      if (list.length === 0) continue;
-      const col = grid.createDiv({ cls: "bt-unscheduled-col" });
-      col.createDiv({
-        text: `${label} (${list.length})`,
-        cls: "bt-unscheduled-col-head",
-      });
-      for (const t of list) this.renderCard(col, t);
-    }
+    const col = grid.createDiv({ cls: "bt-unscheduled-col" });
+    for (const t of unscheduled) this.renderCard(col, t);
 
     this.renderTrashZone(wrap);
   }
@@ -1713,6 +1588,8 @@ export class TaskCenterView extends ItemView {
     const title = titleRow.createDiv({ cls: "bt-card-title", text: t.title });
     title.title = t.title; // tooltip for long titles
     if (t.status === "done") card.addClass("done");
+
+    this.renderTaskTags(card, t.tags, "bt-card-tags");
 
     // Meta row
     const meta = card.createDiv({ cls: "bt-card-meta" });
@@ -1866,7 +1743,7 @@ export class TaskCenterView extends ItemView {
         const r = await this.api.drop(taskId);
         if (!r.unchanged) {
           this.undoStack.push({
-            label: "🗑 dropped",
+            label: tr("trash.dropped"),
             ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
           });
           new Notice(tr("trash.dropped"));
@@ -1932,7 +1809,7 @@ export class TaskCenterView extends ItemView {
           ],
         });
       }
-      new Notice(kind === "done" ? "✓ Done" : "🗑 Dropped", 1000);
+      new Notice(kind === "done" ? "✓ Done" : tr("trash.dropped"), 1000);
     } catch (err) {
       new Notice(tr("notice.error", { msg: (err as Error).message }), 4000);
     }
@@ -2038,6 +1915,16 @@ export class TaskCenterView extends ItemView {
     }
   }
 
+  private renderTaskTags(parent: HTMLElement, tags: string[], extraClass: string) {
+    const displayTags = taskDisplayTags(tags);
+    if (displayTags.length === 0) return;
+
+    const row = parent.createDiv({ cls: `bt-task-tags ${extraClass}` });
+    for (const tag of displayTags) {
+      row.createSpan({ cls: "bt-task-tag", text: tag });
+    }
+  }
+
   /** Count all descendants (children + grandchildren + …) of a task. */
   private countDescendants(c: ParsedTask): number {
     let count = 0;
@@ -2132,7 +2019,7 @@ export class TaskCenterView extends ItemView {
       e.dataTransfer.effectAllowed = "move";
       el.addClass("dragging");
       // View-wide "a drag is in progress" marker so drop zones (esp. the
-      // trash bin) can attract attention without waiting for direct hover.
+      // abandon target can attract attention without waiting for direct hover.
       this.contentEl.addClass("dragging-active");
     });
     el.addEventListener("dragend", (e) => {
@@ -2283,13 +2170,29 @@ export class TaskCenterView extends ItemView {
     };
   }
 
-  private quadrantClass(tags: string[]): string | null {
-    const index = groupingTagIndex(tags, this.getGroupingTags());
-    return index >= 0 && index < 4 ? `q${index + 1}` : null;
+  private quadrantClass(_tags: string[]): string | null {
+    return null;
   }
 
-  private getGroupingTags(): string[] {
-    return normalizeGroupingTags(this.plugin.settings.groupingTags);
+  private collectKnownTags(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const add = (raw: string) => {
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+      const tag = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+      if (seen.has(tag)) return;
+      seen.add(tag);
+      out.push(tag);
+    };
+    for (const task of this.tasks) {
+      for (const tag of task.tags) add(tag);
+    }
+    for (const view of this.plugin.settings.savedViews) {
+      if (view.tag) add(view.tag);
+      if (view.grouping) add(view.grouping);
+    }
+    return out.sort((a, b) => a.localeCompare(b));
   }
 
   private clearSavedViewFilters(): void {
@@ -2377,11 +2280,9 @@ export class TaskCenterView extends ItemView {
 
   // ---------- Keyboard ----------
 
-  // US-166: global desktop hotkeys live here — Ctrl+1~4 switch tabs,
-  // `/` focuses the search input, Ctrl/Cmd+Z pops the undo stack,
-  // Ctrl/Cmd+T opens Quick Add. Per-card shortcuts (1~4 quadrant,
-  // arrows reschedule, Space toggle, D date prompt, E open source,
-  // Delete drop, Enter open) follow once a card is selected.
+  // US-166 / UX.md §6.8: global desktop hotkeys live here — Ctrl+1~5
+  // switch tabs, `/` focuses the search input, Ctrl/Cmd+Z pops the undo
+  // stack. Card-level shortcuts were removed with the old README residue.
   // US-501: desktop-only features silently no-op on Obsidian Mobile —
   // returning early here means the board never claims to handle a key
   // the user can't produce. CLI / hover popovers do the same at their
@@ -2413,14 +2314,6 @@ export class TaskCenterView extends ItemView {
       return;
     }
 
-    // Quick add
-    if ((e.ctrlKey || e.metaKey) && e.key === "t" && !e.shiftKey && !e.altKey) {
-      // Ctrl+T / Cmd+T — quick add
-      e.preventDefault();
-      this.openQuickAdd();
-      return;
-    }
-
     // Focus search
     if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       const active = document.activeElement;
@@ -2434,63 +2327,6 @@ export class TaskCenterView extends ItemView {
       return;
     }
 
-    // Selected-card shortcuts
-    const sel = this.getSelectedTask();
-    if (!sel) return;
-    // Don't interfere when input is focused
-    if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
-
-    if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
-      const target = groupingTagForKey(e.key, this.getGroupingTags());
-      if (!target) return;
-      e.preventDefault();
-      await this.changeQuadrant(sel, e.key);
-      return;
-    }
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      if (!sel.scheduled) return;
-      e.preventDefault();
-      const delta = e.key === "ArrowRight" ? 1 : -1;
-      const newDate = addDays(sel.scheduled, delta);
-      await this.runWithRemoveAnim(sel.id, async () => {
-        const r = await this.api.schedule(sel.id, newDate);
-        if (!r.unchanged) {
-          this.undoStack.push({
-            label: `⏳ ${newDate}`,
-            ops: [{ path: sel.path, line: sel.line, before: [r.before], after: [r.after] }],
-          });
-        }
-      });
-      return;
-    }
-    if (e.key === "d" || e.key === "D") {
-      e.preventDefault();
-      this.openDatePrompt(sel);
-      return;
-    }
-    if (e.key === " ") {
-      e.preventDefault();
-      await this.runWithRemoveAnim(sel.id, async () => {
-        if (sel.status === "done") await this.api.undone(sel.id);
-        else await this.api.done(sel.id);
-      });
-      return;
-    }
-    if (e.key === "e" || e.key === "E") {
-      e.preventDefault();
-      void this.openSourceEditShell(sel);
-      return;
-    }
-    if (e.key === "Delete" || e.key === "Backspace") {
-      e.preventDefault();
-      await this.runWithRemoveAnim(sel.id, () => this.api.drop(sel.id));
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void this.openSourceEditShell(sel);
-      return;
-    }
   }
 
   // Undo stack push / pop now live on `this.undoStack` (UndoStack instance).
@@ -2502,26 +2338,10 @@ export class TaskCenterView extends ItemView {
     return this.tasks.find((t) => t.id === this.state.selectedTaskId) ?? null;
   }
 
-  private async changeQuadrant(t: ParsedTask, digit: string) {
-    const groupingTags = this.getGroupingTags();
-    const target = groupingTagForKey(digit, groupingTags);
-    if (!target) return;
-    // Remove existing configured grouping tags, add target.
-    for (const existing of t.tags) {
-      if (groupingTags.includes(existing) && existing !== target) {
-        await this.api.tag(t.id, existing, true);
-      }
-    }
-    if (!t.tags.includes(target)) {
-      await this.api.tag(t.id, target);
-    }
-    this.scheduleRefresh();
-  }
-
   // ---------- Context menu / source ----------
 
   // US-164: right-click a card to get secondary task actions — toggle
-  // done, schedule today / tomorrow / clear, switch grouping tags, drop.
+  // done, schedule today / tomorrow / clear, drop.
   // Source/context editing is now the US-168 single-click source shell.
   // Wired from `wireCardEvents`'s `contextmenu` listener.
   // see USER_STORIES.md
@@ -2564,17 +2384,6 @@ export class TaskCenterView extends ItemView {
         }
       }),
     );
-    const groupingTags = this.getGroupingTags();
-    if (groupingTags.length > 0) m.addSeparator();
-    for (let index = 0; index < groupingTags.length && index < 9; index++) {
-      const tag = groupingTags[index];
-      m.addItem((item) =>
-        item.setTitle(tr("ctx.groupingTag", { tag })).onClick(async () => {
-          await this.changeQuadrant(task, String(index + 1));
-        }),
-      );
-    }
-    if (groupingTags.length > 0) m.addSeparator();
     m.addItem((i) =>
       i.setTitle(tr("ctx.drop")).onClick(async () => {
         await this.runWithRemoveAnim(task.id, () => this.api.drop(task.id));
@@ -2611,7 +2420,13 @@ export class TaskCenterView extends ItemView {
   }
 
   openQuickAdd() {
-    new QuickAddModal(this.app, this.api, () => this.scheduleRefresh(), this.plugin.settings).open();
+    new QuickAddModal(
+      this.app,
+      this.api,
+      () => this.scheduleRefresh(),
+      this.plugin.settings,
+      this.collectKnownTags(),
+    ).open();
   }
 
 }

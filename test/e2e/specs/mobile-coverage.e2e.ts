@@ -11,7 +11,7 @@ import { obsidianPage } from "wdio-obsidian-service";
  *   ✅ 长按 → action sheet (US-506)
  *   ✅ 滑动 done (US-508 left)
  *   ✅ 滑动 drop (US-508 right)
- *   ✅ 移动拖拽到日期 + 垃圾站 (US-507)
+ *   ✅ 移动拖拽到日期 + 放弃目标区 (US-507)
  *
  * The five gesture / sheet behaviors below are gated on
  * Obsidian core's `Platform.isMobile`. WDIO drives a desktop Chromium
@@ -470,10 +470,10 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     );
   });
 
-  // US-507 (trash): mobile pointer-drag from a card to the trash zone
+  // US-507 (abandon): mobile pointer-drag from a card to the abandon zone
   // marks it dropped. Same gesture path as the day-column case but the
-  // hit-test resolves to `[data-drop-zone='trash']`.
-  it("US-507: mobile pointer-drag to trash drops the task", async function () {
+  // hit-test resolves to `[data-drop-zone='abandon']`.
+  it("US-507: mobile pointer-drag to abandon drops the task", async function () {
     await setTestForceMobile(true);
     const today = todayISO();
     const path = "Tasks/Inbox.md";
@@ -481,11 +481,11 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     await openMobileBoardWeek();
 
     const cardSel = `.task-center-view [data-task-id="${path}:L1"]`;
-    // Both desktop pool trash and mobile sticky action-bar trash carry
-    // `[data-drop-zone="trash"]`. We need the mobile one (the desktop
+    // Both desktop pool abandon and mobile sticky action-bar abandon carry
+    // `[data-drop-zone="abandon"]`. We need the mobile one (the desktop
     // pool element is `display:none` under `[data-mobile-layout="true"]`,
     // so elementFromPoint resolves to the visible mobile bar instead).
-    const trashSel = `.bt-mobile-trash[data-drop-zone="trash"]`;
+    const trashSel = `.bt-mobile-trash[data-drop-zone="abandon"]`;
     await $(cardSel).waitForExist({ timeout: 5000 });
     await $(trashSel).waitForExist({ timeout: 5000 });
 

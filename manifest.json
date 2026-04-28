@@ -1,7 +1,7 @@
 {
   "id": "obsidian-task-center",
   "name": "Task Center",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "minAppVersion": "1.5.0",
   "description": "Task Center + CLI for energy-based task management. Full Task Center GUI + shell CLI on top of Obsidian Tasks syntax.",
   "author": "ctrdh",

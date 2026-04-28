@@ -1,5 +1,3 @@
-const DEFAULT_GROUPING_TAGS = ["#1象限", "#2象限", "#3象限", "#4象限"];
-
 function normalizeTag(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -20,7 +18,7 @@ export function parseGroupingTagsInput(input: string): string[] {
 }
 
 export function normalizeGroupingTags(tags: string[] | undefined | null): string[] {
-  if (tags == null) return [...DEFAULT_GROUPING_TAGS];
+  if (tags == null) return [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of tags) {

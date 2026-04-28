@@ -9,7 +9,8 @@ import { spawnSync } from "node:child_process";
 // US-31a task #31a — footer/writer SSOT alignment.
 // computeWriteTarget must mirror writer.ts addTask's target resolution:
 //   - Obsidian's built-in daily-notes plugin enabled → its folder/format
-//   - Otherwise → settings.inboxPath
+//   - Otherwise → no target; Quick Add / add must fail instead of writing
+//     to an inbox fallback.
 //
 // task #32 (0.3.0 breaking) removed the legacy `settings.dailyFolder`;
 // the old "footer lies" scenario it produced is now structurally
@@ -55,8 +56,8 @@ test("parseQuickAdd — extracts tags", () => {
   assert.deepEqual(r.tag.sort(), ["#2象限", "#基建"]);
 });
 
-test("US-301: quick chips follow custom groupingTags", () => {
-  const chips = quickChips({ groupingTags: ["#now", "#next"] });
+test("US-108/US-301: quick chips use saved/current markdown tags, not a groupingTags setting", () => {
+  const chips = quickChips(["#now", "#next", "#now"]);
   assert.deepEqual(
     chips.map((c) => c.token),
     ["⏳ today", "⏳ tomorrow", "⏳ 周六", "#now", "#next"],
@@ -131,20 +132,31 @@ test("computeWriteTarget — daily-notes plugin enabled → uses its folder/form
   assert.match(r, /^Journal\/\d{4}-\d{2}-\d{2}\.md$/);
 });
 
-test("computeWriteTarget — daily-notes plugin DISABLED → falls back to inboxPath (footer must not lie)", () => {
+test("computeWriteTarget — daily-notes plugin DISABLED → null target (Quick Add must not write inbox fallback)", () => {
   // No internalPlugins.plugins["daily-notes"] → daily-notes is disabled.
   const app = { internalPlugins: { plugins: {} } };
-  const settings = { inboxPath: "Tasks/Inbox.md" };
-  const r = computeWriteTarget(app, settings);
-  // task #32 (0.3.0): no `dailyFolder` setting exists; the resolver
-  // returns the inbox path when daily-notes is disabled.
-  assert.equal(r, "Tasks/Inbox.md");
+  const r = computeWriteTarget(app);
+  assert.equal(r, null);
 });
 
-test("computeWriteTarget — daily-notes disabled + no inboxPath setting → 'Tasks/Inbox.md' default", () => {
+test("computeWriteTarget — daily-notes enabled but no folder → null target", () => {
+  const app = {
+    internalPlugins: {
+      plugins: {
+        "daily-notes": {
+          instance: { options: { folder: "", format: "YYYY-MM-DD" } },
+        },
+      },
+    },
+  };
+  const r = computeWriteTarget(app);
+  assert.equal(r, null);
+});
+
+test("computeWriteTarget — daily-notes disabled + no settings → null target", () => {
   const app = { internalPlugins: { plugins: {} } };
   const r = computeWriteTarget(app, undefined);
-  assert.equal(r, "Tasks/Inbox.md");
+  assert.equal(r, null);
 });
 
 test("resolveDateInput — blank clears", () => {

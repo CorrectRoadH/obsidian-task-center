@@ -160,7 +160,6 @@ test("task #108 — toolbar, Today, and saved-view control labels are localized"
   const keys = [
     { key: "toolbar.add", vars: undefined, mustDifferFromEnInZh: true },
     { key: "toolbar.filter", vars: undefined, mustDifferFromEnInZh: true },
-    { key: "plan.entry", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupOverdue", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupToday", vars: undefined, mustDifferFromEnInZh: true },
     { key: "today.groupRec", vars: undefined, mustDifferFromEnInZh: true },

@@ -26,28 +26,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: "pnpm"
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       # Ordered for fastest failure: typecheck < lint < unit < e2e.
       # Any single step failing aborts the workflow before the release
       # job runs — that's the whole point of US-602 ("build 通过 != 可发版").
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
       - name: Unit tests
-        run: npm run test:unit
+        run: pnpm run test:unit
       # E2E uses wdio-obsidian-service, which downloads Obsidian binaries
       # via obsidian-launcher. Beta versions need OBSIDIAN_EMAIL — pin to
       # `latest/latest` to skip Insiders requirement on CI runners.
       - name: E2E tests
         env:
           OBSIDIAN_VERSIONS: latest/latest
-        run: npm run test:e2e
+        run: pnpm run test:e2e
 
   release:
     name: Build + GitHub Release (US-601, US-603, US-604, US-605)
@@ -59,15 +63,19 @@ jobs:
           # Full history so the conventional-commit grouping can
           # diff this tag against the prior tag.
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: "pnpm"
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Hard guard: the tag MUST match manifest.json's version. The
-      # `version-bump.mjs` script (wired into the `version` npm
+      # `version-bump.mjs` script (wired into the `version` package
       # lifecycle) is supposed to keep them in lockstep. If someone
       # tagged manually without bumping, fail loud here rather than
       # publish a release with mismatched plugin metadata.
@@ -97,7 +105,7 @@ jobs:
           fi
 
       - name: Build (produces main.js)
-        run: npm run build
+        run: pnpm run build
 
       # US-604: release notes. Strategy:
       #   - find previous semver tag (skip the current one)

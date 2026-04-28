@@ -324,7 +324,7 @@ export function rebuildTaskLineWithNewTitle(
   const parsed = parseTaskLine(raw);
   if (!parsed) return null;
   const META_TOKEN_RE =
-    /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|[🔺⏫🔼🔽⏬]|\[(?:estimate|actual|priority|id|recurrence)::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/gu;
+    /#[^\s#\[\]()]+|⏳\s*\d{4}-\d{2}-\d{2}|📅\s*\d{4}-\d{2}-\d{2}|🛫\s*\d{4}-\d{2}-\d{2}|✅\s*\d{4}-\d{2}-\d{2}|❌\s*\d{4}-\d{2}-\d{2}|➕\s*\d{4}-\d{2}-\d{2}|🔁\s*[^⏳📅🛫✅❌➕#\[\^]+|[🔺⏫🔼🔽⏬]|\[[^\[\]\n:]+::\s*[^\]]+\]|\^[A-Za-z0-9_-]+/gu;
   const tokens: string[] = [];
   let m;
   while ((m = META_TOKEN_RE.exec(parsed.content)) !== null) {
@@ -392,8 +392,8 @@ export interface AddTaskOpts {
   parent?: ParsedTask | null;
   checkbox?: string;
   stampCreated?: boolean;
-  // Fallback target when no targetPath, no parent, and no daily note exists.
-  // Typically plugin.settings.inboxPath (default "Tasks/Inbox.md").
+  // Legacy no-op: kept so old callers compile, but new tasks without an
+  // explicit target require a configured Daily Notes plugin.
   inboxFallback?: string;
 }
 
@@ -457,7 +457,9 @@ export async function addTask(
     if (opts.parent) {
       targetPath = opts.parent.path;
     } else {
-      // Priority: today's daily note → inbox fallback ("Tasks/Inbox.md")
+      // Priority: today's daily note. US-163 / US-701 removed the old inbox
+      // fallback: when Daily Notes is disabled or has no folder, creation
+      // must fail without writing to an arbitrary file.
       const dnOpts =
         (app as unknown as {
           internalPlugins?: {
@@ -467,12 +469,19 @@ export async function addTask(
             >;
           };
         }).internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
-      const dailyEnabled = !!dnOpts;
-      if (dailyEnabled) {
-        targetPath = todayFilename(dnOpts?.folder ?? "", dnOpts?.format);
-      } else {
-        targetPath = opts.inboxFallback ?? "Tasks/Inbox.md";
+      if (!dnOpts) {
+        throw new TaskWriterError(
+          "daily_notes_unavailable",
+          "Daily Notes plugin is disabled; enable and configure Daily Notes before adding tasks.",
+        );
       }
+      if (!dnOpts.folder) {
+        throw new TaskWriterError(
+          "daily_notes_unavailable",
+          "Daily Notes folder is not configured; set New file location before adding tasks.",
+        );
+      }
+      targetPath = todayFilename(dnOpts.folder, dnOpts.format);
     }
   }
   targetPath = normalizePath(targetPath);

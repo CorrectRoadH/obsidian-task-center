@@ -1,15 +1,17 @@
 {
   "name": "obsidian-task-center",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "description": "Task Center + CLI for energy-based task management on top of Obsidian Tasks syntax",
   "main": "main.js",
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc -noEmit",
-    "test": "npm run test:unit",
-    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs test/cache.test.mjs test/i18n.test.mjs test/wdio-versions.test.mjs test/task32-daily-folder.test.mjs test/source-dialog-api.test.mjs",
-    "test:e2e": "npm run build && wdio run ./wdio.conf.mts",
+    "test": "pnpm run test:unit",
+    "test:unit": "node --test test/parser.test.mjs test/writer.test.mjs test/cli.test.mjs test/quickadd.test.mjs test/cache.test.mjs test/i18n.test.mjs test/wdio-versions.test.mjs test/task32-daily-folder.test.mjs test/source-dialog-api.test.mjs test/tags.test.mjs",
+    "test:e2e": "pnpm run build && wdio run ./wdio.conf.mts",
+    "e2e": "pnpm run test:e2e",
     "lint": "eslint src",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },

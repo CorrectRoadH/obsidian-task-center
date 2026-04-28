@@ -141,7 +141,6 @@
   cursor: pointer;
   font-weight: 600;
 }
-.task-center-view .bt-plan-today-btn,
 .task-center-view .bt-saved-view-save {
   padding: 0 12px;
   border: 1px solid var(--background-modifier-border);
@@ -151,7 +150,6 @@
   cursor: pointer;
   font-weight: 600;
 }
-.task-center-view .bt-plan-today-btn:hover,
 .task-center-view .bt-saved-view-save:hover {
   background: var(--background-modifier-hover);
 }
@@ -398,6 +396,27 @@
 .task-center-view .bt-card-title:hover {
   color: var(--text-accent);
 }
+.task-center-view .bt-task-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 5px;
+  min-width: 0;
+}
+.task-center-view .bt-card-tags {
+  margin-top: 3px;
+  margin-left: 22px;
+}
+.task-center-view .bt-task-tag {
+  max-width: 100%;
+  padding: 1px 5px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .task-center-view .bt-card-meta {
   margin-top: 3px;
   margin-left: 22px;
@@ -462,7 +481,7 @@
   align-items: start;
 }
 
-/* Trash drop zone — sticky so it stays visible while scrolling the unscheduled pool */
+/* Abandon drop zone — sticky so it stays visible while scrolling the unscheduled pool */
 .task-center-view .bt-trash {
   border: 2px dashed var(--background-modifier-border);
   border-radius: 6px;
@@ -730,15 +749,21 @@
 .task-center-view .bt-today {
   display: grid;
   gap: 12px;
+  width: 100%;
   max-width: 920px;
-  padding: 4px 0 16px;
+  margin: 0 auto;
+  padding: clamp(32px, 8vh, 72px) 0 16px;
 }
 .task-center-view .bt-today-empty {
+  min-height: min(45vh, 360px);
   padding: 28px 18px;
   border: 1px dashed var(--background-modifier-border);
   border-radius: 8px;
   background: var(--background-secondary);
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   font-size: 13px;
 }
@@ -804,6 +829,9 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
+}
+.task-center-view .bt-today-card-tags {
+  margin-top: -1px;
 }
 .task-center-view .bt-today-card-meta {
   color: var(--text-muted);
@@ -935,7 +963,7 @@
     border-bottom: 1px solid var(--background-modifier-border);
   }
 
-/* Bottom sticky action bar (🗑 + ➕) — mobile only. */
+/* Bottom sticky action bar (abandon + ➕) — mobile only. */
 .task-center-view .bt-mobile-action-bar {
   display: none;
 }
@@ -960,6 +988,10 @@
     border-radius: 8px;
     background: var(--background-secondary);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
   }
   .task-center-view[data-mobile-layout="true"] .bt-mobile-trash.drop-hover {
     background: var(--background-modifier-error);
@@ -967,6 +999,10 @@
   }
   .task-center-view[data-mobile-layout="true"] .bt-mobile-trash-icon {
     font-size: 18px;
+  }
+  .task-center-view[data-mobile-layout="true"] .bt-mobile-trash-label {
+    font-size: 12px;
+    font-weight: 600;
   }
   .task-center-view[data-mobile-layout="true"] .bt-mobile-add-btn {
     flex: 0 0 auto;
@@ -1028,8 +1064,7 @@
   }
 
   .task-center-view[data-mobile-layout="true"] .bt-card,
-  .task-center-view[data-mobile-layout="true"] .bt-today-card,
-  .task-center-view[data-mobile-layout="true"] .bt-plan-candidate {
+  .task-center-view[data-mobile-layout="true"] .bt-today-card {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -1037,6 +1072,7 @@
   .task-center-view[data-mobile-layout="true"] .bt-today {
     max-width: none;
     gap: 10px;
+    padding-top: clamp(20px, 6vh, 48px);
   }
   .task-center-view[data-mobile-layout="true"] .bt-today-card {
     flex-direction: column;
@@ -1347,7 +1383,7 @@
   /* Card-as-nest-target: stronger highlight than a column */
   outline-color: var(--color-green);
 }
-.task-center-view [data-drop-zone="trash"][data-tc-drop-hover="true"] {
+.task-center-view [data-drop-zone="abandon"][data-tc-drop-hover="true"] {
   outline-color: var(--color-red);
   background: var(--background-modifier-error-hover, var(--background-modifier-hover));
 }

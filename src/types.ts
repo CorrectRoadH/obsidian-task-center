@@ -22,6 +22,10 @@ export interface ParsedTask {
   completed: string | null;
   cancelled: string | null;
   created: string | null;
+  inlineFields: Record<string, string[]>;
+  durationFields: Record<string, number>;
+  // Backward-compatible aliases for the default summary preset. New UI and
+  // aggregation paths should prefer durationFields so field names stay user data.
   estimate: number | null;
   actual: number | null;
   parentLine: number | null;
@@ -42,13 +46,11 @@ export interface ParsedTask {
 }
 
 export interface TaskCenterSettings {
-  inboxPath: string;
-  // US-301: tags used to group the Unscheduled view, Quick Add chips,
-  // context-menu grouping actions, and CLI grouping column. Missing
-  // legacy settings fall back to `#1象限`~`#4象限`; explicit empty disables
-  // grouping actions.
-  // see USER_STORIES.md
-  groupingTags: string[];
+  // Legacy settings may still exist in old data.json; loadSettings ignores
+  // unknown keys, and these optional fields are only read by migration-safe
+  // compatibility paths.
+  inboxPath?: string;
+  groupingTags?: string[];
   // US-724: user-saved board filters ("Work", "Life", "Waiting", etc.).
   // These are lightweight presets over the existing board surface; they do
   // not create a separate data model.
@@ -90,8 +92,6 @@ export interface SavedTaskView {
 }
 
 export const DEFAULT_SETTINGS: TaskCenterSettings = {
-  inboxPath: "Tasks/Inbox.md",
-  groupingTags: ["#1象限", "#2象限", "#3象限", "#4象限"],
   savedViews: [],
   defaultView: "week",
   openOnStartup: false,

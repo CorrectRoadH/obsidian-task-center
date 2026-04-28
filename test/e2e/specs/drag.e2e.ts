@@ -1,11 +1,11 @@
 /**
  * US-121: Dragging a card to a different day column rewrites ⏳ in the markdown file.
- * US-123: Dragging a card to the trash zone marks it dropped ([-] ❌) in the markdown file.
+ * US-123: Dragging a card to the abandon zone marks it dropped ([-] ❌) in the markdown file.
  *
  * DOM coupling is limited to stable data-attributes agreed with Tiger:
  *   [data-task-id="path:LN"]    — task card stable identifier
  *   [data-date="YYYY-MM-DD"]    — day-column drop target
- *   [data-drop-zone="trash"]    — trash area drop target
+ *   [data-drop-zone="abandon"]  — abandon area drop target
  *
  * All final assertions are against markdown file content, not CSS classes.
  */
@@ -156,8 +156,8 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await expect(content).not.toContain(`⏳ ${today}`);
   });
 
-  // US-123: drag a card to the trash → markdown becomes [-] ❌
-  it("US-123: dragging a card to the trash marks it dropped in markdown", async function () {
+  // US-123: drag a card to the abandon zone → markdown becomes [-] ❌
+  it("US-123: dragging a card to the abandon zone marks it dropped in markdown", async function () {
     const today = todayISO();
     const path = "Tasks/Inbox.md";
 
@@ -165,10 +165,10 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await openBoardWeekView();
 
     const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
-    const trashSel = `.task-center-view [data-drop-zone="trash"]`;
+    const trashSel = `.task-center-view [data-drop-zone="abandon"]`;
 
     await $(cardSel).waitForExist({ timeout: 5000 });
-    await $(trashSel).waitForExist({ timeout: 5000, timeoutMsg: `trash zone [data-drop-zone="trash"] not found` });
+    await $(trashSel).waitForExist({ timeout: 5000, timeoutMsg: `abandon zone [data-drop-zone="abandon"] not found` });
 
     await simulateDrag(cardSel, trashSel);
 

@@ -150,6 +150,56 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     );
   });
 
+  // US-151: top-level Task Cards show markdown #tags below the title.
+  it("US-151: task cards render original tags below the title in week and today views", async function () {
+    const today = todayISO();
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      `- [ ] Tagged task #work #1象限 #work ⏳ ${today}\n`,
+    );
+
+    await browser.executeObsidianCommand("obsidian-task-center:open");
+    await forFlush();
+
+    const weekTab = $('[data-tab="week"]');
+    await weekTab.waitForExist({ timeout: 5000 });
+    await weekTab.click();
+
+    const cardSel = `.task-center-view [data-task-id="Tasks/Inbox.md:L1"]`;
+    await $(cardSel).waitForExist({ timeout: 5000 });
+
+    const weekCard = await browser.execute((sel: string) => {
+      const card = document.querySelector(sel)!;
+      const title = card.querySelector(".bt-card-title")!.getBoundingClientRect();
+      const tags = card.querySelector(".bt-card-tags")!.getBoundingClientRect();
+      return {
+        titleText: card.querySelector(".bt-card-title")?.textContent ?? "",
+        tags: Array.from(card.querySelectorAll(".bt-card-tags .bt-task-tag")).map((e) => e.textContent),
+        tagsAreBelowTitle: tags.top >= title.bottom,
+      };
+    }, cardSel);
+    expect(weekCard.titleText).toBe("Tagged task");
+    expect(weekCard.tags).toEqual(["#work", "#1象限"]);
+    expect(weekCard.tagsAreBelowTitle).toBe(true);
+
+    const todayTab = $('[data-tab="today"]');
+    await todayTab.waitForExist({ timeout: 5000 });
+    await todayTab.click();
+    await $('[data-view="today"]').waitForExist({ timeout: 3000 });
+
+    const todayCard = await browser.execute(() => {
+      const card = document.querySelector('[data-view="today"] [data-task-id="Tasks/Inbox.md:L1"]')!;
+      const title = card.querySelector(".bt-today-card-title")!.getBoundingClientRect();
+      const tags = card.querySelector(".bt-today-card-tags")!.getBoundingClientRect();
+      return {
+        tags: Array.from(card.querySelectorAll(".bt-today-card-tags .bt-task-tag")).map((e) => e.textContent),
+        tagsAreBelowTitle: tags.top >= title.bottom,
+      };
+    });
+    expect(todayCard.tags).toEqual(["#work", "#1象限"]);
+    expect(todayCard.tagsAreBelowTitle).toBe(true);
+  });
+
   // quick-add modal
   it("opens the quick-add modal via command", async function () {
     await browser.executeObsidianCommand("obsidian-task-center:quick-add");

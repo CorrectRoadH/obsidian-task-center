@@ -33,6 +33,7 @@ compilePure();
 const {
   parseDurationToMinutes,
   formatMinutes,
+  parseInlineFields,
   cleanTitle,
   parseTaskLine,
   statusFromCheckbox,
@@ -120,6 +121,28 @@ test("cleanTitle — strips emoji dates + tags + inline fields + block anchors",
     "real title #tag1 📅 2026-05-15 ⏳ 2026-04-24 ➕ 2026-04-23 ✅ 2026-04-23 [estimate:: 30m] [actual:: 25m] ^abc123",
   );
   assert.equal(t, "real title");
+});
+
+test("US-108: cleanTitle strips arbitrary inline fields without treating names as app knowledge", () => {
+  const t = cleanTitle("real title [planned:: 45m] [花了:: 30m] [owner:: ctrdh]");
+  assert.equal(t, "real title");
+});
+
+test("US-108: parseInlineFields preserves field names and parses duration values generically", () => {
+  const r = parseInlineFields(
+    "task [estimate:: 1h] [planned:: 45m] [花了:: 30m] [owner:: ctrdh] [planned:: 15m]",
+  );
+  assert.deepEqual(r.inlineFields, {
+    estimate: ["1h"],
+    planned: ["45m", "15m"],
+    花了: ["30m"],
+    owner: ["ctrdh"],
+  });
+  assert.deepEqual(r.durationFields, {
+    estimate: 60,
+    planned: 60,
+    花了: 30,
+  });
 });
 
 test("cleanTitle — preserves wikilinks", () => {

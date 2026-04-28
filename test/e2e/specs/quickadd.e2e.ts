@@ -8,7 +8,7 @@ const VAULT = "test/e2e/vaults/simple";
  * US-167 — Quick Add v2 Spotlight redesign. Covers chunks 1–4:
  *   1. Layout shell (`.task-center-quick-add-v2`, no h3, hidden X)
  *   2. Single transparent input + inline parse hint (`→ ⏳ MM-DD (Day)`)
- *   3. Quick chips row (Today / Tomorrow / 周六 / Q1~Q4) — click prefills token
+ *   3. Quick chips row (Today / Tomorrow / 周六 / recent tags) — click prefills token
  *   4. Footer (`↵ <write target>` / `Esc`) + inline error slot
  *
  * Visual evidence per chunk-by-chunk cadence (Leo / Rally agreed):
@@ -20,6 +20,14 @@ const VAULT = "test/e2e/vaults/simple";
 describe("Task Center — Quick Add v2 (US-167)", function () {
   beforeEach(async function () {
     await obsidianPage.resetVault(VAULT);
+    await browser.executeObsidian(async ({ app }) => {
+      const dn = (app as any).internalPlugins?.plugins?.["daily-notes"];
+      if (!dn?.enabled) await dn?.enable?.();
+      if (dn?.instance?.options) {
+        dn.instance.options.folder = "Daily";
+        dn.instance.options.format = "YYYY-MM-DD";
+      }
+    });
     // Close any modal lingering from a prior test (Esc dispatched on
     // body so all open modals receive the cancel signal). Without this
     // chips from two stacked modals collide on click.
@@ -143,9 +151,7 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
 
   // US-167 chunk 4: footer renders with `↵ <path>` left and `Esc` right.
   // Path comes from `computeWriteTarget()` — Obsidian's built-in Daily
-  // Notes core plugin folder when enabled, else `settings.inboxPath`
-  // (default `Tasks/Inbox.md`). task #32 (0.3.0) removed the legacy
-  // `settings.dailyFolder` setting; resolver is now the single source.
+  // Notes core plugin folder when enabled and configured. No inbox fallback.
   it("US-167 chunk 4 — footer shows write target path and Esc marker", async function () {
     await browser.executeObsidianCommand("obsidian-task-center:quick-add");
     await $(".task-center-quick-add-v2").waitForExist({ timeout: 3000 });

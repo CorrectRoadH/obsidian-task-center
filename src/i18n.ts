@@ -58,14 +58,14 @@ const EN = {
 
   // Unscheduled big view
   "unscheduled.hint":
-    "Shortcuts: D date · Space done · 1-9 group · Delete drop",
+    "Use filters and saved views to narrow this list.",
   "unscheduled.mobileHint":
-    "Long-press a card for actions · swipe left = done · swipe right = drop",
+    "Long-press a card for actions · swipe left = done · swipe right = abandon",
 
-  // Trash
-  "trash.title": "Trash",
+  // Abandon target
+  "trash.title": "Abandon",
   "trash.hint": "Drop here → [-] ❌",
-  "trash.dropped": "🗑 dropped",
+  "trash.dropped": "Abandoned",
 
   // US-504: mobile month tab uses calendar-grid + dot density + tap-day
   // bottom sheet listing the day's tasks. This empty-state string powers
@@ -83,9 +83,9 @@ const EN = {
   "loading": "Loading tasks…",
   "onboarding.title": "No tasks yet",
   "onboarding.body":
-    "Create your first task: hit Cmd/Ctrl+T here, click + Add, or add a checkbox line in any note: `- [ ] My task #2q ⏳ tomorrow [estimate:: 30m]`.",
+    "Create your first task: click + Add, or add a checkbox line in any note: `- [ ] My task #tag ⏳ tomorrow [estimate:: 30m]`.",
   "onboarding.mobileBody":
-    "Create your first task: tap + Add below, or write `- [ ] My task #2q ⏳ tomorrow [estimate:: 30m]` in any note.",
+    "Create your first task: tap + Add below, or write `- [ ] My task #tag ⏳ tomorrow [estimate:: 30m]` in any note.",
   "onboarding.cta": "+ Add your first task",
   "mobile.openTaskCenter": "Task Center",
   "completed.total": "total {actual}m",
@@ -94,7 +94,7 @@ const EN = {
   "footer.status": "{todo} todo · {done} done · {overdue} overdue",
   "footer.selected": "selected",
   "footer.hint":
-    "1-9 group · ←/→ day · D date · Space done · E edit · Delete drop · Ctrl+Z undo · / search",
+    "Ctrl+1-5 tabs · / search · Ctrl+Z undo",
   "footer.mobileHint":
     "long-press for menu · swipe left = done · swipe right = drop · drag to reschedule",
 
@@ -121,9 +121,10 @@ const EN = {
   // Quick add modal
   "qa.title": "Add task",
   "qa.placeholder":
-    "Buy groceries #3 ⏳ tomorrow [estimate:: 25m]",
+    "Buy groceries #tag ⏳ tomorrow [estimate:: 25m]",
   "qa.hint":
-    "Shortcuts: today/tomorrow/Mon-Sun auto-resolve to ⏳ dates · #Nq = quadrant · [estimate:: 30m]",
+    "Dates resolve to ⏳ / 📅. Tags and inline fields stay exactly as typed.",
+  "qa.noDailyTarget": "Enable and configure Daily Notes to add tasks",
 
   // Date prompt
   "prompt.setScheduled":
@@ -139,16 +140,10 @@ const EN = {
 
   // Settings
   "settings.header": "Task Center",
-  "settings.inbox.name": "Default inbox path",
-  "settings.inbox.desc":
-    "Where `task-center:add` puts tasks when to= is omitted and no daily note exists.",
   // task #32 (0.3.0 breaking): `settings.dailyFolder.name/desc` removed
   // — the setting is gone, so the i18n keys for its label/description
   // are dead. Daily-note path now reads from Obsidian's built-in Daily
   // Notes core plugin config exclusively (see writer.ts).
-  "settings.groupingTags.name": "Grouping tags",
-  "settings.groupingTags.desc":
-    "Comma-separated tags for Unscheduled grouping, Quick Add chips, 1-9 shortcuts, and CLI group labels.",
   "settings.defaultView.name": "Default view",
   "settings.defaultView.desc": "Which tab to show when Task Center opens.",
   "settings.defaultView.today": "Today",
@@ -163,6 +158,9 @@ const EN = {
   "settings.openOnStartup.name": "Open Task Center on startup",
   "settings.openOnStartup.desc":
     "Opens Task Center automatically when Obsidian starts.",
+  "settings.stampCreated.name": "Stamp created date",
+  "settings.stampCreated.desc":
+    "Append ➕ today when adding new tasks. CLI can override per add.",
   "settings.mobileHeader": "Mobile",
   "settings.mobileLongPress.name": "Long-press duration (ms)",
   "settings.mobileLongPress.desc":
@@ -187,6 +185,7 @@ const EN = {
   "err.invalid_date": "invalid date: {ref}",
   "err.invalid_nest": "invalid nest: {ref}",
   "err.ambiguous_slug": "ambiguous slug: {ref}",
+  "err.daily_notes_unavailable": "{ref}",
 
   // task #43 (US-402): persistent status bar + mobile mirrored status row.
   // Same key set is reused by both surfaces so the two stay in lock-step.
@@ -206,7 +205,7 @@ const EN = {
   "sheet.done": "✓ Done",
   "sheet.scheduleAt": "⏳ {date}",
   "sheet.scheduleClear": "⏳ —",
-  "sheet.drop": "🗑 Drop",
+  "sheet.drop": "Abandon",
 
   // task #43: date prompt hint line — bilingual EN baseline (the original
   // hard-coded string already mixed today/tomorrow with 明天/周六; we
@@ -225,9 +224,9 @@ const EN = {
   // `data-dep-warning="..."` when the built-in Daily Notes plugin is
   // disabled or has no folder configured.
   "dep.dailyNotesDisabled":
-    "Daily Notes plugin disabled — tasks will be written to inbox",
+    "Daily Notes plugin disabled — new tasks cannot be created",
   "dep.dailyNotesNoFolder":
-    "Daily Notes folder not set — tasks will be written to inbox",
+    "Daily Notes folder not set — new tasks cannot be created",
   "dep.tasksMissing":
     "Tasks community plugin not installed — Tasks-format extensions may not render",
   "dep.tasksDisabled":
@@ -238,21 +237,12 @@ const EN = {
   // answers "what should I do today?". Three groups + minimal actions.
   "today.groupOverdue": "Overdue",
   "today.groupToday": "Today",
-  "today.groupRec": "Recommended from inbox",
+  "today.groupRec": "Recommended",
   "today.groupEmpty": "Nothing in this group.",
   "today.empty": "Nothing to do today — enjoy the quiet.",
   "today.actionDone": "✓ Done",
   "today.actionReschedule": "↷ Tomorrow",
-  "today.actionDrop": "🗑 Drop",
-  // US-721 (task #64): today planning mode.
-  "plan.entry": "Plan",
-  "plan.title": "Plan today",
-  "plan.totalEst": "Total estimate {dur}",
-  "plan.overload": "Over capacity by {dur}",
-  "plan.empty": "No unscheduled candidates.",
-  "plan.scheduleToday": "Today",
-  "plan.scheduleTomorrow": "Tomorrow",
-  "plan.scheduleWeek": "This week",
+  "today.actionDrop": "Abandon",
 
   // US-724 (task #67): saved views / custom filters.
   "savedViews.current": "Filters",
@@ -303,13 +293,13 @@ const ZH: Partial<typeof EN> = {
   "pool.other": "其他",
 
   "unscheduled.hint":
-    "快捷键: D 选日期 · Space 完成 · 1-9 改分组 · Delete 放弃",
+    "用筛选和保存视图缩小列表。",
   "unscheduled.mobileHint":
     "长按卡片打开操作 · 左滑 = 完成 · 右滑 = 放弃",
 
-  "trash.title": "垃圾站",
+  "trash.title": "放弃区",
   "trash.hint": "拖到此处 → [-] ❌",
-  "trash.dropped": "🗑 已放弃",
+  "trash.dropped": "已放弃",
 
   "sheet.empty": "这一天没有任务。",
 
@@ -321,9 +311,9 @@ const ZH: Partial<typeof EN> = {
   "loading": "加载任务中…",
   "onboarding.title": "还没有任务",
   "onboarding.body":
-    "创建第一条任务：在此按 Cmd/Ctrl+T，或点击 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #2象限 ⏳ 明天 [estimate:: 30m]`。",
+    "创建第一条任务：点击 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #tag ⏳ 明天 [estimate:: 30m]`。",
   "onboarding.mobileBody":
-    "创建第一条任务：点击下方 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #2象限 ⏳ 明天 [estimate:: 30m]`。",
+    "创建第一条任务：点击下方 + 新建，或在任意笔记里写：`- [ ] 第一个任务 #tag ⏳ 明天 [estimate:: 30m]`。",
   "onboarding.cta": "+ 新建第一个任务",
   "mobile.openTaskCenter": "任务中心",
   "completed.total": "总计 {actual}m",
@@ -331,7 +321,7 @@ const ZH: Partial<typeof EN> = {
   "footer.status": "{todo} 待办 · {done} 完成 · {overdue} 逾期",
   "footer.selected": "已选",
   "footer.hint":
-    "1-9 分组 · ←/→ 改天 · D 选日期 · Space 完成 · E 跳源码 · Delete 放弃 · Ctrl+Z 撤销 · / 搜索",
+    "Ctrl+1-5 切 tab · / 搜索 · Ctrl+Z 撤销",
   "footer.mobileHint":
     "长按弹菜单 · 左滑 = 完成 · 右滑 = 放弃 · 拖拽改期",
 
@@ -355,9 +345,10 @@ const ZH: Partial<typeof EN> = {
 
   "qa.title": "新建任务",
   "qa.placeholder":
-    "去营业厅问携号转网 #3象限 ⏳ 周六 [estimate:: 25m]",
+    "去营业厅问携号转网 #tag ⏳ 周六 [estimate:: 25m]",
   "qa.hint":
-    "快捷键：今天/明天/周六 → 自动识别为 ⏳ 日期 · #N象限 = 象限 · [estimate:: 30m]",
+    "日期会识别为 ⏳ / 📅；tag 与 inline field 原样保留。",
+  "qa.noDailyTarget": "请先启用并配置 Daily Notes 后再新建任务",
 
   "prompt.setScheduled": '设置 ⏳ 给 "{title}"  (YYYY-MM-DD、today、tomorrow，留空清除)',
 
@@ -368,12 +359,6 @@ const ZH: Partial<typeof EN> = {
   "ribbon.open": "打开任务看板",
 
   "settings.header": "Task Center",
-  "settings.inbox.name": "默认收件箱路径",
-  "settings.inbox.desc":
-    "`task-center:add` 在没有指定 to= 且没有当日 daily note 时，把任务写到这里。",
-  "settings.groupingTags.name": "分组标签",
-  "settings.groupingTags.desc":
-    "逗号分隔；用于未排期分组、快速新建 chip、1-9 快捷键和 CLI 分组列。",
   "settings.defaultView.name": "默认视图",
   "settings.defaultView.desc": "打开看板时默认展示哪个 tab。",
   "settings.defaultView.today": "今日",
@@ -387,6 +372,9 @@ const ZH: Partial<typeof EN> = {
   "settings.weekStart.sun": "周日",
   "settings.openOnStartup.name": "启动时打开看板",
   "settings.openOnStartup.desc": "Obsidian 启动时自动打开任务看板。",
+  "settings.stampCreated.name": "自动打创建日期",
+  "settings.stampCreated.desc":
+    "新建任务时追加 ➕ 今天；CLI add 可单次覆盖。",
   "settings.mobileHeader": "移动端",
   "settings.mobileLongPress.name": "长按时长 (ms)",
   "settings.mobileLongPress.desc":
@@ -408,6 +396,7 @@ const ZH: Partial<typeof EN> = {
   "err.invalid_date": "日期无效：{ref}",
   "err.invalid_nest": "嵌套无效：{ref}",
   "err.ambiguous_slug": "前缀歧义：{ref}",
+  "err.daily_notes_unavailable": "{ref}",
 
   // task #43: 状态栏 + 移动状态行（共用一组 key）
   "status.today": "📋 今日 {n}",
@@ -423,7 +412,7 @@ const ZH: Partial<typeof EN> = {
   "sheet.done": "✓ 完成",
   "sheet.scheduleAt": "⏳ {date}",
   "sheet.scheduleClear": "⏳ —",
-  "sheet.drop": "🗑 放弃",
+  "sheet.drop": "放弃",
 
   // task #43: 日期弹窗提示
   "prompt.dateHint":
@@ -435,9 +424,9 @@ const ZH: Partial<typeof EN> = {
 
   // US-701: 依赖健康提示
   "dep.dailyNotesDisabled":
-    "Daily Notes 插件未启用 — 任务将写入收件箱",
+    "Daily Notes 插件未启用 — 无法新建任务",
   "dep.dailyNotesNoFolder":
-    "Daily Notes 未设置文件夹 — 任务将写入收件箱",
+    "Daily Notes 未设置文件夹 — 无法新建任务",
   "dep.tasksMissing":
     "Tasks 社区插件未安装 — Tasks 扩展字段可能展示不完整",
   "dep.tasksDisabled":
@@ -452,16 +441,7 @@ const ZH: Partial<typeof EN> = {
   "today.empty": "今天没有可执行任务。",
   "today.actionDone": "✓ 完成",
   "today.actionReschedule": "↷ 明天",
-  "today.actionDrop": "🗑 放弃",
-  // US-721: 今日计划模式
-  "plan.entry": "计划",
-  "plan.title": "今日计划",
-  "plan.totalEst": "总预估 {dur}",
-  "plan.overload": "超出容量 {dur}",
-  "plan.empty": "没有未排期候选任务。",
-  "plan.scheduleToday": "今天",
-  "plan.scheduleTomorrow": "明天",
-  "plan.scheduleWeek": "本周",
+  "today.actionDrop": "放弃",
 
   // US-724: 保存视图 / 自定义过滤
   "savedViews.current": "筛选",
