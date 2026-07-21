@@ -1,4 +1,5 @@
 /* AUTO: assembled by esbuild into the plugin-root styles.css. Order is cascade-significant — do not reorder. */
+@import "./tokens.css";
 @import "./base.css";
 @import "./header.css";
 @import "./tabs.css";

@@ -100,7 +100,7 @@
     min-width: 36px;
     min-height: 44px;
     padding: 0 8px;
-    border-radius: 999px;
+    border-radius: var(--tc-radius-pill);
     font-size: 13px;
   }
 
@@ -346,7 +346,7 @@
     width: 50%;
     pointer-events: none;
     opacity: 0.35;
-    animation: tc-swipe-confirm 120ms ease-out;
+    animation: tc-swipe-confirm var(--tc-duration) ease-out;
   }
   .task-center-view[data-mobile-layout="true"] .bt-card[data-swipe-ready="true"]::before {
     content: attr(data-swipe-label);
@@ -354,7 +354,7 @@
     top: 50%;
     z-index: 1;
     padding: 4px 10px;
-    border-radius: 999px;
+    border-radius: var(--tc-radius-pill);
     background: var(--background-primary);
     color: var(--text-normal);
     font-size: 12px;
@@ -362,7 +362,7 @@
     transform: translateY(-50%);
     pointer-events: none;
     box-shadow: var(--shadow-s);
-    animation: tc-swipe-confirm 120ms ease-out;
+    animation: tc-swipe-confirm var(--tc-duration) ease-out;
   }
   .task-center-view[data-mobile-layout="true"] .bt-card[data-swipe-direction="left"]::after {
     left: auto;
@@ -423,8 +423,8 @@
     border-radius: 8px;
     box-shadow: none;
     transition:
-      background-color 0.12s ease,
-      box-shadow 0.12s ease;
+      background-color var(--tc-duration) ease,
+      box-shadow var(--tc-duration) ease;
   }
   /* 折叠（未选中）态：hover/按压才浮出，平时贴底色。 */
   .task-center-view[data-mobile-layout="true"] .bt-area-accordion.bt-area-collapsed > .bt-area-head:hover,
@@ -463,7 +463,7 @@
     margin-left: 6px;
     font-size: 12px;
     line-height: 1;
-    transition: color 0.12s ease;
+    transition: color var(--tc-duration) ease;
   }
   .task-center-view[data-mobile-layout="true"] .bt-area-collapsed > .bt-area-head .bt-area-caret {
     color: var(--text-faint);
@@ -777,7 +777,7 @@
 .task-center-bottom-sheet .bt-mobile-task-detail-meta span {
   max-width: 100%;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-muted);
   font-size: 12px;
@@ -1058,7 +1058,7 @@
   gap: 8px;
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-normal);
   font-size: 13px;

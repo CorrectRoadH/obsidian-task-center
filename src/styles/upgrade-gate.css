@@ -22,7 +22,7 @@
   display: inline-block;
   margin-bottom: 12px;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-semibold);
   letter-spacing: 0.06em;
@@ -68,7 +68,7 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-l, 12px);
   background: var(--background-secondary);
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color var(--tc-duration) ease, transform var(--tc-duration) ease;
 }
 
 .task-center-view .tc-bento-cell:hover {
@@ -450,7 +450,7 @@
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+  transition: border-color var(--tc-duration) ease, transform var(--tc-duration) ease, background var(--tc-duration) ease;
 }
 
 .task-center-view .tc-flavor-card:hover {
@@ -484,7 +484,7 @@
   );
   background-size: 16px 16px;
   overflow: hidden;
-  transition: border-color 120ms ease;
+  transition: border-color var(--tc-duration) ease;
 }
 
 .task-center-view .tc-flavor-card.is-selected .tc-flavor-art {
@@ -612,7 +612,7 @@
 .task-center-view .tc-migration-view-tag {
   flex: 0 0 auto;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   background: var(--background-modifier-hover);
@@ -644,7 +644,7 @@
   border: 1px dashed var(--background-modifier-border);
   border-radius: var(--radius-l, 12px);
   background: var(--background-secondary);
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color var(--tc-duration) ease, transform var(--tc-duration) ease;
 }
 .task-center-view .tc-roadmap-cell:hover {
   border-color: var(--interactive-accent);
@@ -767,7 +767,7 @@
 }
 .task-center-view .tc-roadmap-tag {
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   background: var(--background-modifier-hover);
@@ -787,7 +787,7 @@
   gap: 6px;
   margin: 0 0 22px;
   padding: 3px 12px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   background: var(--background-modifier-hover);

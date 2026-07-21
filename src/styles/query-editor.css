@@ -78,7 +78,7 @@
   flex: 0 0 auto;
   padding: 6px 14px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-muted);
   font-size: 13px;
@@ -166,7 +166,7 @@
   color: var(--text-normal);
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   cursor: pointer;
   box-shadow: none;
 }
@@ -295,7 +295,7 @@
 .task-center-bottom-sheet .bt-parent-candidate-invalid {
   max-width: 100%;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-primary);
   color: var(--text-muted);
   font-size: 10.5px;

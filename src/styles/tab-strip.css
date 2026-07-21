@@ -76,7 +76,7 @@
 }
 .task-center-bottom-sheet .bt-manage-tab-badge {
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-modifier-border);
   color: var(--text-muted);
   font-size: 11px;
@@ -224,7 +224,7 @@
   flex: 0 0 auto;
   margin-left: auto;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-modifier-hover);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
@@ -232,7 +232,7 @@
 .task-center-bottom-sheet .bt-overflow-tab-badge {
   flex: 0 0 auto;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);

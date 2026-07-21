@@ -18,10 +18,10 @@
      a dirty double outline in dark themes. The single theme border separates cards
      cleanly on its own. */
   transition:
-    transform 0.12s ease,
-    border-color 0.12s ease,
-    background-color 0.12s ease,
-    box-shadow 0.12s ease;
+    transform var(--tc-duration) ease,
+    border-color var(--tc-duration) ease,
+    background-color var(--tc-duration) ease,
+    box-shadow var(--tc-duration) ease;
 }
 /* Hover states live behind (hover: hover): on touch screens :hover is sticky
    after a tap, so the lift/accent would linger on the last-tapped card. Touch
@@ -76,11 +76,11 @@
   height: 18px;
   text-align: center;
   color: var(--text-muted);
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.12s ease;
+  transition: color var(--tc-duration) ease;
 }
 @media (hover: hover) {
   .task-center-view .bt-check:hover {
@@ -118,7 +118,7 @@
   max-width: 100%;
   padding: 1px 5px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-muted);
   font-size: 10px;
@@ -159,10 +159,10 @@
   border-radius: 6px;
   cursor: pointer;
   transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    transform 0.12s ease;
+    background-color var(--tc-duration) ease,
+    border-color var(--tc-duration) ease,
+    box-shadow var(--tc-duration) ease,
+    transform var(--tc-duration) ease;
 }
 /* US-168c: subtask hover reads as a soft tinted box — no left accent bar
    (the cheap-looking left border is gone, matching the flat-bordered cards). */
@@ -195,7 +195,7 @@
   font: inherit;
   line-height: 1;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition: color var(--tc-duration) ease;
 }
 .task-center-view .bt-sub-check:focus-visible {
   color: var(--interactive-accent);

@@ -128,7 +128,7 @@
   flex: 0 0 auto;
   margin-left: auto;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-modifier-hover);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
@@ -136,7 +136,7 @@
 .task-center-view .bt-overflow-tabs-menu .bt-overflow-tab-badge {
   flex: 0 0 auto;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--tc-radius-pill);
   background: var(--background-secondary);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
