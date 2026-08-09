@@ -12,7 +12,13 @@ import { t as tr } from "../../i18n";
 import { todayISO, fromISO, addDays, daysBetween, pad } from "../../dates";
 import { weekdayLabel } from "../../weekday";
 import { recomputeTopLevelInQuery } from "../../task-tree";
-import { columnStats, buildWeekDays, buildMonthGrid, bucketByScheduledDay } from "./calendar-grid";
+import {
+  columnStats,
+  deadlineRiskStats,
+  buildWeekDays,
+  buildMonthGrid,
+  bucketByScheduledDay,
+} from "./calendar-grid";
 import { renderCard, wireCardEvents } from "./card";
 
 export function renderWeek(
@@ -109,6 +115,7 @@ export function renderWeek(
       });
       stats.title = "Scheduled estimate (hours)";
     }
+    if (isCompactPointer) renderDeadlineRisk(head, col, dayTasksRecomputed, today);
 
     const list = col.createDiv({ cls: "bt-week-list" });
     // Drop handler on the COLUMN (which carries `data-date`), not the
@@ -206,24 +213,30 @@ export function renderMonth(
     if (dayTasks.length > 0) {
       head.createSpan({ text: `${dayTasks.length}`, cls: "bt-month-cell-count" });
     }
+    if (isCompactPointer) renderDeadlineRisk(head, cell, dayTasksRecomputed, today);
     const list = cell.createDiv({ cls: "bt-month-cell-list" });
     v.makeDropZone(cell, day);
-    for (const t of dayTasks.slice(0, 6)) {
-      const chip = list.createDiv({ cls: "bt-mini-card" });
-      chip.dataset.taskId = t.id;
-      chip.dataset.taskStatus = t.effectiveStatus;
-      chip.addClass(`bt-mini-card-${t.effectiveStatus}`);
-      if (!isMobileLayout) chip.draggable = true;
-      chip.setText(t.title);
-      if (t.effectiveDeadline && t.effectiveStatus === "todo") {
-        const deadlineDays = daysBetween(today, t.effectiveDeadline);
-        if (deadlineDays < 0) chip.addClass("overdue");
-        else if (deadlineDays <= 3) chip.addClass("near-deadline");
+    // A condensed month cell is navigation + a drop target, not a hidden
+    // second task surface. Mount cards only in the selected-day outline so
+    // task IDs and keyboard/pointer targets stay unique (US-515).
+    if (!isCondensed) {
+      for (const t of dayTasks.slice(0, 6)) {
+        const chip = list.createDiv({ cls: "bt-mini-card" });
+        chip.dataset.taskId = t.id;
+        chip.dataset.taskStatus = t.effectiveStatus;
+        chip.addClass(`bt-mini-card-${t.effectiveStatus}`);
+        chip.draggable = true;
+        chip.setText(t.title);
+        if (t.effectiveDeadline && t.effectiveStatus === "todo") {
+          const deadlineDays = daysBetween(today, t.effectiveDeadline);
+          if (deadlineDays < 0) chip.addClass("overdue");
+          else if (deadlineDays <= 3) chip.addClass("near-deadline");
+        }
+        wireCardEvents(v, chip, t);
       }
-      wireCardEvents(v, chip, t);
-    }
-    if (dayTasks.length > 6) {
-      list.createDiv({ text: `+${dayTasks.length - 6} more`, cls: "bt-mini-more" });
+      if (dayTasks.length > 6) {
+        list.createDiv({ text: `+${dayTasks.length - 6} more`, cls: "bt-mini-more" });
+      }
     }
     // US-504: mobile month tab is calendar-grid + per-day dot density;
     // tapping a day selects it and refreshes the inline day panel below
@@ -242,6 +255,32 @@ export function renderMonth(
   }
   if (isCondensed) {
     renderDayOutline(v, wrapper, selectedDay, selectedDayTasks, "month");
+  }
+}
+
+function renderDeadlineRisk(
+  parent: HTMLElement,
+  owner: HTMLElement,
+  tasks: EffectiveTask[],
+  today: string,
+): void {
+  const risk = deadlineRiskStats(tasks, today);
+  owner.dataset.overdueCount = `${risk.overdue}`;
+  owner.dataset.nearDeadlineCount = `${risk.nearDeadline}`;
+  if (risk.overdue === 0 && risk.nearDeadline === 0) return;
+
+  const badges = parent.createSpan({ cls: "bt-calendar-risk" });
+  if (risk.overdue > 0) {
+    const label = tr("calendar.overdueShort", { n: risk.overdue });
+    const badge = badges.createSpan({ cls: "bt-calendar-risk-overdue", text: label });
+    badge.setAttr("aria-label", label);
+    badge.title = label;
+  }
+  if (risk.nearDeadline > 0) {
+    const label = tr("calendar.nearDeadlineShort", { n: risk.nearDeadline });
+    const badge = badges.createSpan({ cls: "bt-calendar-risk-near", text: label });
+    badge.setAttr("aria-label", label);
+    badge.title = label;
   }
 }
 

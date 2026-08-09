@@ -9,6 +9,13 @@ function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function offsetISO(deltaDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + deltaDays);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 async function forFlush() {
   await browser.executeObsidian(async ({ app }) => {
     // @ts-expect-error — runtime plugin
@@ -104,7 +111,12 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
 
   it("US-514/US-515: compact desktop pane uses date keys and keeps pointer cards draggable", async function () {
     const today = todayISO();
-    await writeAndWait("Tasks/Inbox.md", `- [ ] Compact outline task ⏳ ${today}\n`);
+    const yesterday = offsetISO(-1);
+    const tomorrow = offsetISO(1);
+    await writeAndWait(
+      "Tasks/Inbox.md",
+      `- [ ] Compact outline task ⏳ ${today}\n- [ ] Overdue risk ⏳ ${today} 📅 ${yesterday}\n- [ ] Near risk ⏳ ${today} 📅 ${tomorrow}\n`,
+    );
 
     await browser.executeObsidianCommand("task-center:open");
     await forFlush();
@@ -121,10 +133,31 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     await $(".bt-week-compact").waitForExist({ timeout: 5000 });
     await expect($(".task-center-view")).toHaveAttribute("data-mobile-layout", "false");
     expect((await $$(".bt-week-compact > .bt-week-col[data-date]")).length).toBe(7);
+    const weekKey = $(`.bt-week-compact > .bt-week-col[data-date="${today}"]`);
+    await expect(weekKey).toHaveAttribute("data-overdue-count", "1");
+    await expect(weekKey).toHaveAttribute("data-near-deadline-count", "1");
+    await expect(weekKey.$(".bt-calendar-risk-overdue")).toBeDisplayed();
+    await expect(weekKey.$(".bt-calendar-risk-near")).toBeDisplayed();
 
     const outlineCard = $('.bt-month-day-panel[data-source="week"] [data-task-id="Tasks/Inbox.md:L1"]');
     await outlineCard.waitForExist({ timeout: 5000 });
     await expect(outlineCard).toHaveAttribute("draggable", "true");
+    expect((await $$('[data-task-id="Tasks/Inbox.md:L1"]')).length).toBe(1);
+
+    const sourcePath = outlineCard.$(".bt-meta-path");
+    await expect(sourcePath).not.toBeDisplayed();
+    await outlineCard.moveTo();
+    await expect(sourcePath).toBeDisplayed();
+
+    await $('[data-tab="month"]').click();
+    await $('.bt-month-day-panel[data-source="month"] [data-task-id="Tasks/Inbox.md:L1"]').waitForExist({
+      timeout: 5000,
+    });
+    const monthCell = $(`.bt-month-cell[data-date="${today}"]`);
+    await expect(monthCell).toHaveAttribute("data-overdue-count", "1");
+    await expect(monthCell).toHaveAttribute("data-near-deadline-count", "1");
+    expect((await $$('[data-task-id="Tasks/Inbox.md:L1"]')).length).toBe(1);
+    expect((await $$('.bt-month-cell-list [data-task-id="Tasks/Inbox.md:L1"]')).length).toBe(0);
   });
 
   // US-107: tasks with empty title must be silently ignored — no card appears

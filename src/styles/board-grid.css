@@ -86,6 +86,28 @@
   flex-basis: 100%;
   margin-left: 0;
 }
+.task-center-view:not([data-mobile-layout="true"]) .bt-calendar-risk {
+  display: flex;
+  flex-basis: 100%;
+  gap: 3px;
+  min-width: 0;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-calendar-risk-overdue,
+.task-center-view:not([data-mobile-layout="true"]) .bt-calendar-risk-near {
+  padding: 0 4px;
+  border-radius: var(--tc-radius-pill);
+  font-size: 9px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-calendar-risk-overdue {
+  color: var(--color-red);
+  background: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-calendar-risk-near {
+  color: var(--color-orange);
+  background: color-mix(in srgb, var(--color-orange) 10%, transparent);
+}
 .task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-list {
   display: none;
 }

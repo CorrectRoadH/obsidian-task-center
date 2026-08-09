@@ -36,6 +36,20 @@ test("US-116: columnStats — `count · duration` when estimates sum > 0", async
   assert.match(s, /^2 · /, "leads with the task count and a separator");
 });
 
+test("US-115/US-515: deadlineRiskStats reports active overdue and near-deadline tasks", async () => {
+  const { deadlineRiskStats } = await mod();
+  const stats = deadlineRiskStats([
+    { effectiveStatus: "todo", effectiveDeadline: "2026-06-23" },
+    { effectiveStatus: "todo", effectiveDeadline: "2026-06-24" },
+    { effectiveStatus: "todo", effectiveDeadline: "2026-06-27" },
+    { effectiveStatus: "todo", effectiveDeadline: "2026-06-28" },
+    { effectiveStatus: "done", effectiveDeadline: "2026-06-20" },
+    { effectiveStatus: "dropped", effectiveDeadline: "2026-06-25" },
+    { effectiveStatus: "todo", effectiveDeadline: null },
+  ], "2026-06-24");
+  assert.deepEqual(stats, { overdue: 1, nearDeadline: 2 });
+});
+
 test("buildWeekDays — 7 consecutive ISO days aligned to weekStartsOn", async () => {
   const { buildWeekDays } = await mod();
   const days = buildWeekDays("2026-06-24", 1); // Wed; Monday-start week

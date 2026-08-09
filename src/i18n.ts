@@ -75,6 +75,8 @@ const EN = {
   // the panel body when a day has no scheduled tasks.
   // see USER_STORIES.md
   "month.daySchedule": "{date} schedule",
+  "calendar.overdueShort": "Overdue {n}",
+  "calendar.nearDeadlineShort": "Due soon {n}",
   "sheet.empty": "No tasks scheduled this day.",
 
   // Completed
@@ -558,6 +560,8 @@ const ZH: Partial<typeof EN> = {
   "dnd.droppedUndo": "放弃",
 
   "month.daySchedule": "{date} 排期",
+  "calendar.overdueShort": "逾 {n}",
+  "calendar.nearDeadlineShort": "近 {n}",
   "sheet.empty": "这一天没有任务。",
 
   "completed.weekOf": "{date} 那一周",

@@ -2,7 +2,7 @@
 // state (REFACTOR.md / ARCHITECTURE §7.6: clean first extraction toward the
 // CalendarRenderPort split). Unit-testable in isolation.
 
-import { addDays, startOfWeek, startOfMonth, endOfMonth } from "../../dates";
+import { addDays, daysBetween, startOfWeek, startOfMonth, endOfMonth } from "../../dates";
 import { formatMinutes } from "../../parser";
 import type { ParsedTask } from "../../types";
 
@@ -12,6 +12,23 @@ export function columnStats(tasks: ParsedTask[]): string {
   const sum = tasks.reduce((s, t) => s + (t.estimate ?? 0), 0);
   if (sum === 0) return `${tasks.length}`;
   return `${tasks.length} · ${formatMinutes(sum)}`;
+}
+
+// US-115 / US-515: condensed calendars still expose deadline risk even
+// though full cards live only in the selected-day outline.
+export function deadlineRiskStats<T extends {
+  effectiveDeadline: string | null;
+  effectiveStatus: string;
+}>(tasks: T[], today: string): { overdue: number; nearDeadline: number } {
+  let overdue = 0;
+  let nearDeadline = 0;
+  for (const task of tasks) {
+    if (task.effectiveStatus !== "todo" || !task.effectiveDeadline) continue;
+    const delta = daysBetween(today, task.effectiveDeadline);
+    if (delta < 0) overdue += 1;
+    else if (delta <= 3) nearDeadline += 1;
+  }
+  return { overdue, nearDeadline };
 }
 
 // Bucket tasks by their effective `⏳` day in ONE pass. The week / month

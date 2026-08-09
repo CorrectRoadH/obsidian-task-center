@@ -140,6 +140,29 @@
 .task-center-view .bt-meta-sched { color: var(--color-blue); }
 .task-center-view .bt-meta-path { color: var(--text-faint); font-size: 9px; }
 
+/* US-515: compact outlines optimize for scanning. Source remains available
+ * through the card action and appears on hover/selection when context matters. */
+.task-center-view:not([data-mobile-layout="true"]):is(
+  [data-pane-layout="compact"],
+  [data-pane-layout="narrow"]
+) .bt-card .bt-meta-path {
+  display: none;
+}
+@media (hover: hover) {
+  .task-center-view:not([data-mobile-layout="true"]):is(
+    [data-pane-layout="compact"],
+    [data-pane-layout="narrow"]
+  ) .bt-card:hover .bt-meta-path {
+    display: inline;
+  }
+}
+.task-center-view:not([data-mobile-layout="true"]):is(
+  [data-pane-layout="compact"],
+  [data-pane-layout="narrow"]
+) .bt-card.selected .bt-meta-path {
+  display: inline;
+}
+
 .task-center-view .bt-card-children {
   margin-top: 4px;
   margin-left: 22px;
@@ -219,4 +242,3 @@
 /* US-152: completed subcards match the main card — muted, no strike-through. */
 .task-center-view .bt-subcard.done { opacity: 0.7; color: var(--text-muted); }
 .task-center-view .bt-subcard.done .bt-subcard-title { color: var(--text-muted); }
-
