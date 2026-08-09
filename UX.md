@@ -416,7 +416,7 @@ Task Center 经常不是全屏页面，而是 Obsidian 多分栏中的一个 pan
 - **Month**：月历降为负载地图；空日期平面化，有任务日期显示计数 / 风险点，不在格内塞 mini-card。点击日期后，下方内联展示该日标准任务列表。日期格仍是 drop target。
 - **布局树**：横排 `row` 在紧凑 pane 中可视觉叠成纵排，但不修改保存的 DSL；固定方形 drop area 改成紧凑横条，避免与主 outline 争宽。
 - **Tabs**：仍按 pane 宽度量宽，但以可读和留白为目标，不以“勉强塞得下”为目标；常用前几项保留，其他进入“更多”。
-- **Outline**：标题是第一层；日期、标签、路径等是第二层。来源路径在紧凑 pane 默认弱化或隐藏，选中 / hover / 源编辑入口仍可访问。父任务用字重、展开与缩进表达层级，不新增常驻 Inspector。
+- **Outline**：标题是第一层；日期、标签、路径等是第二层。来源路径在紧凑 pane 默认隐藏，hover / 选中时显示，源编辑入口始终可访问。概览格不挂载隐藏卡片，同一任务只保留 outline 这一份可交互 DOM。父任务用字重、展开与缩进表达层级，不新增常驻 Inspector。
 
 紧凑态借鉴 OmniFocus Forecast 的“日期导航先概览、Outline 再承载详情”，但不引入 OmniFocus 的 GTD 字段、Columns Layout、复合状态圆或 Apple 专属外观。
 

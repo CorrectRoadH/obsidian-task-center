@@ -516,7 +516,7 @@ View 层负责把同一份 Query / ViewModel 投射成桌面或移动端 DOM，�
 **桌面 pane 自适应（US-514 / US-515）**：视图外壳通过 `ResizeObserver` 读取 `contentEl` 自己的宽度并映射为 presentation width band；不得用 `window.innerWidth` 代替 pane 宽度。只有跨 band 时才调度重渲，普通像素抖动只更新 CSS metrics。紧凑 pointer pane 不复用 `data-mobile-layout="true"`，否则会错误关闭 draggable / tab 排序 / 快捷键并把卡片点击改成移动 sheet。
 
 - `wide`：week 7 列、month 格内 mini-card、row 布局与方形 drop area。
-- `compact`：week 日期键 + 选中日 outline；month 负载月历 + 选中日 outline；row 视觉纵排；drop area 紧凑横条。日期键 / 月格仍调用同一 `makeDropZone`，保留 pointer 改期。
+- `compact`：week 日期键 + 选中日 outline；month 负载月历 + 选中日 outline；row 视觉纵排；drop area 紧凑横条。日期键 / 月格仍调用同一 `makeDropZone`，保留 pointer 改期。概览格只渲染日期、计数与风险摘要，不创建再由 CSS 隐藏的 card / mini-card；否则同一 `data-task-id` 会出现不可见重复交互节点。outline 的来源路径由 CSS 渐进披露：默认隐藏，card hover / selected 时显示。
 - `narrow`：沿用移动端手风琴与触控排版；是否启用 swipe / long-press 仍只看 `modality`。
 
 calendar 的 `selectedDay` 是 view 会话态：week 与 month 都记住当前选中日期，跨 `wide ↔ compact` 不修改 Query DSL、不丢 tab / anchor；选中日期离开当前范围时回退到 today（若在范围内）或范围第一天。
