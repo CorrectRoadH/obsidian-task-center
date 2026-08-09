@@ -163,6 +163,26 @@
   min-height: 0;
 }
 
+/* US-514: compact desktop panes reflow, but retain pointer interactions. */
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-stack-row,
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-stack-row {
+  flex-direction: column;
+}
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-stack-row.bt-row-has-head > .bt-area:not(.bt-has-head),
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-stack-row.bt-row-has-head > .bt-area:not(.bt-has-head) {
+  margin-top: 0;
+}
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-area-drop,
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-area-drop {
+  align-self: stretch;
+}
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-area-drop .bt-trash,
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-area-drop .bt-trash {
+  width: 100%;
+  min-height: 52px;
+  aspect-ratio: auto;
+}
+
 /* grid area：响应式多列任务卡（未排期 tray 用） */
 .task-center-view .bt-list-grid {
   display: grid;

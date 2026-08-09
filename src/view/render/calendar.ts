@@ -38,8 +38,15 @@ export function renderWeek(
   const effectiveTasks = v.scopeTasksToArea(v.getEffectiveTasks(), area.when);
   // One pass over the task set instead of one full filter per day column.
   const dayBuckets = bucketByScheduledDay(effectiveTasks, filter);
+  const isMobileLayout = v.contentEl.dataset.mobileLayout === "true";
+  const isCompactPointer = !isMobileLayout && v.contentEl.dataset.paneLayout !== "wide";
+  let selectedDay = v.state.selectedWeekDay;
+  if (!selectedDay || !days.includes(selectedDay)) {
+    selectedDay = days.includes(today) ? today : days[0];
+  }
+  let selectedDayTasks: EffectiveTask[] = [];
 
-  const wrapper = parent.createDiv({ cls: "bt-week" });
+  const wrapper = parent.createDiv({ cls: `bt-week${isCompactPointer ? " bt-week-compact" : ""}` });
   wrapper.dataset.view = "week";
 
   for (const day of days) {
@@ -55,6 +62,7 @@ export function renderWeek(
       return 0;
     });
     const topLevel = dayTasksRecomputed.filter((t) => t.isTopLevelInQuery);
+    if (day === selectedDay) selectedDayTasks = topLevel;
     // Mobile collapsible per-day rows (UX-mobile §3.1): `today` always
     // shows its body; other days show body only when `expanded` class
     // is present. Desktop CSS overrides and shows body unconditionally,
@@ -64,13 +72,20 @@ export function renderWeek(
     let cls = "bt-week-col";
     if (isToday) cls += " today";
     if (isExpanded) cls += " expanded";
+    if (isCompactPointer && day === selectedDay) cls += " selected";
     const col = wrapper.createDiv({ cls });
     // e2e drop-target selector: `[data-date="YYYY-MM-DD"]`. Stable across
     // i18n / weekday labels.
     col.dataset.date = day;
     const head = col.createDiv({ cls: "bt-week-head" });
     // Tap-to-toggle on mobile. Today's row stays open (no toggle).
-    if (!isToday) {
+    if (isCompactPointer) {
+      head.addEventListener("click", () => {
+        v.state.selectedWeekDay = day;
+        v.state.selectedTaskId = null;
+        v.render();
+      });
+    } else if (!isToday) {
       head.addEventListener("click", (e) => {
         // Ignore clicks that bubbled up from the card area inside the body.
         if ((e.target as HTMLElement).closest(".bt-card, .bt-subcard")) return;
@@ -87,8 +102,7 @@ export function renderWeek(
     head.createSpan({ text: `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, cls: "bt-week-date" });
     // On mobile, hide the "0" count for empty days — the caret already
     // signals collapsibility; showing "0" is noise with no value.
-    const isMobile = v.contentEl.dataset.mobileLayout === "true";
-    if (!isMobile || dayTasksRecomputed.length > 0) {
+    if (!isMobileLayout || dayTasksRecomputed.length > 0) {
       const stats = head.createSpan({
         text: columnStats(dayTasksRecomputed),
         cls: "bt-week-stats",
@@ -102,9 +116,15 @@ export function renderWeek(
     // handler lives on a child the synthesized drop event from
     // `simulateDrag()` never reaches it.
     v.makeDropZone(col, day);
-    for (const t of topLevel) {
-      renderCard(v, list, t, day);
+    // Compact date keys are navigation/drop targets only. Rendering hidden
+    // full cards here would duplicate task IDs and make automation/keyboard
+    // selection hit an invisible copy before the visible outline card.
+    if (!isCompactPointer) {
+      for (const t of topLevel) renderCard(v, list, t, day);
     }
+  }
+  if (isCompactPointer) {
+    renderDayOutline(v, wrapper, selectedDay, selectedDayTasks, "week");
   }
 }
 
@@ -156,6 +176,8 @@ export function renderMonth(
 
   const grid = wrapper.createDiv({ cls: "bt-month-grid" });
   const isMobileLayout = v.contentEl.dataset.mobileLayout === "true";
+  const isCompactPointer = !isMobileLayout && v.contentEl.dataset.paneLayout !== "wide";
+  const isCondensed = isMobileLayout || isCompactPointer;
   let selectedDay = v.state.selectedMonthDay;
   if (!selectedDay || (selectedDay < first || selectedDay > last)) {
     selectedDay = today >= first && today <= last ? today : first;
@@ -169,7 +191,7 @@ export function renderMonth(
         "bt-month-cell" +
         (day === today ? " today" : "") +
         (isCurMonth ? "" : " other-month") +
-        (isMobileLayout && day === selectedDay ? " selected" : ""),
+        (isCondensed && day === selectedDay ? " selected" : ""),
     });
     // e2e drop-target selector — same contract as the week view.
     cell.dataset.date = day;
@@ -191,7 +213,7 @@ export function renderMonth(
       chip.dataset.taskId = t.id;
       chip.dataset.taskStatus = t.effectiveStatus;
       chip.addClass(`bt-mini-card-${t.effectiveStatus}`);
-      if (v.contentEl.dataset.mobileLayout !== "true") chip.draggable = true;
+      if (!isMobileLayout) chip.draggable = true;
       chip.setText(t.title);
       if (t.effectiveDeadline && t.effectiveStatus === "todo") {
         const deadlineDays = daysBetween(today, t.effectiveDeadline);
@@ -209,7 +231,7 @@ export function renderMonth(
     // inside handle their own drag / select.
     // see USER_STORIES.md
     cell.addEventListener("click", (e) => {
-      if (v.contentEl.dataset.mobileLayout !== "true") return;
+      if (!isCondensed) return;
       // Don't fire when the click bubbled from a chip — that's a select
       // intent, not "open the day".
       if ((e.target as HTMLElement).closest(".bt-mini-card")) return;
@@ -218,18 +240,20 @@ export function renderMonth(
       v.render();
     });
   }
-  if (isMobileLayout) {
-    renderMobileMonthDayPanel(v, wrapper, selectedDay, selectedDayTasks);
+  if (isCondensed) {
+    renderDayOutline(v, wrapper, selectedDay, selectedDayTasks, "month");
   }
 }
 
-function renderMobileMonthDayPanel(
+function renderDayOutline(
   v: TaskCenterView,
   parent: HTMLElement,
   day: string,
   dayTasks: EffectiveTask[],
+  source: "week" | "month",
 ): void {
   const panel = parent.createDiv({ cls: "bt-month-day-panel" });
+  panel.dataset.source = source;
   panel.dataset.date = day;
 
   const d = fromISO(day);

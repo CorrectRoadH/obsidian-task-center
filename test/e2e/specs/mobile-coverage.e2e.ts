@@ -199,6 +199,13 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
   });
 
   afterEach(async function () {
+    // Obsidian 1.13 can leave a modal mounted briefly after its close button is
+    // clicked. Escape + disappearance wait prevents one sheet from intercepting
+    // every card click in the following example.
+    for (let i = 0; i < 4 && (await $(".modal-bg").isExisting()); i++) {
+      await browser.keys(["Escape"]);
+      await $(".modal-bg").waitForExist({ reverse: true, timeout: 1000 }).catch(() => undefined);
+    }
     // Reset the test hook so a stray failure can't poison the next spec.
     await setTestForceMobile(false);
   });
@@ -372,11 +379,9 @@ describe("Task Center — mobile coverage gap-fill (task #44)", function () {
     );
     expect(opened).toBe(true);
 
-    // Close the modal so the next test starts clean.
-    await browser.execute(() => {
-      const close = document.querySelector<HTMLElement>(".modal-close-button");
-      close?.click();
-    });
+    // Close the modal and prove it is gone before the next test starts.
+    await browser.keys(["Escape"]);
+    await $(".modal-bg").waitForExist({ reverse: true, timeout: 3000 });
   });
 
   it("US-506a/US-507a: tapping a mobile card opens details, and scheduling uses tap-only dates", async function () {

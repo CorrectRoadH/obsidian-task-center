@@ -27,6 +27,7 @@ import { BottomSheet } from "./view/bottom-sheet";
 import { openMobileDatePicker, openMobileTagEditor, type TagEditResult } from "./view/mobile-task-sheet";
 import { shouldCloseFilterPopoverOnPointerDown, isClickInsideFilterControls } from "./view/filter-popover";
 import { isMobileMode } from "./platform";
+import { classifyPaneLayout } from "./view/presentation";
 import { weekMinHeightFromViewHeightPx } from "./view/layout";
 import { defaultExpandedAreaIndex, resolveExpandedAreaIndex, nextExpandedAreaIndex } from "./view/area-accordion";
 import { QueryDslModal, type QueryDslSubmitMode } from "./view/query-dsl-modal";
@@ -298,6 +299,7 @@ export class TaskCenterView extends ItemView {
       showUnscheduledPool: true,
       collapsedWeeks: new Set(),
       expandedDays: new Set(),
+      selectedWeekDay: null,
       selectedMonthDay: null,
       expandedAreaByTab: {},
     };
@@ -349,22 +351,20 @@ export class TaskCenterView extends ItemView {
     // 使用 activeDocument 而非 document，保证 popout 窗口兼容。
     this.registerDomEvent(activeDocument, "pointerdown", (e) => this.handleFilterOutsidePointerDown(e), { capture: true });
 
-    // US-502: mobile layout gating. Reads viewport width (< 600px) OR
-    // user setting `mobileForceLayout` (escape hatch for iPad / split-
-    // screen) and writes `data-mobile-layout="true|false"` on contentEl;
-    // styles.css attaches every mobile-only rule under
-    // `[data-mobile-layout="true"]`. Driven by JS rather than @media so
-    // the setting can override the viewport. UX-mobile §7.
-    // see USER_STORIES.md
+    // US-502 / US-514: pane width controls presentation; real/forced mobile
+    // controls input modality. A narrow desktop pane must keep pointer affordances.
     this.applyMobileLayoutAttr();
     this.registerDomEvent(window, "resize", () => {
-      this.applyMobileLayoutAttr();
+      const layoutChanged = this.applyMobileLayoutAttr();
       this.updateViewLayoutMetrics();
       this.tabOverflow.onResize();
+      if (layoutChanged) this.render();
     });
     this.viewResizeObserver = new ResizeObserver(() => {
+      const layoutChanged = this.applyMobileLayoutAttr();
       this.updateViewLayoutMetrics();
       this.tabOverflow.onResize();
+      if (layoutChanged) this.render();
     });
     this.viewResizeObserver.observe(this.contentEl);
     this.updateViewLayoutMetrics();
@@ -377,12 +377,16 @@ export class TaskCenterView extends ItemView {
     this.registerEvent(this.app.workspace.on("css-change", () => this.scheduleRefresh()));
   }
 
-  /** Idempotent — recompute and write the data-mobile-layout attribute. */
-  private applyMobileLayoutAttr(): void {
-    const narrow = window.innerWidth < 600;
-    const force = !!this.plugin.settings.mobileForceLayout;
-    this.contentEl.dataset.mobileLayout = narrow || force ? "true" : "false";
+  /** Idempotent — write orthogonal pane-layout and interaction attributes. */
+  private applyMobileLayoutAttr(): boolean {
+    const measuredWidth = this.contentEl.getBoundingClientRect().width || this.contentEl.clientWidth || window.innerWidth;
+    const paneLayout = classifyPaneLayout(measuredWidth);
+    const mobileLayout = isMobileMode() || !!this.plugin.settings.mobileForceLayout;
+    const changed = this.contentEl.dataset.paneLayout !== paneLayout;
+    this.contentEl.dataset.paneLayout = paneLayout;
+    this.contentEl.dataset.mobileLayout = mobileLayout ? "true" : "false";
     this.contentEl.dataset.obsidianMobile = Platform.isMobile ? "true" : "false";
+    return changed;
   }
 
   private updateViewLayoutMetrics(): void {
@@ -1608,14 +1612,10 @@ export class TaskCenterView extends ItemView {
     areaIndex: number,
   ): void {
     void area;
+    void areaIndex;
     const empty = parent.createDiv({ cls: "bt-area-empty" });
     empty.dataset.emptyState = "area";
-    const icon = empty.createDiv({ cls: "bt-area-empty-icon" });
-    setIcon(icon, "search-x");
     empty.createDiv({ text: tr("area.emptyArea"), cls: "bt-area-empty-title" });
-    const edit = empty.createEl("button", { text: tr("savedViews.editArea"), cls: "bt-area-empty-clear" });
-    edit.dataset.action = "edit-area";
-    edit.addEventListener("click", () => this.openQueryControlsSheet({ scope: "area", areaIndex, areaTab: "filter" }));
   }
 
   // US-109x: write a list/grid area's `when` into the current tab draft, keyed

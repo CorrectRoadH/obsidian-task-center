@@ -54,6 +54,15 @@ async function switchToWeekTab() {
   );
 }
 
+async function selectCompactWeekDay(day: string): Promise<void> {
+  const compact = await $(".task-center-view .bt-week-compact").isExisting();
+  if (!compact) return;
+  await $(`.task-center-view .bt-week-col[data-date="${day}"] .bt-week-head`).click();
+  await $(`.task-center-view .bt-month-day-panel[data-source="week"][data-date="${day}"]`).waitForExist({
+    timeout: 3000,
+  });
+}
+
 async function writeAndWait(path: string, body: string) {
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
@@ -255,6 +264,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
+    await selectCompactWeekDay(today);
 
     // Parent card must appear in today's column.
     const parentSel = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"]`;
@@ -272,6 +282,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await $(sameDayNested).waitForExist({ timeout: 3000, timeoutMsg: "same-day subtask not found nested in parent" });
 
     // US-148: cross-day child must appear as a top-level card in tomorrow's column.
+    await selectCompactWeekDay(tomorrow);
     const standaloneSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L3"]`;
     await $(standaloneSel).waitForExist({
       timeout: 3000,
@@ -311,6 +322,7 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await forFlush();
     await $(".task-center-view").waitForExist({ timeout: 5000 });
     await switchToWeekTab();
+    await selectCompactWeekDay(tomorrow);
 
     const parentSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L1"]`;
     const completedChildAnywhere = `.task-center-view [data-task-id="${path}:L2"]`;
@@ -382,14 +394,16 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
 
     const todayCardSel = `.task-center-view [data-date="${today}"] [data-task-id="${path}:L1"]`;
     const tomorrowCardSel = `.task-center-view [data-date="${tomorrow}"] [data-task-id="${path}:L2"]`;
+    await selectCompactWeekDay(today);
     await $(todayCardSel).waitForExist({ timeout: 5000, timeoutMsg: "today's task card not found" });
-    await $(tomorrowCardSel).waitForExist({ timeout: 5000, timeoutMsg: "tomorrow's task card not found" });
 
     // US-150: column header already implies the date — badge must not appear
     await expect(await browser.$(`${todayCardSel} .bt-meta-sched`).isExisting()).toBe(
       false,
       "⏳ badge must not show for a task in its own scheduled day column (today)",
     );
+    await selectCompactWeekDay(tomorrow);
+    await $(tomorrowCardSel).waitForExist({ timeout: 5000, timeoutMsg: "tomorrow's task card not found" });
     await expect(await browser.$(`${tomorrowCardSel} .bt-meta-sched`).isExisting()).toBe(
       false,
       "⏳ badge must not show for a task in its own scheduled day column (tomorrow)",

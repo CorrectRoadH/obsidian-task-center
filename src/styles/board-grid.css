@@ -60,6 +60,83 @@
   min-height: 40px;
 }
 
+/* US-515: Forecast-like compact week — date keys above one readable outline. */
+.task-center-view:not([data-mobile-layout="true"]) .bt-week.bt-week-compact {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(72px, 1fr));
+  gap: 4px;
+  min-height: 0;
+  overflow-x: auto;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-col {
+  min-height: 54px;
+  padding: 4px;
+  cursor: pointer;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-col.selected {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-secondary));
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-head {
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  padding: 2px;
+  border-bottom: 0;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-stats {
+  flex-basis: 100%;
+  margin-left: 0;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact .bt-week-list {
+  display: none;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-week-compact > .bt-month-day-panel {
+  grid-column: 1 / -1;
+}
+
+/* Compact month is a load map; full cards live in the selected-day outline. */
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-month-cell-list,
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-month-cell-list {
+  display: none;
+}
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="compact"] .bt-month-cell,
+.task-center-view:not([data-mobile-layout="true"])[data-pane-layout="narrow"] .bt-month-cell {
+  min-height: 46px;
+  cursor: pointer;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-cell.selected {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-secondary));
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-head,
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-list {
+  display: flex;
+  gap: 8px;
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-head {
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-title {
+  flex: 1;
+  font-weight: var(--font-semibold);
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-count,
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-empty {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.task-center-view:not([data-mobile-layout="true"]) .bt-month-day-panel-list {
+  flex-direction: column;
+  padding-top: 8px;
+}
+
 /* Month grid */
 .task-center-view .bt-month {
   display: flex;
@@ -406,27 +483,14 @@
 /* Per-area empty state (US-109w / US-109b1): neutral, not a global clear. */
 .task-center-view .bt-area-empty {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 20px 12px;
-  text-align: center;
-}
-.task-center-view .bt-area-empty-icon {
-  color: var(--text-faint);
-}
-.task-center-view .bt-area-empty-icon svg {
-  width: 20px;
-  height: 20px;
+  min-height: 28px;
+  padding: 4px 8px;
+  text-align: left;
 }
 .task-center-view .bt-area-empty-title {
   font-size: 12px;
-  color: var(--text-muted);
-}
-.task-center-view .bt-area-empty-clear {
-  font-size: 11px;
-  padding: 2px 10px;
-  cursor: pointer;
+  color: var(--text-faint);
 }
 
 /* Unknown area — graceful fallback for an unsupported area type. */
@@ -456,4 +520,3 @@
   margin: 0;
   color: var(--text-normal);
 }
-

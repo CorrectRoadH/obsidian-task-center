@@ -1,4 +1,4 @@
-import { browser, expect, $ } from "@wdio/globals";
+import { browser, expect, $, $$ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
@@ -74,8 +74,9 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
     await expect(card).toExist();
   });
 
-  // US-101: week 主体不能塌得太矮；至少占当前 Task Center 可视高度一半。
-  it("US-101: week body keeps at least half of the Task Center visible height", async function () {
+  // US-101 / US-515: wide week keeps its board height; compact week is allowed
+  // to shrink to date keys + the selected-day outline.
+  it("US-101/US-515: week height follows the active pane presentation", async function () {
     const today = todayISO();
     await writeAndWait("Tasks/Inbox.md", `- [ ] Week min-height task ⏳ ${today}\n`);
 
@@ -88,12 +89,42 @@ describe("Task Center — 看板基础 (US-101/107/115)", function () {
       const view = document.querySelector<HTMLElement>(".task-center-view")!;
       const week = document.querySelector<HTMLElement>(".task-center-view .bt-week")!;
       return {
+        paneLayout: view.dataset.paneLayout,
         viewHeight: view.getBoundingClientRect().height,
         weekHeight: week.getBoundingClientRect().height,
       };
     });
 
-    expect(metrics.weekHeight).toBeGreaterThanOrEqual(Math.floor(metrics.viewHeight / 2));
+    if (metrics.paneLayout === "wide") {
+      expect(metrics.weekHeight).toBeGreaterThanOrEqual(Math.floor(metrics.viewHeight / 2));
+    } else {
+      expect(metrics.weekHeight).toBeGreaterThan(100);
+    }
+  });
+
+  it("US-514/US-515: compact desktop pane uses date keys and keeps pointer cards draggable", async function () {
+    const today = todayISO();
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Compact outline task ⏳ ${today}\n`);
+
+    await browser.executeObsidianCommand("task-center:open");
+    await forFlush();
+    await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".task-center-view")!;
+      view.style.width = "760px";
+      view.style.flex = "0 0 760px";
+    });
+    await browser.waitUntil(async () => (
+      await $(".task-center-view").getAttribute("data-pane-layout")
+    ) === "compact");
+
+    await $('[data-tab="week"]').click();
+    await $(".bt-week-compact").waitForExist({ timeout: 5000 });
+    await expect($(".task-center-view")).toHaveAttribute("data-mobile-layout", "false");
+    expect((await $$(".bt-week-compact > .bt-week-col[data-date]")).length).toBe(7);
+
+    const outlineCard = $('.bt-month-day-panel[data-source="week"] [data-task-id="Tasks/Inbox.md:L1"]');
+    await outlineCard.waitForExist({ timeout: 5000 });
+    await expect(outlineCard).toHaveAttribute("draggable", "true");
   });
 
   // US-107: tasks with empty title must be silently ignored — no card appears

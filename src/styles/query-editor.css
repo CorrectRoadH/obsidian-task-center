@@ -352,7 +352,8 @@
 /* Drop the default Obsidian X close button — Esc / outside-click handles
  * dismissal. Keeping the button creates visual clutter against the
  * Spotlight aesthetic. */
-.task-center-quick-add-v2.modal .modal-close-button {
+.task-center-quick-add-v2.modal .modal-close-button,
+.modal-container.task-center-quick-add-v2-container .modal-close-button {
   display: none;
 }
 /* Anchor at viewport-top 30% rather than vertical center — matches

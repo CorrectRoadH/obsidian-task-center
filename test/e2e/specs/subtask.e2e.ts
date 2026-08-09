@@ -89,6 +89,15 @@ async function switchToWeekTab() {
   );
 }
 
+async function selectCompactWeekDay(day: string): Promise<void> {
+  const compact = await $(".task-center-view .bt-week-compact").isExisting();
+  if (!compact) return;
+  await $(`.task-center-view .bt-week-col[data-date="${day}"] .bt-week-head`).click();
+  await $(`.task-center-view .bt-month-day-panel[data-source="week"][data-date="${day}"]`).waitForExist({
+    timeout: 3000,
+  });
+}
+
 async function openBoardToTask(taskId: string) {
   await browser.executeObsidianCommand("task-center:open");
   await forFlush();
@@ -241,6 +250,7 @@ describe("Task Center - subtasks via source edit (US-141/162/168)", function () 
       timeout: 3000,
       timeoutMsg: `week containing ${pastDate} did not appear after navigating back`,
     });
+    await selectCompactWeekDay(pastDate);
 
     const card = $(`.task-center-view [data-task-id="${dailyPath}:L1"]`);
     await card.waitForExist({ timeout: 5000 });

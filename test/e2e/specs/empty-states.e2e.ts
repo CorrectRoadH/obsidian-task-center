@@ -136,6 +136,8 @@ describe("US-720d2/US-122a empty-state rendering", function () {
     const perAreaEmpties = await $$('.task-center-view .bt-area-list [data-empty-state="area"]');
     expect(perAreaEmpties.length).toBe(4);
     await expect($('[data-empty-state="view"]')).not.toExist();
+    await expect($(".bt-area-empty button")).not.toExist();
+    await expect($(".bt-area-empty-icon")).not.toExist();
 
     // The two row stacks survived normalization (genuine 2D matrix structure).
     const rowStacks = await $$(".task-center-view .bt-stack-col > .bt-stack-row");

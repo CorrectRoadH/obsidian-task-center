@@ -1,8 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Mobile layout (UX-mobile.md §2 / §13).
-   Decision is by viewport WIDTH, not platform — a 600px split pane on a
-   desktop should still get the desktop layout. The 600px breakpoint is
-   the orientation/size split, not a mobile/desktop probe (§13 #1, #8).
+   Mobile interaction layout (UX §6.3 / §6.4).
+   This attribute is driven by real/forced mobile modality. Pane width has its
+   own data-pane-layout band, so a narrow desktop pane keeps pointer behavior.
    ───────────────────────────────────────────────────────────────────────── */
 
 /* US-511a: the page is edge-to-edge. The view itself has no side padding;

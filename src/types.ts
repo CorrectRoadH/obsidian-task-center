@@ -99,11 +99,11 @@ export interface TaskCenterSettings {
   // see USER_STORIES.md
   mobileLongPressMs: number; // 200..1000, default 500
   mobileSwipeEnabled: boolean; // default true (left=done, right=drop)
-  // US-502: viewport-based mobile layout switch + force-mobile escape
+  // US-502: real mobile layout with a force-mobile escape hatch
   // hatch for iPad / split-screen / large foldables that want column
   // layout regardless of width. UX-mobile §7.
   // see USER_STORIES.md
-  mobileForceLayout: boolean; // default false (auto = follow viewport width)
+  mobileForceLayout: boolean; // default false (auto = follow platform modality)
 }
 
 export type TaskFormatFlavor = "tasks" | "dataview";

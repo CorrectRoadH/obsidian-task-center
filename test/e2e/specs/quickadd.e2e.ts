@@ -54,9 +54,9 @@ describe("Task Center — Quick Add v2 (US-167)", function () {
     // X close button is in the DOM (Obsidian renders it) but hidden by CSS.
     const xVisible = await browser.execute(() => {
       const x = document.querySelector(
-        ".task-center-quick-add-v2 .modal-close-button",
+        ".task-center-quick-add-v2 .modal-close-button, .task-center-quick-add-v2-container .modal-close-button",
       ) as HTMLElement | null;
-      if (!x) return true; // either fully removed or hidden — both acceptable
+      if (!x) return false; // either fully removed or hidden — both acceptable
       const cs = window.getComputedStyle(x);
       return cs.display !== "none" && cs.visibility !== "hidden";
     });
