@@ -1,6 +1,6 @@
 {
   "name": "obsidian-task-center",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "AI-ready task board with day/week/month views, natural-language Quick Add, task trees, mobile gestures, and CLI commands over plain markdown.",
   "main": "main.js",
   "packageManager": "pnpm@10.32.1",
