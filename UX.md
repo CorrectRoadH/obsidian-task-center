@@ -145,11 +145,11 @@ Tab 菜单至少包含：重命名、复制、编辑 Query、设为默认、隐�
 两类控件都遵循这一条：
 
 - **时间范围选择器属于视图本身。** 它只在周 / 月这类有时间轴的视图里存在；列表 / 网格视图没有"上一周 / 下一月"的概念。范围导航跟着**组件（area）走**——周组件渲染并拥有自己的 `◀ 周 ▶`，月组件渲染并拥有自己的 `◀ 月 ▶`，切到列表 / 网格时随组件一起消失。
-- **过滤（搜索 / 标签 / 排期 / 更多时间 / 状态）属于渲染任务的 area，不属于全局工具栏。** 一个 tab 可以有多个内容 area（四象限 = 4 格，工作/个人并排 = 2 个 list）。全局只有一个过滤入口时，"编辑它作用于下面哪个 area"无法回答。所以每个 `list`/`grid` area 自己拥有、自己渲染、自己管理过滤状态（US-109w / US-109x）。
+- **过滤（搜索 / 标签 / 排期 / 更多时间 / 状态）属于渲染任务的 area，不属于全局工具栏。** 一个 tab 可以有多个内容 area（四象限 = 4 格，工作/个人并排 = 2 个 list）。全局只有一个过滤入口时，"编辑它作用于下面哪个 area"无法回答。所以每个 `list`/`grid`/`week`/`month` area 自己拥有、自己渲染、自己管理过滤状态（US-109w / US-109x / US-109z2）。
 
 由此，**顶部 Query 工具栏不再有任何过滤控件**（搜索框、标签 / 排期 / 更多时间 / 待办 chip 全部下沉到 area）。工具栏只剩 tab 级动作：`编辑 Query`、dirty 时的 `更新 / 另存为新 tab / 丢弃`、以及任务主按钮 `+ 新建`。垂直空间进一步省出。
 
-tab 仍可保留一个**共享基础集** `preset.filters`，对所有 area 生效（让今日 / TODO 等内置单 area tab 行为不变），但它不再以全局 chip 形式出现，只能在 DSL / 编辑 Query 面板里改。（US-109z）
+tab 不再有共享 `preset.filters`；要让多个 area 共享同一条件，就把条件写进每个 area 的 `when`。Tab 面板只编辑名称、布局、管理动作与完整 DSL，Area 面板编辑单块 `when` / 外观。（US-109z2）
 
 移动端日期导航在 week / month 的 area head 内（和桌面一致），不在顶部工具栏，见 §6.2 / §13.1。
 
@@ -168,13 +168,13 @@ tab 仍可保留一个**共享基础集** `preset.filters`，对所有 area 生�
 
 ### 3.1 Toolbar 摘要
 
-Toolbar 摘要解释当前 Query 的 **tab 级**配置（共享基础集 `preset.filters`、view、summary），不再罗列各 area 的过滤——后者属于各 area 自己的过滤入口（§4.0）：
+Toolbar 只解释当前 Tab 的视图身份与未保存状态，不罗列各 area 的过滤——过滤只属于各 area 自己的 `when`，从对应 area head 进入（§4.0）：
 
 ```text
-基础集 状态:TODO · view:四象限 · summary:count
+四象限 · 有未保存改动
 ```
 
-空状态按 area 归因（§4.0 / US-109b1）：不在全局 Toolbar 弹"清空筛选"。某个 area 空时由该 area 自己解释「本区无匹配任务」并提供「清空本区筛选」；整 tab 因基础集天然为空（如未排期 + 周 view）才在 view 层解释。（US-109b / US-104）
+空状态按 area 归因（§4.0 / US-109b1）：不在全局 Toolbar 弹"清空筛选"。某个 area 空时只在该 area 内显示一行弱提示；修正条件继续走 area head 已有的「编辑区域」，空状态不重复动作。（US-109b / US-104）
 
 ### 3.2 编辑视图：两个独立面板（Tab 面板 / Area 面板）
 
@@ -187,9 +187,6 @@ Toolbar 摘要解释当前 Query 的 **tab 级**配置（共享基础集 `preset
 ```text
 编辑视图 · Today                                   [×]
 ─────────────────────────────────────────────────────
-基础集（对本 Tab 所有区域生效）
-  [搜索] 状态:TODO  #work                  〔编辑〕
-
 布局（3 个区域 · 竖排）
   ⠿  ▦ 列表「逾期」      截止<今天         ✎  ⋮
   ⠿  ▦ 列表「今天」      排期:今天         ✎  ⋮
@@ -200,9 +197,9 @@ Toolbar 摘要解释当前 Query 的 **tab 级**配置（共享基础集 `preset
 DSL          〔展开 DSL 直编〕
 ```
 
-四个小节：
+四个部分：
 
-1. **基础集**（`data-filter-section="base"`）：tab 级共享 `preset.filters`，对该 tab 所有 area 生效（让今日 / TODO 等内置单 area tab 不破，US-109z）。
+1. **名称**：当前 Tab 名称。
 2. **布局**（`data-query-layout`）：`view.layout` 区域树的可视化编辑，见 §3.2.3。
 3. **保存与管理**：更新 / 另存为新 tab / 复制 / 删除 / 设默认 / 管理 Tabs（US-109n1 / US-109n3）。
 4. **DSL**（`data-query-dsl-input`）：整份 preset 直编（高级模式），独立可展开/独立滚动；校验失败按 §3.3 标位、不覆盖 saved query。
@@ -223,7 +220,6 @@ Tab 面板**不出现某一块 area 的 `when` / 标题 / 类型**——那些�
   标题:  [逾期                    ]
   类型:  (列表) 网格 周 月 放弃区
 ─────────────────────────────────────────────────────
-ℹ︎ 基础集（状态:TODO #work）也叠加在本区   〔去 Tab 改基础集〉
 ```
 
 - **本区过滤**（`data-filter-section="area"`）：该 area 的 `when`。**除放弃区（`drop`）外所有内容 area 都有**——`week`/`month` 也有 `when`（US-109z2），所以日期视图也显示本区过滤小 tab。控件形态（US-109z2）：
@@ -253,7 +249,7 @@ Tab 面板「布局」小节把 `view.layout` 渲染成一棵可见的树：
 
 - Tab 面板根：`data-saved-views` / `data-query-editor` + `data-query-editor-scope="tab"`。
 - Area 面板根：`data-saved-views` / `data-query-editor` + `data-query-editor-scope="area"`，并带 `data-query-editor-area`（被编辑 area 的 DFS 索引）。
-- Tab 面板小节：基础集 `data-filter-section="base"`、布局 `data-query-layout`、DSL 输入框 `data-query-dsl-input`。布局树每个 area 行带 `data-layout-area`（DFS 索引），每个容器框带 `data-layout-stack`。
+- Tab 面板小节：名称 `data-view-name-input`、布局 `data-query-layout`、DSL 输入框 `data-query-dsl-input`。布局树每个 area 行带 `data-layout-area`（DFS 索引），每个容器框带 `data-layout-stack`。
 - Area 面板：area 级 tab 条 `data-area-editor-tabs`，按钮 `data-area-tab="filter|appearance"`；本区过滤小节 `data-filter-section="area"`；标题输入 `data-area-title-input`；返回 Tab 面板入口 `data-action="back-to-tab"`。
 - 动作钩子沿用：`save-current-view` / `edit-current-view-dsl` / `manage-query-tabs` / `edit-area`。切换面板 / 小 tab 不改变这些钩子的取值。
 
@@ -264,7 +260,7 @@ Tab 面板「布局」小节把 `view.layout` 渲染成一棵可见的树：
 - **可视化编辑**：默认模式，用控件编辑 DSL。
 - **DSL 直编**：高级模式，编辑同一份 tab draft。
 
-切换模式不切换对象。DSL 校验失败时，指出 `filters`、`view` 或 `summary` 的错误位置，不覆盖 saved query；校验成功后必须能回显到可视化控件。（US-109p1 / US-109p2 / US-109p3）
+切换模式不切换对象。DSL 校验失败时，指出具体字段与错误位置，不覆盖 saved query；校验成功后必须能回显到可视化控件。（US-109p1 / US-109p2 / US-109p3）
 
 ## 4. Filters 交互
 
@@ -272,22 +268,22 @@ Filter 只缩小当前任务集合，不写 Markdown，不改变任务状态。�
 
 ### 4.0 过滤入口归属 area（US-109w / US-109x / US-109y）
 
-过滤入口长在**每个 `list`/`grid` area 自己的 header 上**，不在全局工具栏：
+过滤入口长在**每个可查询 area 自己的 head 上**，不在全局工具栏：
 
-- area header 左侧是它的标题（带计数，`bt-list-area-head`），右侧是一个紧凑的**过滤入口**——一个漏斗 / `⛁` 图标按钮，激活时显示当前条件摘要（如 `#重要 +1 · 状态:TODO`）。
-- 点开是同一套控件（搜索、标签、状态、排期、更多时间），但作用域是**这一个 area**。编辑它 = 编辑该 area 的 `when`（US-109x）。`when` 本来就是 DSL 可改的，所以这只是它的图形入口（US-109y：DSL 能改的 UI 也能改）。
+- area head 左侧是标题，右侧是安静的「编辑区域」图标按钮；不在按钮上重复显示 `when` 摘要或激活态。
+- 点开 Area 面板后提供同一套控件（搜索、标签、状态、排期、更多时间），但作用域是**这一个 area**。编辑它 = 编辑该 area 的 `when`（US-109x）。
 - 改动进入当前 tab 草稿，dirty 标记出现；`更新` 写回该 area 的 `when`，`丢弃改动` 回退（§2.4）。
 - 单 area tab（今日 / TODO / 已完成 / 未排期）只有一个内容 area，它的过滤入口在视觉上就近似过去的"工具栏过滤"，但对象明确是这个 area，不是含糊的全局。
-- 一个 area 没有 `when` 条件时，过滤入口是未激活态（只有图标 / 占位文案）；有条件时高亮并显示摘要。
+- 一个 area 的 `when` 概览在 Tab 面板的布局树中查看，不挤占主界面。
 - `week`/`month` area 的自有控件是范围导航（§3.0），导航与过滤入口并存：导航是组件固有的，过滤 / 标题编辑走下面 US-109p9 的统一 area head。
 
-> **US-109p9 / US-109p10 取代上面"就地漏斗 popover"的形态**：不再每个 area 各画一个就地展开的漏斗 popover、也不再有"摘要栏 area 例外"的分叉。改为：**每个内容 area（list / grid / week / month / 四象限 / 未排期 tray）共用同一套 area head——标题 + 一个统一「编辑区域」按钮（`bt-area-edit`，图标 `sliders-horizontal`）。点它打开 §3.2.2 的「Area 面板」，「本区过滤」改这个 area 自己的 `when`（week/month 无 `when` 则不显示本区过滤小 tab），「外观」改并保存该 area 的标题与类型。** 上面关于"作用域是这一个 area / 编辑该 area 的 `when` / 空状态归因"的语义不变，只是入口打开的是 Area 面板（不是 Tab 面板）。drop / week / month 与 list/grid 同一套 head；纯 drop 放弃区无 query，不给编辑入口。
+> **US-109p9 / US-109p10 取代上面"就地漏斗 popover"的形态**：不再每个 area 各画一个就地展开的漏斗 popover、也不再有"摘要栏 area 例外"的分叉。改为：**每个内容 area（list / grid / week / month / 四象限 / 未排期 tray）共用同一套 area head——标题 + 一个统一「编辑区域」按钮（`bt-area-edit`，图标 `sliders-horizontal`）。点它打开 §3.2.2 的「Area 面板」，「本区过滤」改这个 area 自己的 `when`，「外观」改并保存该 area 的标题与类型。** 上面关于"作用域是这一个 area / 编辑该 area 的 `when` / 空状态归因"的语义不变，只是入口打开的是 Area 面板（不是 Tab 面板）。drop / week / month 与 list/grid 同一套 head；纯 drop 放弃区无 query，不给编辑入口。
 >
 > **area head 的「编辑区域」按钮保持安静（用户反馈）**：按钮**不**因为该 area 有 `when` 就高亮（`active`）或在按钮上挂 `when` 摘要 chip。原因：四象限里每一格天生都有 `when`（那就是象限本身的条件），逐格挂一个高亮摘要是纯视觉噪音；它应当长得和"没有过滤"时一模一样——只有图标。该 area 的 `when` 概览改在 Tab 面板的布局树里看（§3.2.3 的 area 行摘要），不在看板 head 上强调。
 
 > **area head 是「区段标题」，要和内容卡片视觉分层（用户反馈）**：area head（WEEK / 未排期 / 象限名…）必须一眼读作区段标题，不能和下方的内容卡片（周视图日卡片 `bt-week-col`、任务卡）长一个样。规则：head 折叠（未选中）态**扁平**（背景透明、不占卡片填充色）；内容卡片才是带填充色 + 圆角的抬升块。**展开（选中）态例外**：那一条 head 用半透明的软 accent 背景（`color-mix(--interactive-accent 8%, --background-modifier-hover)`）读作「激活行」，标出当前打开的 area。**禁止用左侧 accent 竖条/`box-shadow: inset` spine**（`local.no-inset-left-border` 明令禁止、`cards.css` 早有「No coloured left spine」定论），激活态只用背景高亮表达，见 §13.1。窄屏（移动布局）尤其重要——此前 head 和日卡片都用 `--background-secondary` 圆角卡片，完全分不开。**不做 sticky 吸顶**：四象限 / 今日三组在移动端是手风琴，多个 area head 累叠时若都 sticky 会在顶部互相重叠成一坨，反而更糟；扁平标题 vs 抬升卡片的层次已足够区分。空的未排期 tray 的占位（「没有未排期任务」）是轻量左对齐 faint 提示，不是抢重心的大块居中文案。
 
-**空状态按 area 归因**（US-109b / US-109b1）：某个 area 因自己 `when` 没命中而空时，显示中性的「本区无匹配任务」；仅当该 area 有自己的 `when` 条件时，给一个「清空本区筛选」（只清这个 area 的 `when`）。绝不弹出会让用户去清空别处或全局的提示——四象限里 `#不重要` 两格为空是正常分区，不是过滤设错。
+**空状态按 area 归因**（US-109b / US-109b1）：某个 area 因自己 `when` 没命中而空时，在标题下显示一行中性的「本区无匹配任务」；不放居中插图、不重复「编辑区域」按钮，也不提供「清空筛选」。四象限里 `#不重要` 两格为空是正常分区，不是过滤设错；用户确实要修改条件时走 area head 的统一入口。
 
 下面 §4.1–§4.5 描述各控件的交互细节，这些细节不变；变的只是它们挂在 area 的过滤入口里、写的是该 area 的 `when`。
 
@@ -410,7 +406,21 @@ Month 把当前 query 命中的任务按有效 `⏳ scheduled` 放入月历日�
 
 可选未排期 tray 位于月历下方，语义与 Week 一致。
 
-### 6.4 二维分类（四象限）= 布局组合，不是单独 view（US-103a）
+### 6.4 桌面窄 pane：Forecast 导航 + Outline（US-514 / US-515）
+
+Task Center 经常不是全屏页面，而是 Obsidian 多分栏中的一个 pane。布局以 `.task-center-view` 自己的可用宽度为准，不以整个 `window.innerWidth` 为准。宽度与输入模态是两条正交轴：窄 pointer pane 仍保留拖拽、右键、hover、快捷键和桌面源编辑；只有 touch 模态才启用长按、swipe 与移动 bottom sheet。
+
+宽 pane 继续使用完整桌面看板；当 pane 无法让 7 个日期列保持可读宽度时，进入紧凑桌面结构：
+
+- **Week**：area head 下是一排 7 个 Forecast 日期键。每键只显示星期、日期、任务数 / 估时和必要的逾期风险提示；今天有轻量标记，选中日用软 accent 背景。点击日期键后，下方用一列标准任务卡展示该日任务。日期键本身仍是 drop target，拖入即改期。
+- **Month**：月历降为负载地图；空日期平面化，有任务日期显示计数 / 风险点，不在格内塞 mini-card。点击日期后，下方内联展示该日标准任务列表。日期格仍是 drop target。
+- **布局树**：横排 `row` 在紧凑 pane 中可视觉叠成纵排，但不修改保存的 DSL；固定方形 drop area 改成紧凑横条，避免与主 outline 争宽。
+- **Tabs**：仍按 pane 宽度量宽，但以可读和留白为目标，不以“勉强塞得下”为目标；常用前几项保留，其他进入“更多”。
+- **Outline**：标题是第一层；日期、标签、路径等是第二层。来源路径在紧凑 pane 默认弱化或隐藏，选中 / hover / 源编辑入口仍可访问。父任务用字重、展开与缩进表达层级，不新增常驻 Inspector。
+
+紧凑态借鉴 OmniFocus Forecast 的“日期导航先概览、Outline 再承载详情”，但不引入 OmniFocus 的 GTD 字段、Columns Layout、复合状态圆或 Apple 专属外观。
+
+### 6.5 二维分类（四象限）= 布局组合，不是单独 view（US-103a）
 
 没有 Matrix view 类型。二维分类（如四象限）用 `row` / `col` 嵌套多个带标题的 `grid` area 表达：
 
@@ -683,7 +693,7 @@ Month：每个日期格都是改期目标。（US-122）
 
 ## 13. 移动端
 
-移动端 breakpoint：屏幕 `< 600px` 走移动布局；`≥ 600px` 走桌面布局；用户可强制保持移动布局。触控目标高度不低于 44px。（US-502）
+真实移动设备或用户强制移动布局时走移动交互；触控目标高度不低于 44px。桌面 pane 变窄只进入 §6.4 的紧凑桌面结构，不得因此启用长按 / swipe、关闭拖拽或改变桌面点击语义。（US-502 / US-514）
 
 移动端不支持 CLI、键盘快捷键、拖拽、dwell、hover；不可用功能不露出。（US-501）
 
@@ -798,7 +808,7 @@ entry card 视觉与桌面完全一致（§8.1 / §8.1.1）：同一套字号、
 ### 15.1 空状态
 
 - 全 vault 没有任务：显示引导“没有任务，按 + 添加”，不能空白。（US-113）
-- 某个 `list`/`grid` area 无结果：在**该 area 内部**显示中性的「本区无匹配任务」；仅当该 area 有自己的 `when` 时给「清空本区筛选」（只清这个 area）。不弹全局"清空筛选"。（US-109w / US-109b1）
+- 某个 `list`/`grid` area 无结果：在**该 area 内部**显示一行中性的「本区无匹配任务」。不重复 area head 的编辑入口，也不弹局部或全局"清空筛选"。（US-109w / US-109b1）
 - `未排期 + week/month view`：解释“未排期任务没有 `⏳`，不会落入日期区”，并提供切到 list 或显示 tray 的动作。（US-104 / US-109b）
 
 ### 15.2 状态栏

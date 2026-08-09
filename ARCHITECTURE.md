@@ -438,17 +438,11 @@ Obsidian vault/metadata event
 TaskCache.flatten()
   → parse-level ParsedTask[]
   → deriveEffectiveTasks()
-  → applyQueryFilters(preset.filters)        // tab 级共享基础集（程序化，无全局过滤 UI）
-  → applyViewProjection(view)                // 每个 list/grid area 再用自己的 when 收窄
-  → computeSummary(summary)
+  → applyViewProjection(view)                // 每个 task-rendering area 用自己的 when 收窄
   → render surface / CLI format
 ```
 
-过滤分两层、各有归属：
-
-- **基础集 `preset.filters`**：`applyQueryFilters` 在投影前对全集生效，决定"这个 tab 整体看哪些任务"。它没有全局过滤 chip UI，只在 DSL / 编辑 Query 面板里改。
-- **per-area `when`**：在 `applyViewProjection` 里，每个 `list`/`grid` area 用自己的 `when` 在基础集上再收窄。area header 的过滤入口编辑的就是这个 `when`，写进 tab draft（`draftByTabId`），与 DSL 直编同一份数据。
-- **不存在第三层全局 live filter**：渲染层不再有 `getTextFilter()` 式的、读一份全局 tag/time/status/search 运行时状态再套在所有 area 上的逻辑。空状态由各 area 自己按 `when` 归因。（US-109w / US-109b1）
+过滤只有一层且归属于 area：在 `applyViewProjection` 里，每个 `list`/`grid`/`week`/`month` area 用自己的 `when` 从有效任务全集投影。area head 的编辑入口写的就是这份 `when`，进入 tab draft，与 DSL 直编同源。不存在 tab 级 `preset.filters` 或第三层全局 live filter；空状态由各 area 自己按 `when` 归因。（US-109w / US-109z2 / US-109b1）
 
 ### 4.2 Filter 语义
 
@@ -472,7 +466,7 @@ TaskCache.flatten()
 
 - 语义：若 `task.id ∈ exemptStatusIds`，该任务**跳过 status 过滤**（其它过滤——search / tags / time——照常生效）。这让一条 `done` 任务能临时留在一个 `status: todo` 的集合里，而不破坏其它筛选条件。
 - 纯函数：豁免集合作为入参传入，`applyQueryFilters` / `projectListArea` 不持有任何会话状态；不传时退化为原行为，CLI / summary / badge 计数一律不传，因此完全不受影响。
-- 会话状态归属 view 层：`TaskCenterView` 维护 `justCompletedIds: Set<string>`（仅当前 view 会话）。它同时喂给两层过滤——tab 级共享基础集 `preset.filters`（`getTextFilter`）与 per-area `when`（`projectListArea`）——因为内置单 area tab（今日 / TODO）的 `status: todo` 落在基础集里。
+- 会话状态归属 view 层：`TaskCenterView` 维护 `justCompletedIds: Set<string>`（仅当前 view 会话），投影每个 area 的 `when` 时传给 `applyQueryFilters` / `projectListArea`。内置今日 / TODO / 已完成的状态条件同样都在各自 area 的 `when` 中。
 - 加入时机：用户在卡片上点 ✔ **切换任意方向的状态**（todo → done 或 done → todo）时，把它的 id 加入集合，并走"原地变切换后状态"的局部重渲（不播放 animateOut、不移除卡片）。两个方向都加入、都不移除，因此对称——无论变 done 还是变 todo，卡片都跳过该次过滤而停留（一条刚 undone 的 `todo` 任务也能临时留在 `status: done` 的"已完成"集合里）。
 - 清空时机（= "重新进入 view"）：`onOpen`（整页加载）、`applySavedView`（切 tab / 激活 saved view）、`scheduleRefresh`（cache changed 触发的整表刷新）三处清空 `justCompletedIds`。**注意**：完成切换自身触发的局部重渲不清空集合，否则刚完成的卡又会立即被过滤掉。
 
@@ -494,7 +488,7 @@ type AreaModel =
 ```
 
 - 容器：row / col 决定子节点横向 / 纵向排列，`weight` 决定伸缩比。
-- List：用 area `when` 在 `preset.filters` 上收窄，投影成一列扁平任务（无内部分组）。今日与 TODO 走同一条 list 投影，差异只在 DSL——今日是 col 叠 3 个各自带 `when` 的 list。
+- List：用 area `when` 从有效任务全集收窄，投影成一列扁平任务（无内部分组）。今日与 TODO 走同一条 list 投影，差异只在 DSL——今日是 col 叠 3 个各自带 `when` 的 list。
 - Week：按有效 `scheduled` 落入 7 天；无有效 scheduled 不进日期区。移动端折叠状态只影响 day row body 可见性，不改变 day model。
 - Month：按有效 `scheduled` 落入月历日期格；移动端只改变渲染密度，并把当前选中日期的任务列表作为月历下方内联 panel 渲染。
 - Grid：与 List 同投影，只是渲染成响应式多列网格；四象限由 row/col 嵌套多个带 title + when 的 grid 组成。
@@ -517,27 +511,36 @@ type AreaModel =
 
 View 层负责把同一份 Query / ViewModel 投射成桌面或移动端 DOM，不允许通过移动端分支改变任务集合、Query DSL 或写回语义。（US-109k / US-117）
 
-**移动端 area 单开手风琴（US-511 / US-511a）**：`renderLayoutNode` 在移动布局下把 layout 树里的每个内容 area 包成可折叠节，复用既有 `renderAreaHead`（标题 + 计数 / 导航 + 编辑入口）当 head，点 head 展开 area body 并收起其它（exclusive）。它是**纯渲染 / DOM 适配层**：不改 `view.layout`、不改任务投影、不写 tab draft——只决定哪个 area 的 body 可见。展开态键（哪个 area 打开）是会话态（§7.1 `expandedAreaByTab`），不持久化；默认首个内容 area。area 内部既有折叠（week 7 日行 `expandedDays`、month `selectedMonthDay`）不受影响。容器（row/col）在移动端退化为竖排手风琴；`drop` 等桌面专属 area 在移动端本就不渲染。手风琴容器与 body 移动端左右无 padding，entry card edge-to-edge（CSS 在 `mobile.css`，`[data-mobile-layout="true"]`）。桌面端不进此分支，多 area 同时铺开。
+**移动端 area 单开手风琴（US-511 / US-511a）**：`renderLayoutNode` 在移动布局下把 layout 树里的每个内容 area 包成可折叠节，复用既有 `renderAreaHead`（标题 + 计数 / 导航 + 编辑入口）当 head，点 head 展开 area body 并收起其它（exclusive）。它是**纯渲染 / DOM 适配层**：不改 `view.layout`、不改任务投影、不写 tab draft——只决定哪个 area 的 body 可见。展开态键（哪个 area 打开）是会话态（§7.1 `expandedAreaByTab`），不持久化；默认首个内容 area。area 内部既有折叠（week 7 日行 `expandedDays`、month `selectedMonthDay`）不受影响。容器（row/col）在移动端退化为竖排手风琴；`drop` 等桌面专属 area 在移动端本就不渲染。手风琴容器贴合页面可用宽度，展开 body 左右各留 8px 层级槽（CSS 在 `mobile.css`，`[data-mobile-layout="true"]`）。桌面端不进此分支，多 area 同时铺开。
+
+**桌面 pane 自适应（US-514 / US-515）**：视图外壳通过 `ResizeObserver` 读取 `contentEl` 自己的宽度并映射为 presentation width band；不得用 `window.innerWidth` 代替 pane 宽度。只有跨 band 时才调度重渲，普通像素抖动只更新 CSS metrics。紧凑 pointer pane 不复用 `data-mobile-layout="true"`，否则会错误关闭 draggable / tab 排序 / 快捷键并把卡片点击改成移动 sheet。
+
+- `wide`：week 7 列、month 格内 mini-card、row 布局与方形 drop area。
+- `compact`：week 日期键 + 选中日 outline；month 负载月历 + 选中日 outline；row 视觉纵排；drop area 紧凑横条。日期键 / 月格仍调用同一 `makeDropZone`，保留 pointer 改期。
+- `narrow`：沿用移动端手风琴与触控排版；是否启用 swipe / long-press 仍只看 `modality`。
+
+calendar 的 `selectedDay` 是 view 会话态：week 与 month 都记住当前选中日期，跨 `wide ↔ compact` 不修改 Query DSL、不丢 tab / anchor；选中日期离开当前范围时回退到 today（若在范围内）或范围第一天。
 
 **移动端首屏精简（US-512）**：移动布局下渲染调度根**不调用** `renderFooter`（底部统计行）与 `renderMobileActionBar`（未排期 / + 新建 条）。未排期 tray 仍是 layout 里的一个 area，由手风琴呈现；新建任务入口收敛为顶部 toolbar 的一个「+」→ 打开 Quick Add bottom sheet（US-509 / US-169）。桌面端 Footer 不受影响。
 
 移动端布局状态分两层：
 
-- `data-mobile-layout="true"`：窄屏或用户强制移动布局，用于切换 tabs、toolbar、week/month/card/sheet 的移动端排版。
+- `data-pane-layout="wide|compact|narrow"`：只描述 `contentEl` 可用宽度，驱动 calendar / row / drop / tabs 的排版，不改变输入能力。
+- `data-mobile-layout="true"`：真实移动设备或用户强制移动布局，用于移动端手风琴、触控工具栏与 sheet 排版；窄桌面 pane 不设置该值。
 - `data-obsidian-mobile="true"`：真实 Obsidian Mobile 环境，用于额外预留 Obsidian 底部工具栏避让空间。窄屏桌面不能自动套用这层底部避让。
 
 `BottomSheet` 是移动端复杂操作的共享 shell，但调用方可以传入语义 class，使 Query 编辑、父任务选择、日期选择、任务动作 sheet 使用不同高度和 footer 策略。sheet 只能承载视图适配和交互编排；筛选、summary、嵌套、写回仍调用既有 query / writer / api 路径。
 
-**Query 编辑器是两个独立面板（US-109p10，取代 US-109p6 的单面板 Tab 化形态）**：`openQueryControlsSheet({ scope, areaIndex?, initialTab? })` 在 `BottomSheet` 里按 scope 渲染（桌面、移动同一套 DOM，只是外层 sheet class 不同）。两个 scope 投影同一份 tab draft，互不持有独立状态：
+**Query 编辑器是两个独立面板（US-109p10）**：`openQueryControlsSheet({ scope, areaIndex?, initialTab? })` 在 `BottomSheet` 里按 scope 渲染（桌面、移动同一套 DOM，只是外层 sheet class 不同）。两个 scope 投影同一份 tab draft，互不持有独立状态：
 
-- **Tab 面板**（`scope:"tab"`，工具栏 / tab 菜单 / 摘要入口，`areaIndex=null`）：`renderTabEditor` 渲染 `data-query-editor-scope="tab"`，四小节自上而下——基础集（`renderSavedViewsFilterControls` 编辑 `preset.filters`，`data-filter-section="base"`）、布局树（`renderLayoutTree`，`data-query-layout`，接 §1.3.1 算子）、保存与管理（`renderSavedViewsActionControls`）、DSL（`renderDslTab`，`data-query-dsl-input`）。
-- **Area 面板**（`scope:"area"`，area head 的 `bt-area-edit` 入口，带 `areaIndex`）：`renderAreaEditor` 渲染 `data-query-editor-scope="area"` + `data-query-editor-area=<idx>`，顶部面包屑（`data-action="back-to-tab"` 回 Tab 面板），下面 area 级两 tab（`data-area-tab="filter|appearance"`）——本区过滤（`renderAreaFilterControls` + `setAreaWhen`，`data-filter-section="area"`；week/month/drop 无 `when` 时不显示本区过滤 tab）、外观（标题 `areaTitleByIndex`/`setAreaTitle` + 类型）。底部一行只读基础集提示。
+- **Tab 面板**（`scope:"tab"`，工具栏 / tab 菜单 / 摘要入口，`areaIndex=null`）：`renderTabEditor` 渲染 `data-query-editor-scope="tab"`，包含名称、布局树（`data-query-layout`，接 §1.3.1 算子）、保存与管理（`renderSavedViewsActionControls`）与 DSL（`data-query-dsl-input`）；不出现过滤控件。
+- **Area 面板**（`scope:"area"`，area head 的 `bt-area-edit` 入口，带 `areaIndex`）：`renderAreaEditor` 渲染 `data-query-editor-scope="area"` + `data-query-editor-area=<idx>`，顶部面包屑（`data-action="back-to-tab"` 回 Tab 面板），下面 area 级两 tab（`data-area-tab="filter|appearance"`）——本区过滤（`renderAreaFilterControls` + `setAreaWhen`，`data-filter-section="area"`；drop 无 `when`，其余 task-rendering area 均支持）、外观（标题 `areaTitleByIndex`/`setAreaTitle` + 类型）。
 
 `queryEditorScope` / `queryEditorAreaIndex` / `queryEditorTab`（或 area 子 tab `queryEditorAreaTab`）存在实例字段上，跨重渲染保留；切面板 / 切 tab 不重置 tab draft、不丢 DSL 校验错误位置。DSL 只在 Tab 面板（它编辑整份 preset）。
 
-**统一 area head（US-109p9，取代 US-109p7/p8 的实现）**：所有内容 area（list / grid / week / month / 四象限 / 未排期 tray）共用一个 `renderAreaHead(parent, areaIndex, area, {title, isSummaryArea})`：渲染 `bt-area-head`（标题 + 右侧）。右侧对 summary 落点 area 渲染 `renderSummaryChips`（纯显示，从原 `renderSummaryInto` 拆出，去掉内联编辑），并对每个 area 渲染**一个** `bt-area-edit` 按钮（`data-area-edit=<idx>`、`data-action="edit-area"`、图标 `sliders-horizontal`，`areaWhenByIndex` 有 `when` 时按钮上显示 `areaFilterSummary` 并加 `active`）。点按钮 → `openQueryControlsSheet({ areaIndex, initialTab: "filter" })`。`renderListArea` 用它替换旧的 `bt-list-area-head` + `renderSummaryInto` + `renderAreaFilter`；`renderWeek`/`renderMonth` 顶部也调用它（保留各自范围导航）；`renderRangeNav` 不再渲染过滤 chip。原就地 popover `renderAreaFilter` 与 `filterPopoverArea` 状态删除。
+**统一 area head（US-109p9）**：所有内容 area（list / grid / week / month / 四象限 / 未排期 tray）共用一个 `renderAreaHead(parent, areaIndex, area, {title})`：渲染 `bt-area-head`（标题 + 右侧），并为每个可查询 area 渲染一个安静的 `bt-area-edit` 按钮（`data-area-edit=<idx>`、`data-action="edit-area"`、图标 `sliders-horizontal`）。按钮不因 `when` 高亮或挂摘要，避免把 area 自身的固有条件渲染成告警。点按钮 → `openQueryControlsSheet({ scope:"area", areaIndex, initialTab:"filter" })`。`renderWeek`/`renderMonth` 保留各自范围导航；纯 drop 区不显示编辑按钮。
 
-**area head 入口打开 Area 面板（US-109p9 / US-109p10）**：`renderAreaHead` 的 `bt-area-edit` 按钮点击 → `openQueryControlsSheet({ scope:"area", areaIndex, initialTab:"filter" })`。Area 面板的本区过滤 tab 用 `areaWhenByIndex(areaIndex)` 取该 area 的 `when`（list/grid 返回对象、week/month/drop 返回 null → 不渲染本区过滤 tab，只渲染外观）；外观 tab 渲染标题输入框（`areaTitleByIndex` / `setAreaTitle`，空则清除回退内置本地化标题）+ 类型按钮（调 `updateAreaAt(layout, areaIndex, {type})`，**只换这一块**）。`when` 仍只在 list/grid（`ListLikeFields`），week/month 不新增 `when`。`type` 切换不再走重建整棵树的旧 `buildLayoutForAreaType`（删除）。
+**area head 入口打开 Area 面板（US-109p9 / US-109p10）**：`renderAreaHead` 的 `bt-area-edit` 按钮点击 → `openQueryControlsSheet({ scope:"area", areaIndex, initialTab:"filter" })`。Area 面板的本区过滤 tab 用 `areaWhenByIndex(areaIndex)` 取该 area 的 `when`（list/grid/week/month 均返回条件，drop 返回 null）；外观 tab 渲染标题输入框（`areaTitleByIndex` / `setAreaTitle`，空则清除回退内置本地化标题）+ 类型按钮（调 `updateAreaAt(layout, areaIndex, {type})`，**只换这一块**）。`type` 切换不再走重建整棵树的旧 `buildLayoutForAreaType`（删除）。
 
 父任务选择的候选数据来自已缓存的 EffectiveTask 集合和当前 DOM 可见任务 id。排序、搜索、禁用当前任务及后代都在 view 层完成；真正嵌套写回仍通过 `api.nest(childId, parentId)`。
 
@@ -1095,12 +1098,12 @@ export interface TaskActionsPort {
 // src/view/presentation.ts
 export interface PresentationCtx {
   modality: "touch" | "pointer"; // 输入模态：取代 isMobileMode()/裸 Platform.isMobile，单一来源（底层走 __testForceMobile）
-  width: "narrow" | "wide";      // 布局宽度：取代 dataset.mobileLayout 字符串
+  width: "narrow" | "compact" | "wide"; // contentEl 宽度 band，与输入模态正交
 }
 ```
 
-- **外壳算一次、注入给渲染器**。`render`(686) 起点由 `applyMobileLayoutAttr` + `isMobileMode()` 算出 `PresentationCtx`，传给 `CalendarRenderPort` / `CardRenderPort` / `TaskActionsPort.ctx`。渲染器不再读 dataset 字符串。
-- **calendar 收 `ctx.width`**：week 桌面 7 列 vs 窄屏单日、month 移动端 panel、mini-card draggable、cell 点击行为——现 `renderWeek`/`renderMonth` 里的 `desktop`/`isMobileLayout` 分叉收进各自一个文件按 `ctx.width` 分支（取代 `CalendarRenderPort.isMobile` 布尔的临时形态，最终统一到 `PresentationCtx`）。
+- **外壳算一次、注入给渲染器**。`render` 起点由 `contentEl` 的 ResizeObserver width band + `isMobileMode()` 算出 `PresentationCtx`，传给 `CalendarRenderPort` / `CardRenderPort` / `TaskActionsPort.ctx`。渲染器不再读 dataset 字符串。
+- **calendar 收 `ctx.width`**：week wide 7 列、compact 日期键 + outline、narrow 日期行；month wide 格内 mini-card、compact/narrow 负载月历 + inline day outline。mini-card draggable、card click 与手势装配不看 width，统一读 `ctx.modality`。
 - **card 收 `ctx.modality`**：draggable / click 路由 / 子树折叠 +N 按 `ctx.modality`；手势适配器 `attachCardGestures`（`touch.ts`）由 card 模块在 `modality === "touch"` 时装配，取代每个 `renderCard` 里 `if (Platform.isMobile)`。
 - **交互能力按模态门控**：拖拽/dwell/hover/快捷键 ∈ `pointer`；long-press/swipe/bottom-sheet ∈ `touch`（正是 §0 原则 9 清单）。做成 `PointerInteractions`/`TouchInteractions` 适配器，外壳按 `ctx.modality` 装一个。
 - **sheet vs popover**：`query-editor.ts` 已按 `mobileLayout` 选 class（对的雏形），推广成统一收 `ctx.width`。
