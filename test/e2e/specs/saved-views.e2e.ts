@@ -124,12 +124,17 @@ describe("US-109x/z2 area filter model", function () {
       plugin.settings.defaultSavedViewId = today.id;
       plugin.settings.lastSavedViewId = today.id;
       await plugin.saveSettings();
-      const expected = JSON.parse(JSON.stringify(plugin.settings.queryPresets));
-      await plugins.disablePlugin("task-center");
-      await plugins.enablePlugin("task-center");
-      return { expected, actual: plugins.plugins["task-center"].settings.queryPresets };
+      return JSON.parse(JSON.stringify(plugin.settings.queryPresets));
     });
-    expect(saved.actual).toEqual(saved.expected);
+    await obsidianPage.disablePlugin("task-center");
+    await obsidianPage.enablePlugin("task-center");
+    await browser.waitUntil(async () => browser.executeObsidian(({ app }) =>
+      !!(app as any).plugins.plugins["task-center"]), {
+      timeout: 10000, timeoutMsg: "Task Center did not finish enabling after reload",
+    });
+    const reloaded = await browser.executeObsidian(({ app }) =>
+      (app as any).plugins.plugins["task-center"].settings.queryPresets);
+    expect(reloaded).toEqual(saved);
     await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-query-tab-id="preset-today"]').click();
