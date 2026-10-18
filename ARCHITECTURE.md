@@ -6,17 +6,17 @@
 
 ## 0. 架构原则
 
-1. **Markdown 是唯一事实源**：任务数据只存在于 vault 的 Markdown 行中；内存缓存、Query、summary、view 都是派生结果。（US-401）
+1. **Markdown 是唯一事实源**：任务数据只存在于 vault 的 Markdown 行中；内存缓存、区域查询结果与区域头统计都是派生结果。（US-401）
 2. **字节级写回**：改名、移动、嵌套、改期、完成、放弃都必须最小化改动目标行 / 目标块，保留未知 emoji、inline field、tag、block id、wikilink anchor 与用户原文。（US-407 / US-409）
 3. **一份 Query DSL**：view（area 布局树）、tab preset、GUI 可视化编辑、GUI DSL 直编、CLI query 管理共用同一份 schema 与校验。（US-109t / US-219）
 4. **Tab 是持久 Query**：不存在独立持久化的“current query”。运行时只有 tab saved query、tab draft、effective query。（US-109u）
-5. **View 不拥有业务集合**：list / grid / week / month 只消费 Query 结果并提供对应操作；TODO、今日、未排期、已完成等都是 QueryPreset。（US-100 / US-109k）
-5a. **过滤归属 area，不是全局 live state**：没有一份作用于整个 tab 的全局过滤运行时状态。每个 `list`/`grid` area 的过滤就是它自己的 `when`；图形过滤入口直接编辑该 area 的 `when`（落进 tab draft），与 DSL 直编同一份数据。**没有** tab 级 `filters` / 全局基础集——要整个 tab 都只看某状态，就在每个 area 的 `when` 里各写一遍。（US-109w / US-109x / US-109y / US-109z / US-109z2）
-6. **GUI 与 CLI 共用业务层**：解析、筛选、summary、写回、嵌套、QueryPreset CRUD 都必须通过同一服务层，不允许 CLI 和 GUI 各自实现。（US-201~219）
+5. **区域类型不隐含业务过滤**：list / grid / week / month 按各自 `when` 过滤后的结果呈现并提供对应操作；TODO、今日、未排期、已完成等都是 QueryPreset。（US-100 / US-109k）
+5a. **过滤归属 area，不是全局 live state**：没有一份作用于整个 tab 的全局过滤运行时状态。每个 `list`/`grid`/`week`/`month` 区域的过滤就是它自己的 `when`；图形过滤入口直接编辑该 area 的 `when`（落进 tab draft），与 DSL 直编同一份数据。**没有** tab 级 `filters` / 全局基础集——要整个 tab 都只看某状态，就在每个 area 的 `when` 里各写一遍。（US-109w / US-109x / US-109y / US-109z2）
+6. **GUI 与 CLI 共用业务层**：解析、区域过滤与统计、写回、嵌套、QueryPreset CRUD 都必须通过同一服务层，不允许 CLI 和 GUI 各自实现。（US-201~219）
 7. **缓存是唯一读入口**：状态栏、看板、CLI 不直接扫 vault；所有任务读取经 TaskCache。（US-404）
 8. **事件增量优先**：文件变更只重解析该文件；打开看板 / list / stats / hash disambiguation 才允许显式全量 ensure。（US-404）
 9. **移动端不是降级桌面**：业务语义共用，交互适配层分离；移动端没有拖拽、dwell、hover、快捷键。（US-501 / US-507）
-10. **可测试纯逻辑优先**：解析、Query、继承、summary、writer plan、CLI formatter 都应是无 DOM 纯逻辑。
+10. **可测试纯逻辑优先**：解析、区域查询、继承、统计、writer plan、CLI formatter 都应是无 DOM 纯逻辑。
 
 ## 1. 核心数据模型
 
@@ -90,7 +90,7 @@ interface EffectiveTask extends ParsedTask {
 
 ### 1.3 QueryPreset
 
-> 本节是 DSL 的 TypeScript 规格（架构事实源）。面向使用者、带配图与可运行示例的「怎么写」参考在 [`docs/dsl/zh.md`](docs/dsl/zh.md) / [`docs/dsl/en.md`](docs/dsl/en.md)；应用内「编辑 Query」的「DSL 文档」链接按 locale 指向对应语言页。
+> 本节是 DSL 的 TypeScript 规格（架构事实源）。面向使用者、带配图与可运行示例的「怎么写」参考在 [`docs/dsl/zh.md`](docs/dsl/zh.md) / [`docs/dsl/en.md`](docs/dsl/en.md)；应用内「编辑视图」的「DSL 文档」链接按 locale 指向对应语言页。
 
 ```ts
 type TaskStateFilter = "todo" | "done" | "dropped"; // GUI 暴露这三个；解析器还接受 in_progress / cancelled / custom
@@ -108,13 +108,13 @@ type DateToken =
 
 interface QueryFilters {
   search?: string;
-  tags?: string[] | string | { values: string[]; mode: "and" | "or"; exclude?: string[] } | { expr: string }; // 三态：values=包含组（数组/逗号串=AND，对象 mode 选与/或）+ exclude=排除组（US-109d3）；或 { expr } 自由布尔表达式（US-109d4）
+  tags?: string[] | string | { values: string[]; mode: "and" | "or"; exclude?: string[] } | { expr: string }; // {expr} 是界面编辑形态；旧数组 / values / mode / exclude 读取时保留含义（US-109d4）
   status?: TaskStateFilter[]; // undefined = 全部
   time?: {
     scheduled?: DateToken; // ⏳；unscheduled = is empty
-    deadline?: DateToken | "overdue" | "next-7-days";
+    deadline?: DateToken | "overdue" | "not-overdue" | "next-7-days"; // not-overdue 包含无截止日期，支撑 US-720b
     completed?: DateToken;
-    dropped?: DateToken; // 取消日期；DSL 归一化目前会剥除，预设里写了不生效
+    dropped?: DateToken; // 放弃于 ❌；与其它日期字段一样可添加、过滤和保存（US-109i）
     created?: DateToken;
   };
 }
@@ -125,7 +125,7 @@ interface QueryFilters {
 // 组件。旧的「view 类型」升级成「area 类型」：一个 view 不再只有一种类型，
 // 而是可以自由组建多个 area（周视图 = col[ 网格, tray ]；未排期 =
 // col[ 列表, 放弃 ]；用户也能 row[ 工作列表, 个人列表 ] 并排自定义）。
-// 根节点可以直接是单个 area，不必包壳（今日 = 一个 list area）。渲染层
+// 根节点可以直接是单个 area，不必包壳（TODO = 一个 list area）。渲染层
 // 递归遍历布局树，逐个 area 派发到对应组件，不存在 today / completed /
 // unscheduled 等专属渲染分支。（US-720 / US-109k / US-109f）
 
@@ -169,17 +169,26 @@ interface ListArea extends AreaBase {
   emptyText?: string;
 }
 
+interface GridArea extends AreaBase {
+  type: "grid";
+  when?: QueryFilters;
+  orderBy?: string[];
+  limit?: number;
+  emptyText?: string;
+}
+
 // week / month：日期网格组件。日格内部自排布局，每个日格隐式
 // onDrop:{ setScheduled: <当日> }。
 interface WeekArea extends AreaBase {
   type: "week";
+  when?: QueryFilters;
   firstDayOfWeek?: "monday" | "sunday";
 }
 
 interface MonthArea extends AreaBase {
   type: "month";
+  when?: QueryFilters;
   firstDayOfWeek?: "monday" | "sunday";
-  density?: "compact" | "cards";
 }
 
 // drop：纯动作落区，无 query；onDrop 必填。放弃区就是 drop area。
@@ -211,21 +220,21 @@ interface QueryPreset {
 
 Schema 约束：
 
-- 一个 preset 只有 `view`（一棵 area 布局树）。**没有** tab 级 `filters`、**没有** `summary`（US-109z2 移除）：过滤只属于每个 list/grid/week/month area 自己的 `when`，写在顶层的 `filters` 会被静默忽略。
-- 没有 view 类型枚举，也没有 `preset` 判别字段。view 行为完全由 `view.layout` 布局树决定，渲染层不得按 today / completed / unscheduled 等名字分支。（US-720 / US-109k）
+- 视图的内容配置是 `view.layout` 布局树；过滤只属于 list/grid/week/month 的 `when`。新提交的 DSL 含顶层 `filters` / `summary` 或旧 `view.type/preset/sections/tray/matrix` 时返回 `invalid_query`，不静默忽略。已有旧设置的升级迁移仅走 §1.5。（US-109z2 / US-217a）
+- 没有 view 类型枚举，也没有 `preset` 判别字段。view 行为完全由 `view.layout` 布局树决定，渲染层不得按 today / completed / unscheduled 等名字分支。（US-720 / US-109k / US-109v）
 - 内置 view 的布局（真实出厂见 `src/builtin-views/*.json`）：今日 = `col[ list(逾期), list(今日), list(未排期) ]`（每个 list 自带 `when`，与 TODO 同组件，差异只在布局树）；未排期 = `col[ list ]`；已完成 / 已放弃 = 单个 `list`；周 / 月 = `col[ week|month, row[ grid(tray), drop ] ]`；四象限 = `col[ row[grid,grid], row[grid,grid] ]`（带 title + when 的 grid，没有专门 matrix 类型）。状态等过滤都落在各 area 的 `when`，不是 tab 级。都是 area 组合，不是新 view 类型。（US-720 / US-103 / US-103a）
 - 未排期 tray 是一个 `grid` area（卡片多列网格），数据来源是它自己的 `when`，不改变同一布局里 week / month area 的集合。（US-109j）
 - 「改到明天」「清空排期」「放弃」是列表卡片与 drop area 的通用能力，不是某个 preset 的专属动作。（US-103 / US-123）
 - `unscheduled` 属于 `time.scheduled is empty`，不是日期范围 token。（US-109e）
 - View 配置不能硬编码业务分类；area 的 title 和 when 条件都来自 DSL。（US-109f / US-103a）
-- 不被支持的 area `type` 不是错误：归一化成 `unknown` area（保留原始 JSON），视图层渲染「未知类型 + JSON」。（US-103c）
+- 未知区域类型保留原始 JSON，视图显示“未知区域类型”而不静默丢弃或换类型。（US-103c）新 DSL 的严格字段校验见 US-219；未知类型展示与导入拒绝的边界需澄清，不能用兜底行为掩盖已知区域字段错误。
 
 #### 1.3.1 布局树编辑算子（US-109p11）
 
 `view.layout` 是用户可视化编辑的对象（Tab 面板「布局」小节 + 各 area head 的「编辑」）。所有结构改动做成**可测试的纯逻辑算子**，不在视图层手搓 `JSON.parse(JSON.stringify())` 改树。算子放在 `saved-views.ts`（或同层 `layout-ops.ts`），输入输出都是 `LayoutNode`，纯函数、不可变、不抛错（坏路径返回原树）：
 
 - **定位**：`collectAreas(layout)` 已有，按 DFS 顺序枚举 area 叶子；视图层用 area 的 DFS 索引寻址（与 `setAreaWhen` / `setAreaTitle` 一致）。容器节点用从根出发的 `path: number[]`（children 下标序列）寻址。
-- `updateAreaAt(layout, areaIndex, patch)`：改第 N 个 area 叶子的字段（`when` / `title` / `type` / `weight`）。**改 `type` 只换这一个叶子，保留 title / weight，不重建树**——修掉旧 `buildLayoutForAreaType` 重建整棵树的 bug。
+- `updateAreaAt(layout, areaIndex, patch)`：改第 N 个区域叶子的字段（`when` / `title` / `type` / `weight`）。显示任务的区域之间切换类型时保留 `when`、标题和宽度比例，只换这一块，不重建树或改变其它区域。（US-109k / US-109p11）
 - `insertArea(layout, path, index, area)` / `removeNode(layout, path)`：在某容器的指定位置插入 area，或删掉某节点；删到容器只剩 0 个孩子时容器一并塌掉，删到根为空时回退成单个默认 `list`。
 - `wrapInStack(layout, path, dir)`：把某节点包进一层新 `row` / `col` 容器（搭四象限的原子操作）。
 - `setStackDir(layout, path, dir)` / `moveNode(layout, fromPath, toPath, index)` / `setWeight(layout, path, weight)`：切排列方向、跨容器拖拽移动、调宽重。
@@ -241,7 +250,7 @@ area 的"能做什么"用 `areas.ts` 的 `AreaHandler` **类层级**统一描述
 - `AreaHandler`（基类，默认最弱）→ `TaskAreaHandler`（list/grid/week/month 共享 `rendersTasks` / `filterable` / `editable`）→ `DateGridAreaHandler`（week/month，覆盖 `acceptsDrop`，每个日格隐式是改期落点）→ 各叶子类（`ListAreaHandler` 等）只覆盖 `icon` / `labelKey`；`DropAreaHandler` / `UnknownAreaHandler` 不渲染任务。
 - `areaHandler(type)` 取处理器；`areaSupportsWhen(area)` = `areaHandler(area.type).filterable()`（唯一真源，narrow 到带 `when` 的 area 配置）。图标 / 文案 / 可编辑 / 可拖入 全部读 handler。
 - **数据仍是纯 JSON**（`AreaConfig` 在 types.ts，DSL 可序列化）；行为在类里。**per-instance** 行为（同类型两个 area 不同的拖入语义，如未排期 tray = 拖入清空 ⏳）仍是 area 自己的 `onDrop` 数据，不进类。
-- `week` / `month` 的 `AreaConfig` 也带可选 `when`（US-109z2），projection / GUI 渲染按 `when` 收窄；CLI `query-run` 与 view 覆盖也携带主 area 的 `when`。
+- `week` / `month` 的 `AreaConfig` 也带可选 `when`（US-109z2），projection / GUI 渲染按 `when` 收窄；CLI `query-run` 与区域类型覆盖也保留每块区域的 `when`。
 
 ### 1.4 TabState 与 Settings
 
@@ -272,6 +281,8 @@ interface PluginSettings {
 
 持久化设置必须兼容旧 `data.json` 字段；删除旧设置项时可忽略但不能导致启动失败。（US-118）
 
+已保存的出厂 / 自建视图布局、混合排序在插件重载、仓库重开、升级后保持不变；仅用户显式恢复预设才重置出厂配置。（US-109c2）`lastActiveTabId` 只记视图身份：打开看板优先恢复该 Tab，无记录或目标已删除时回落到 `defaultTabId`；默认视图选项来自未隐藏的出厂 / 自建 Tab。（US-405 / US-120）`draftByTabId` 不持久化，关闭看板或重载时清空；桌面切 Tab 保留、移动端切走丢弃。（US-109s / US-513）
+
 ### 1.5 老数据迁移与升级闸门（US-414 / US-415）
 
 新模型统一为 `QueryPreset`（只有 `view.layout` 布局树，过滤在各 area 的 `when`）。两类旧结构需要迁移：
@@ -282,8 +293,8 @@ interface PluginSettings {
 实现：
 
 - 检测：`isLegacyQueryPresetShape(obj)` —— 命中 `isLegacySavedTaskView(obj)`，或 `view` 是非空旧 DSL 形状（无 `layout` 且含 `type/preset/sections/tray/matrix` 任一）即判定为旧结构。
-- 迁移：`migrateLegacySavedTaskView(obj) → QueryPreset`（纯函数）把扁平字段收进 `filters`；旧 DSL view 由下游 `ensureBuiltinQueryPresets → normalizeQueryPreset → normalizeQueryPresetView` 的 `migrateLegacyViewToLayout` 迁成 `layout`。坏字段按默认值降级，不抛错、不中断加载。
-- 内置视图：旧格式内置项在一次性迁移时使用出厂布局并应用旧过滤条件；现代 `view.layout` 不再刷新为出厂 JSON。`ensureBuiltinQueryPresets` 按保存数组原序归一化，保留内置与自定义项的混合排序、名称、隐藏状态和布局，仅在末尾补齐缺失且未被 tombstone 删除的内置项。显式恢复预设仍使用出厂布局。（US-109c1，#8 / #9）
+- 迁移：纯函数将旧扁平 / Tab 级过滤条件按等价语义放进各任务区域的 `when`，旧显示配置转换为 `view.layout`；最终不保留 Tab 级过滤。坏字段按默认值降级，一个坏视图不阻断其它视图加载。该宽容迁移不用于新 DSL 输入。（US-414 / US-217a）
+- 内置视图：旧格式内置项在一次性迁移时使用出厂布局并应用旧过滤条件；现代 `view.layout` 不再刷新为出厂 JSON。`ensureBuiltinQueryPresets` 按保存数组原序归一化，保留内置与自定义项的混合排序、名称、隐藏状态和布局，仅在末尾补齐缺失且未被 tombstone 删除的内置项。显式恢复预设仍使用出厂布局。（US-109c2）
 - 闸门与时机：`loadSettings` 在内存里完成迁移并把检测计数记到 `plugin.migratedLegacyCount`，但**不**自动写回。只要该计数 > 0，`TaskCenterView.render()` 早退渲染全屏升级闸门页，不渲染看板——确保看板渲染路径只面对一种数据结构。用户点击闸门确认后调用 `plugin.completeMigration()`：`saveSettings()` 持久化、清零计数、刷新所有打开的看板进入新版 UI。
 - 幂等：确认写回后，下次加载检测不到旧结构、计数为 0、闸门不再出现。用户不确认就退出则不写回，下次仍展示闸门。
 - 边界：迁移只改本地 `data.json`，不触碰任务 Markdown（US-403）。
@@ -301,7 +312,7 @@ src/
 │  ├─ validate.ts         # GUI / CLI 共用校验
 │  ├─ normalize.ts        # DSL 规范化、默认值填充
 │  ├─ filter.ts           # filterTasks
-│  ├─ summary.ts          # computeSummary
+│  ├─ summary.ts          # 区域过滤结果统计
 │  └─ presets.ts          # builtin preset factory
 ├─ cache.ts               # TaskCache，唯一 vault 读缓存
 ├─ writer.ts              # 单行 / 块级写回与 undo op plan
@@ -312,7 +323,7 @@ src/
 │  ├─ tabs.ts             # tab strip / menus
 │  ├─ query-editor.ts     # 可视化 + DSL 编辑
 │  ├─ filters.ts          # filter popovers
-│  ├─ summary.ts          # summary render
+│  ├─ summary.ts          # 区域头统计呈现
 │  ├─ views/list.ts
 │  ├─ views/week.ts
 │  ├─ views/month.ts
@@ -449,8 +460,9 @@ TaskCache.flatten()
 `applyQueryFilters` 必须按用户故事实现：
 
 - `search`：标题关键字匹配。
-- `tags`：合法 hashtag。包含组（`values`）默认 AND、可切 OR；对象形态可带 `exclude` 排除组。匹配 = （包含组为空，或按 `mode` 命中）且（`exclude` 一个都不命中）。归一化：纯 AND 且无 `exclude` → 收敛成裸数组 `string[]`，否则用 `{values, mode, exclude?}` 对象形态。（US-109d3 / US-109d4）
-- `tags` 的第三形态 `{ expr: "…" }`：自由布尔表达式（`#tag` / `and` / `or` / `not` / 括号；关键字大小写不敏感；优先级 `not`>`and`>`or`；`#` 可省略）。`src/query/tag-expr.ts` 的 `parseTagExpr` 把字符串解析成 AST（纯逻辑、可单测）；`normalizeQueryFilters` 解析**一次**存进 `NormalizedQueryFilters.tagExpr`，再对每个 task 用 `evalTagExpr(ast, task.tags)` 求值——不每条任务重解析。解析失败（语法错误 / 空）→ 该 area **不做标签过滤**（fail-open），GUI 就地标红，不静默丢任务。三态与 `{expr}` 互斥，是同一份 `when.tags` 的两种形态。（US-109d4）
+- `tags`：界面统一编辑 `{ expr: "…" }` 布尔表达式；兼容旧数组、逗号串与 `{values, mode, exclude}`，转换时保留包含 AND/OR 与排除语义，不另建 UI 状态。（US-109d / US-109d3 / US-109d4）
+- 表达式由 `#tag` / `and` / `or` / `not` / 括号组成，关键字不分大小写，优先级 `not` > `and` > `or`，`#` 可省略。`parseTagExpr` 解析为 AST 后复用，任务匹配时不重复解析。非法表达式不能 fail-open：GUI 保留先前有效条件，错误定位到字符；CLI / DSL 校验返回 `invalid_query` 并指出区域和字段。主动清除表达式才移除标签过滤。（US-109d4 / US-219）
+- 点选标签追加由纯表达式操作完成：已有 `#a or #b` 时追加 `#c` 生成 `(#a or #b) and #c`；末尾已有 `and` / `or` / `not` 则只补标签，空串直接填标签。GUI、序列化与匹配共享同一含义。（US-109d4）
 - `status`：todo / done / dropped 多选；undefined 表示全部。
 - `time.scheduled`：只看有效 `⏳`；`unscheduled` 表示有效排期为空。
 - `time.deadline`：只看 `📅`；`overdue` 属于 deadline。
@@ -465,14 +477,14 @@ TaskCache.flatten()
 为支撑"点 ✔ 后卡片原地停留、重进 view 才消失"，`applyQueryFilters` 接受一个可选的纯参数 `exemptStatusIds: ReadonlySet<string>`：
 
 - 语义：若 `task.id ∈ exemptStatusIds`，该任务**跳过 status 过滤**（其它过滤——search / tags / time——照常生效）。这让一条 `done` 任务能临时留在一个 `status: todo` 的集合里，而不破坏其它筛选条件。
-- 纯函数：豁免集合作为入参传入，`applyQueryFilters` / `projectListArea` 不持有任何会话状态；不传时退化为原行为，CLI / summary / badge 计数一律不传，因此完全不受影响。
+- 纯函数：豁免集合作为入参传入，`applyQueryFilters` / `projectListArea` 不持有任何会话状态；不传时退化为原行为，CLI / 区域头统计 / badge 计数一律不传，因此完全不受影响。
 - 会话状态归属 view 层：`TaskCenterView` 维护 `justCompletedIds: Set<string>`（仅当前 view 会话），投影每个 area 的 `when` 时传给 `applyQueryFilters` / `projectListArea`。内置今日 / TODO / 已完成的状态条件同样都在各自 area 的 `when` 中。
 - 加入时机：用户在卡片上点 ✔ **切换任意方向的状态**（todo → done 或 done → todo）时，把它的 id 加入集合，并走"原地变切换后状态"的局部重渲（不播放 animateOut、不移除卡片）。两个方向都加入、都不移除，因此对称——无论变 done 还是变 todo，卡片都跳过该次过滤而停留（一条刚 undone 的 `todo` 任务也能临时留在 `status: done` 的"已完成"集合里）。
 - 清空时机（= "重新进入 view"）：`onOpen`（整页加载）、`applySavedView`（切 tab / 激活 saved view）、`scheduleRefresh`（cache changed 触发的整表刷新）三处清空 `justCompletedIds`。**注意**：完成切换自身触发的局部重渲不清空集合，否则刚完成的卡又会立即被过滤掉。
 
 ### 4.3 View Projection
 
-View projection 不再筛选业务集合，只把 query 结果投影成渲染模型。它递归遍历 `view.layout`：容器节点（row / col）投影成 `StackModel`，叶子 area 各自投影成对应的 area model。
+区域投影递归遍历 `view.layout`：横排 / 竖排容器投影为 `StackModel`；每个显示任务的区域先用自己的 `when` 过滤有效任务全集，再按区域类型生成呈现模型。没有 Tab 级基础集合，也不按 Tab 名称分支。（US-109v / US-109z2）
 
 ```ts
 type LayoutModel = StackModel | AreaModel;
@@ -480,7 +492,7 @@ type LayoutModel = StackModel | AreaModel;
 interface StackModel { kind: "stack"; dir: "row" | "col"; weight: number; children: LayoutModel[]; }
 
 type AreaModel =
-  | { kind: "area"; type: "list"; weight: number; tasks: EffectiveTask[]; onDrop?: DropEffect }
+  | { kind: "area"; type: "list" | "grid"; weight: number; tasks: EffectiveTask[]; onDrop?: DropEffect }
   | { kind: "area"; type: "week"; weight: number; days: DayColumnModel[]; onDrop?: DropEffect }
   | { kind: "area"; type: "month"; weight: number; cells: MonthCellModel[]; onDrop?: DropEffect }
   | { kind: "area"; type: "drop"; weight: number; onDrop: DropEffect }
@@ -495,17 +507,16 @@ type AreaModel =
 - Drop：纯落区，无数据投影，只携带 `onDrop`。
 - Unknown：不被支持的 area 类型，渲染「未知类型 + 原始 JSON」，不参与任务投影。
 
-### 4.4 Summary
+列表 / 网格的 `limit` 只限制初始显示的顶层卡片数，投影必须保留剩余数量与完整匹配结果供“还有 M 条”展开；不能永久截掉任务。展开状态仅限本区域、本次看板会话，关闭看板时清除；不改保存的条数上限，不影响其它区域，子任务不单独占顶层卡片名额。（US-103 / US-720b）今日三块列表各自最多 3 条；未排期推荐必须排除截止逾期任务，逾期与今日安排可重复命中。同一组件执行配置，不按标题或出厂身份补特殊逻辑。（US-720b / US-109v）
 
-`computeSummary(tasks, metrics)` 对过滤后的集合计算：
+### 4.4 区域头统计
 
-- count。
-- sum(field)：读取 `durationFields[field]` 或可解析的 inline field。
-- ratio(numerator, denominator)。
-- top-n(by)：tag 或用户字段。
-- group-by(by)。
+统计函数接收单个区域按 `when` 过滤后的全部真实匹配任务；任务数、估时、实际合计均不受 `limit` 或展开状态影响。不接受 Tab 级 `summary` 配置，也不使用完成后暂留卡片的状态过滤豁免。（US-109 / US-153 / US-303）
 
-字段名是用户配置，不允许视图层硬编码 `estimate` / `actual` 分支；默认 preset 可以使用这些字段名作为配置值。（US-302 / US-303）
+- list / grid：任务数、估时合计；区域含已完成任务时再给实际耗时合计和“实际 / 估时”比例。展示例如 `12 条 · 估 6h · 实 7h30m（125%）`。
+- 估时与实际合计分别跳过缺失对应字段的任务。比例只取同时存在 estimate 与 actual 的任务计算 `sum(actual) / sum(estimate)`；分母为 0 不输出百分比。仅匹配集合存在 done 时显示实际合计与比例。
+- week：区域过滤后再按有效排期分日，每日标题显示 `N tasks · XhYm`。（US-116）
+- 跨时间窗口的整体分析、按标签拆分只由 CLI `stats` / `review` 提供，不在 Tab 上另设全局汇总区。（US-206 / US-722）
 
 ### 4.5 移动端布局适配层
 
@@ -529,7 +540,7 @@ calendar 的 `selectedDay` 是 view 会话态：week 与 month 都记住当前�
 - `data-mobile-layout="true"`：真实移动设备或用户强制移动布局，用于移动端手风琴、触控工具栏与 sheet 排版；窄桌面 pane 不设置该值。
 - `data-obsidian-mobile="true"`：真实 Obsidian Mobile 环境，用于额外预留 Obsidian 底部工具栏避让空间。窄屏桌面不能自动套用这层底部避让。
 
-`BottomSheet` 是移动端复杂操作的共享 shell，但调用方可以传入语义 class，使 Query 编辑、父任务选择、日期选择、任务动作 sheet 使用不同高度和 footer 策略。sheet 只能承载视图适配和交互编排；筛选、summary、嵌套、写回仍调用既有 query / writer / api 路径。
+`BottomSheet` 是移动端复杂操作的共享 shell，但调用方可以传入语义 class，使 Query 编辑、父任务选择、日期选择、任务动作 sheet 使用不同高度和 footer 策略。sheet 只能承载视图适配和交互编排；区域过滤与统计、嵌套、写回仍调用既有 query / writer / api 路径。
 
 **Query 编辑器是两个独立面板（US-109p10）**：`openQueryControlsSheet({ scope, areaIndex?, initialTab? })` 在 `BottomSheet` 里按 scope 渲染（桌面、移动同一套 DOM，只是外层 sheet class 不同）。两个 scope 投影同一份 tab draft，互不持有独立状态：
 
@@ -543,6 +554,8 @@ calendar 的 `selectedDay` 是 view 会话态：week 与 month 都记住当前�
 **area head 入口打开 Area 面板（US-109p9 / US-109p10）**：`renderAreaHead` 的 `bt-area-edit` 按钮点击 → `openQueryControlsSheet({ scope:"area", areaIndex, initialTab:"filter" })`。Area 面板的本区过滤 tab 用 `areaWhenByIndex(areaIndex)` 取该 area 的 `when`（list/grid/week/month 均返回条件，drop 返回 null）；外观 tab 渲染标题输入框（`areaTitleByIndex` / `setAreaTitle`，空则清除回退内置本地化标题）+ 类型按钮（调 `updateAreaAt(layout, areaIndex, {type})`，**只换这一块**）。`type` 切换不再走重建整棵树的旧 `buildLayoutForAreaType`（删除）。
 
 父任务选择的候选数据来自已缓存的 EffectiveTask 集合和当前 DOM 可见任务 id。排序、搜索、禁用当前任务及后代都在 view 层完成；真正嵌套写回仍通过 `api.nest(childId, parentId)`。
+
+区域头统计见 §4.4；标题统一按显式标题 → 首区域回落到 Tab 名 → 区域类型名解析，移动端不能留空。（US-511）桌面 `/` 在焦点不处于输入框时按布局顺序选择第一块可过滤区域，打开其区域面板并聚焦搜索；`Ctrl+1~9` 在 macOS 也使用 Ctrl。（US-166）
 
 ## 5. 写路径
 
@@ -586,6 +599,8 @@ interface WriteResult {
 
 如果目标状态已满足，返回 `unchanged: true`，不写文件；CLI 格式化为 `ok … unchanged`。（US-203 / US-204）
 
+**待澄清**：US-203 的“所有写命令重复执行结果一样”与 US-209 的 `actual +Nm/-Nm` 累加、US-213 的新建任务之间缺少重试去重边界。不能把这两类操作宣称为无条件安全重试，也不能自行增加幂等键契约。
+
 ### 5.3 行号漂移与 ref 解析
 
 ```ts
@@ -616,7 +631,9 @@ GUI 拖拽嵌套与 CLI `nest ref=A under=B` 共用同一函数。（US-125 / US
 5. 清空被移动 root 自己行的 `⏳`。
 6. 保留所有子孙任务自己的 `⏳` / emoji / inline fields / tag / 原文。
 
-跨文件没有真正事务。策略：先写 parent 文件，再写 child 文件。若第二步失败，宁可产生可见重复也不丢任务；返回 `nest_partial` 并提供可撤销 parent 插入的 undo op。
+跨文件写入不能假设有跨文件事务。需要保留每个文件的修改前后证据与恢复信息；任务移动结果必须可核对。（US-204 / US-228 / US-403）
+
+**待澄清**：US-403 明确的是每次写文件的原子性，没有定义跨文件移动的整体回滚。旧设计“先写目标、再写来源，第二步失败保留重复”所需的恢复行为、部分成功错误分类尚无对应故事；US-211 的固定集合也没有 `nest_partial`。本文不把旧码当成对外契约，也不在本次文档对齐中另定跨文件事务方案。
 
 ### 5.5 Quick Add 写入
 
@@ -624,11 +641,14 @@ Quick Add / CLI add 的默认路径由 Daily Notes 依赖解析：
 
 ```text
 Daily Notes enabled + folder configured
-  → today daily note path
+  → resolve today's path using folder + filename format
+  → if missing, create from the configured Daily Notes template
   → append `- [ ] title ➕ YYYY-MM-DD [tokens...]`
 ```
 
 Daily Notes 不可用时，add 失败并保留输入；不写 fallback 文件。（US-163 / US-701）
+
+CLI `add` 显式 `to=` 写指定文件；`parent=` 插入父任务文件；二者指向不同文件时报 `invalid_arg`。只有没有显式目标和父任务时使用当天日记路径，日记尚未创建不是依赖失败。（US-213）
 
 任务格式读取固定兼容 Tasks emoji 与 Dataview bracket inline fields：日期字段映射为 `⏳`/`[scheduled::]`、`📅`/`[due::]`、`🛫`/`[start::]`、`➕`/`[created::]`、`✅`/`[completion::]`、`❌`/`[cancelled::]`，并读取 `🔁`/`[repeat::]` 与 priority emoji / `[priority::]`。若同一字段两种格式并存，Tasks emoji 是有效来源。写回由 `settings.taskFormatFlavor` 决定：`tasks` 写 emoji 字段，`dataview` 写 bracket inline fields。`setScheduled` / `setDeadline` / `markDone` / `markDropped` / `addTask` 是格式敏感写入入口；写入某一字段前必须清理该字段的另一种语法，清空排期则同时清理 `⏳` 与 `[scheduled::]`，避免读取优先级导致旧日期继续生效。（US-111 / US-407 / US-409）
 
@@ -667,7 +687,7 @@ Undo 栈：
 
 **(1) per-tab cursor 状态的唯一持有与持久化。** 这些字段是外壳独占的状态真相源，外部子模块**绝不**直接读写，只能经 §7.6 的 Port 间接访问：
 
-- `state: ViewState`（`view/state.ts:6`）：`tab / anchorISO / filter / savedViewId / savedViewTag / savedViewTime / savedViewStatus / expandedDays / selectedMonthDay / collapsedWeeks / showUnscheduledPool / selectedTaskId / expandedAreaByTab`。其中 `expandedAreaByTab`（`Record<tabId, areaIndex>`，US-511）记录移动端各 tab 当前展开哪个 area，会话态、不持久化；缺省回退首个内容 area。
+- `state: ViewState`（`view/state.ts:6`）：`tab / anchorISO / savedViewId / expandedDays / selectedMonthDay / collapsedWeeks / selectedTaskId / expandedAreaByTab`。其中 `expandedAreaByTab`（`Record<tabId, areaIndex>`，US-511）记录移动端各 tab 当前展开哪个 area，会话态、不持久化；缺省回退首个内容 area。
 - `tabDrafts: Map<string, QueryPreset>`（per-tab 草稿，§1.4 `draftByTabId` 的运行时实现）。
 - `justCompletedIds: Set<string>` + `skipNextRefreshClear`（US-153 linger 状态机，§4.2.1）。
 - `tasks / _effectiveTasks / _taskIndex`（数据基线与派生缓存）。
@@ -689,7 +709,7 @@ Undo 栈：
 
 ### 7.2 Query Editor
 
-Query Editor 操作 `draftByTabId[activeTabId]`：
+视图 / 区域编辑器操作目标 Tab 的 `draftByTabId[tabId]`：从某个 Tab 菜单进入时必须使用该菜单的 Tab id，不能误用当前激活的 Tab。（US-109n1）
 
 ```text
 visual controls → update draft → validate → effective query → render preview
@@ -702,9 +722,9 @@ DSL editor     → parse/validate → update same draft → controls rehydrate
 - `saveAsNewTab(effectiveQuery, sourceTabId?)`：创建新 id；`sourceTabId` 只用于复制来源元数据或默认命名，不改变用户语义。
 - `discardDraft(tabId)`：删除 draft。
 
-**切 tab 的分支（US-109s / US-513）**：`activateSavedView` 在切换前看平台——桌面端保留旧行为（dirty 时弹「更新 / 另存为 / 丢弃」`SwitchTabConfirmModal`，否则 `persistCurrentDraft` 把 draft 留在原 tab）；移动端直接 `discardDraft(current.id)` 并 `applySavedView(target)`，不弹确认、不跨 tab 留 draft。
+**切 Tab 的分支（US-109s / US-513）**：桌面端把未保存改动留在原 Tab，切走前温和提供“更新 / 另存为 / 丢弃”；移动端直接丢弃当前 Tab 未保存改动并激活目标已保存配置。`onClose` 和插件卸载清空全部未保存改动，不序列化进设置。
 
-不实现单独的 `saveTab()` / `saveCurrentQuery()` 用户动作。无来源 query 的首次保存也调用 `saveAsNewTab`，因为用户结果同样是“创建一个新的 Query Tab”。所有动作走 `QueryPresetService`，CLI query 动词调用同一个 service。
+不实现单独的“保存为 Tab”用户动作，也不存在无归属的“当前查询”。“另存为”用当前 Tab 配置创建新 id，原 Tab 不变。所有动作走 `QueryPresetService`，CLI 视图命令调用同一服务。（US-109c1 / US-109u）
 
 ### 7.3 Source Markdown 编辑层
 
@@ -757,7 +777,7 @@ E2E 和 UI 自动化依赖稳定 `data-*`，不依赖 CSS 类名或文案：
 | `[data-date="YYYY-MM-DD"]` | week 列 / month 日期格 |
 | `[data-view="list|grid|week|month|unknown"]` | view body |
 | `[data-query-editor]` | Query 编辑器面板根 |
-| `[data-query-tab="filter|summary|view|dsl"]` | Query 编辑器 Tab 按钮 |
+| `[data-query-editor-scope="tab|area"]` / `[data-area-tab="filter|appearance"]` | 视图 / 区域面板及区域内过滤条件 / 外观分节 |
 | `[data-query-dsl-input]` | Query 编辑器 DSL 直编输入框 |
 | `[data-drop-zone="abandon"]` | 桌面放弃目标区 |
 | `[data-drop-zone="unscheduled-tray"]` | 未排期 tray |
@@ -824,7 +844,7 @@ export interface CalendarRenderPort {
 
   // ── 数据管线下沉（取代 scopeTasksToArea + getTextFilter + getEffectiveTasks）──
   scopedTasks(when: QueryPresetFilters | undefined): EffectiveTask[]; // 该 area 该显示的任务（含 justCompletedIds 豁免）
-  textFilter(): (t: EffectiveTask) => boolean;                        // 全局文本/标签/时间/状态谓词
+  // scopedTasks 已应用该区域的 when，不再叠加全局文本 / 标签 / 日期 / 状态谓词。
 
   // ── 共享外壳组件（list/grid/week/month 共用，不属日历簇）──
   renderAreaHead(parent: HTMLElement, areaIndex: number, area: Area,
@@ -840,7 +860,7 @@ export interface CalendarRenderPort {
 }
 ```
 
-**为什么这样切能真解耦**：簇内现直接读写 4 个 `state` 字段（`anchorISO`/`expandedDays`/`selectedMonthDay`/`selectedTaskId`）并直接 `this.render()`。换成 `setAnchor`/`weekExpanded.toggle`/`monthSelection.select` 语义回调后，外壳保留状态所有权与 `render` 节奏，**不必把 state 改 public**。`renderRangeNav`(1324) 与 `renderMobileMonthDayPanel`(2556) 作 calendar 模块**私有函数**，靠同一 Port 驱动，桌面经 areaHead、移动经 toolbar 两条注入路径由外壳装配（`renderRangeNav` 作 `opts.renderNav` 回调传入），使 week/month 不依赖装配顺序。
+**为什么这样切能真解耦**：簇内现直接读写 4 个 `state` 字段（`anchorISO`/`expandedDays`/`selectedMonthDay`/`selectedTaskId`）并直接 `this.render()`。换成 `setAnchor`/`weekExpanded.toggle`/`monthSelection.select` 语义回调后，外壳保留状态所有权与 `render` 节奏，**不必把 state 改 public**。`renderRangeNav`(1324) 与 `renderMobileMonthDayPanel`(2556) 作 calendar 模块**私有函数**，靠同一 Port 驱动，桌面和移动端均经区域头注入由外壳装配（`renderRangeNav` 作 `opts.renderNav` 回调传入），使 week/month 不依赖装配顺序。
 
 **先可抽的 clean 子集**：`columnStats`(2367) 已纯，连同新增 `buildWeekDays` / `buildMonthGrid` 一起进 `view/render/calendar-grid.ts`（纯逻辑禁 DOM，§2.1），让带 Port 的渲染壳变薄。
 
@@ -1205,58 +1225,81 @@ for (const [i, area] of collectAreas(layout).entries()) {
 
 CLI 注册到 Obsidian CLI 命名空间，不提供独立二进制。（US-201）
 
-根命令 `task-center` 只输出静态帮助文本，不读写 vault，不初始化额外状态。帮助文本必须覆盖任务动词、Query Tab 动词和 AI skill 安装命令。（US-201a / US-215）
+根命令 `task-center` 输出命令及全部参数，必须与实际支持一致，不多不少；同时提供 AI skill 安装指引。（US-201a / US-215）
 
 ### 8.1 Task 动词
 
 Task 动词薄封装 `TaskCenterApi`：
 
-- `list` / `stats`：显式 ensureAll。
-- `done` / `drop` / `schedule` / `actual` / `nest`：按 ref 解析，单文件优先。
-- `add`：走 Daily Notes append。
+- `list` / `stats` / `brief` / `review`：显式 ensureAll；`list` 排期过滤使用有效排期，周范围跟随一周第一天设置。（US-207 / US-112 / US-144）
+- `show ref=`：原文、状态、各日期、标签、估时 / 实际、父子编号及 hash。（US-216a / US-202）
+- `schedule ref= date=` / `deadline ref= date=`：`null` 清除；缺参数报 `missing_arg`，不能视作清除。（US-221）
+- `done ref= [at=]` / `undone ref=` / `abandon ref=`（旧别名 `drop`）：按真实目标状态幂等；重复完成不改历史日期。完成 / 放弃向未完成子孙级联，已完成子孙保留历史；取消终态清掉完成和放弃日期，放弃转完成清掉放弃日期。（US-222 / US-203）
+- `actual ref= minutes=` 支持设值和 `+30m` / `-15m` 增减，下限 0，增减从写入时文件值算；`estimate ref= minutes=` 设值，`null` 清除。非法时长报 `invalid_arg`。（US-209）
+- `tag ref= tag= [remove]`：完整标签匹配，支持中文和层级标签，删 `#work` 不影响 `#work/sub`，重复添加返回 unchanged。（US-223）
+- `rename ref= title=` 仅改标题、保留其它 token；空标题报 `missing_arg`。`nest ref= under=` 与看板共用移动子树语义。（US-227 / US-228）
+- `add text= [to=] [tag=] [scheduled=] [deadline=] [estimate=] [parent=] [stamp-created=]`：按 §5.5 解析目标，缺省写当天日记。（US-213）
 - `list parent=<id>`：resolve parent 后基于 task tree 输出子任务。（US-212）
 
 输出格式由 `cli.ts` 统一处理，保证：
 
-- 第一列稳定 id。
-- 写操作 `ok / before / after`。
+- `list` 每行第一列是 `path:L行号`；`show` 和 JSON 另带 hash，所有 `ref=` 接受两种形式。（US-202）
+- 每一行实际写入都列出 `before / after`；`add` 输出新编号与新行，`nest` 输出移动后新编号。（US-204）
 - 幂等 unchanged 仍为 ok。
 - 错误 `error <code>` + 一句人话。
+
+默认纯文本，`format=json` 提供结构化输出。（US-205）`days` / `limit` 必须为正整数；布尔值按值解析，`remove=false` / `hidden=false` 不能因参数存在就当 true。标签等特殊字符非法时返回 `invalid_arg`，不让解析异常泄漏。（US-413a / US-211）
+
+CLI 所有日期参数共用自然语言解析：中英今天 / 明天 / 星期、`today` / `tomorrow` / `next-week` 等先解析再执行，写回只用 ISO。无法识别或不存在的日期返回 `invalid_date`；不把 Quick Add 的“保留未排期”兜底用在 CLI。（US-410a / US-410 / US-411）
+
+`stats [days=7] [from=] [to=] [group=] [format=json]` 的窗口包含今天，按本地日历日计算，不因时区少一天；给估时准确率与标签耗时排行。（US-206）`review [today=] [days=7] [limit=] [format=json]` 输出今天和最近 N 天的完成、放弃、拖期与估时 / 实际对比。（US-722）`brief [today=] [limit=] [format=json]` 输出逾期、今天、未排期候选及可执行后续命令；截止或排期在今天及以前的未完成任务不能遗漏。brief 的逾期包含排期已过，不能误用今日视图仅按截止逾期的规则。（US-723 / US-720b）
 
 ### 8.2 Query 动词
 
 QueryPreset 动词调用 `QueryPresetService`：
 
-- `query-list`：列出 id、name、builtin、hidden、default。
+- `query-list [hidden=true] [format=json]`：列出 id、name、builtin、hidden、default；`hidden=false` 或省略时排除隐藏视图。（US-216 / US-413a）
 - `query-show id=<id>`：输出完整 DSL。
 - `query-run id=<id> [view=list|week|month] [anchor=YYYY-MM-DD]`：执行 QueryPreset 的主内容 area `when`，并按 view projection 输出结果；`view` 把本次展示临时替换成「单个该类型 area」的布局，不写回 preset。
-- `query-create`：读取 DSL 创建 tab。
-- `query-update id=<id>`：校验后覆盖。
+- `query-create dsl=`（别名 `query-save`）：读取 DSL 创建新 id。
+- `query-update id=<id> dsl=`：校验后覆盖，保留原 id。二者和 GUI 写同一存储，成功后刷新已打开看板；非法输入不改已保存配置。（US-217）
 - `query-rename` / `query-copy` / `query-hide` / `query-delete` / `query-set-default`。
 
 `query-create` / `query-update` 的 `parseQueryDsl` 是 CLI 与 GUI DSL 直编的共同入口。它必须在 normalize 前拒绝 1.0 前旧 DSL 输入：顶层 `search/tag/time/status`、顶层 `filters` / `summary`，以及旧 `view.type/preset/sections/tray/matrix`。拒绝时抛给 CLI `invalid_query`，消息固定包含 skill 更新指引 `npx skills add CorrectRoadH/obsidian-task-center`，避免旧 agent skill 继续生成会被 1.0 静默降级的 DSL。（US-217a / US-219）
 
-删除自定义 tab 不删除任务；预设 tab 不允许永久删除，只允许隐藏 / 恢复。（US-216~219）
+`query-run` 各段按区域标题区分：list / grid 输出任务树，week 输出 7 天，month 按日期输出；JSON 保留每块区域结果。覆盖展示类型不合并区域、也不丢区域的 `when`；`anchor` 是本次日期游标，支持自然语言，不修改保存配置。（US-220 / US-410a）
+
+区域字段非法（状态、日期、标签表达式、放弃区 `onDrop` 等）统一报 `invalid_query`，定位到区域与字段，不静默替换默认值。（US-219）
+
+删除任何 Tab 都只删除视图，不删除任务。出厂 Tab 可以永久删除，记录已删除预设，重启不重新播种；仅显式恢复预设或删除后的撤销可找回。（US-218 / US-109l）
 
 ### 8.3 错误码
 
-固定英文错误码至少包含：
+US-211 规定的固定英文错误码集合：
 
 ```ts
 type ErrorCode =
   | "not_found"
   | "ambiguous_slug"
-  | "out_of_date"
+  | "missing_arg"
+  | "invalid_arg"
   | "invalid_date"
   | "invalid_query"
   | "write_conflict"
   | "daily_notes_missing"
-  | "daily_notes_folder_missing"
-  | "invalid_nest"
-  | "nest_partial";
+  | "daily_notes_folder_missing";
 ```
 
-错误码不翻译；后接人话跟随 Obsidian 语言。（US-211 / US-412）
+错误严格两行：
+
+```text
+error <code>
+<一句说明如何处理的人话>
+```
+
+`not_found` 找不到任务；`ambiguous_slug` 为 hash 多匹配，第二行给候选；`missing_arg` 缺必填项；`invalid_arg` 非法时长 / 数字 / 布尔 / 标签；`invalid_date` 无法识别或不存在的日期；`invalid_query` 非法视图 DSL；`daily_notes_missing` 日记插件未启用；`daily_notes_folder_missing` 未设置日记文件夹；`write_conflict` 写入时目标行已被更改。错误码不翻译，第二行跟随 Obsidian 语言。（US-211 / US-412）
+
+**待澄清**：US-211 将 `not_found` 明确限定为任务，但 US-218 未指定不存在的视图 id 应映射哪个现有码；不再把旧 `query_not_found` 作为支持的错误码。跨文件部分失败见 §5.4。不要自行扩大固定错误码集合。
 
 ## 9. 依赖健康
 
@@ -1274,6 +1317,8 @@ type ErrorCode =
 - 设置页说明。
 
 配置变化后，依赖状态自动刷新，不要求重启。（US-701c）
+
+警告同时提供可点击设置入口：Daily Notes 未启用 / 未设文件夹引导修复；Tasks 与 Dataview 都未安装时提示安装，至少安装一个但都未启用时提示启用。任一正常启用即移除该提示，无需重启。（US-701a–f）
 
 ## 10. i18n 与日期
 
@@ -1309,7 +1354,7 @@ onLocaleChanged(cb: () => void): () => void;
 - token 解析：`today / tomorrow / yesterday / week / next-week / month / next-month / YYYY-MM-DD / FROM..TO`。
 - 中文自然语言：今天、明天、昨天、周一至周日、本周、下周、本月、下月。（US-410）
 
-无法识别日期时返回“无日期”，不猜测。
+解析层返回可区分的失败结果，不猜测日期。Quick Add 未识别时保留未排期；CLI 日期参数未识别或日期不存在时返回 `invalid_date`，原词不得写入文件。（US-410 / US-410a）
 
 ### 10.3 IME Guard
 
@@ -1371,7 +1416,7 @@ TS 不写 inline 常量颜色。动画时长通过 CSS custom properties 管理�
 - parser：Obsidian Tasks 字段、tag、inline field、callout、空标题任务忽略。
 - writer：字节级保留、emoji date、checkbox、inline field、tag、嵌套 plan、undo ops。
 - task-tree：继承、父终态、独立日期子任务、顶层去重。
-- query：filter、date token、view projection、summary、布局归一化（含 unknown area）。
+- query：区域过滤、日期、区域投影与统计、布局归一化（含 unknown area）。
 - dates：中英自然语言日期、周起始日、ISO 写回。
 - cli formatter：ok / unchanged / before-after / error code。
 - i18n：用户字面不翻译。
@@ -1408,7 +1453,7 @@ E2E 等待 cache 刷新时使用 `data-test-cache-version`，不使用固定 sle
 
 ## 14. 发布与 CI
 
-发版要求来自 US-601~605：
+发版要求来自 US-601~606：
 
 - 严格 semver tag，不带 `v`，不带 pre-release。
 - pre-flight gate：typecheck、lint、unit test、e2e。
@@ -1432,12 +1477,12 @@ CI 额外建议检查：
 - [ ] Markdown 任务格式兼容 Obsidian Tasks 字段。
 - [ ] 空标题任务不进入 Task Center。
 - [ ] 未识别 token 字节级保留。
-- [ ] Query filters / view / summary 共用同一 DSL。
+- [ ] 视图布局与各区域 `when` 共用同一 DSL；统计只在区域头，无 Tab 级过滤或汇总配置。
 - [ ] GUI Query 编辑器与 CLI Query 动词共用 schema 与校验。
 - [ ] 没有独立持久化 current query。
 - [ ] View 没有硬编码 TODO / 今日 / 未排期等业务分支；这些来自 QueryPreset。
 - [ ] 未排期是 `time.scheduled is empty`，不是任务池。
-- [ ] Week / Month tray 是 view 附加区，不污染主日期区集合。
+- [ ] 未排期区是布局中的普通独立区域，不污染周历 / 月历区域集合。
 - [ ] GUI / CLI 嵌套语义一致。
 - [ ] 移动端不暴露拖拽 / hover / 快捷键。
 - [ ] Daily Notes 不可用时不写 fallback。
