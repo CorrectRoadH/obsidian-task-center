@@ -284,7 +284,8 @@ test("loadSettings seeds built-in query tabs and migrates legacy defaultView/las
 
   await plugin.loadSettings();
 
-  assert.deepEqual(plugin.settings.queryPresets.slice(0, 7).map((view) => view.id), [
+  assert.deepEqual(plugin.settings.queryPresets.map((view) => view.id), [
+    "sv-custom",
     "preset-today",
     "preset-week",
     "preset-month",
