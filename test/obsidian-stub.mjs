@@ -12,6 +12,10 @@ export class Notice {
 }
 export class Menu {}
 export class ItemView {}
+export class Scope {
+  register() {}
+  unregister() {}
+}
 export class Plugin {}
 export function normalizePath(p) {
   return p;

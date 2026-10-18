@@ -1,6 +1,7 @@
 import { resolveScheduledDropDate } from "./areas";
 import {
   ItemView,
+  Scope,
   Modal,
   WorkspaceLeaf,
   Notice,
@@ -346,6 +347,15 @@ export class TaskCenterView extends ItemView {
     // the structural fix for #3 large-vault event-flood regression (double subscription → event flood).
     this.cacheUnsub = this.plugin.cache.on("changed", () => this.scheduleRefresh());
 
+    // US-166: Obsidian handles Ctrl+number before DOM bubbling. A focused
+    // view scope reserves these keys for the board instead of workspace tabs.
+    this.scope = new Scope(this.app.scope);
+    for (let index = 1; index <= 9; index++) {
+      this.scope.register(["Ctrl"], String(index), (event) => {
+        this.handleKey(event);
+        return event.defaultPrevented ? false : undefined;
+      });
+    }
     // Keyboard
     this.contentEl.tabIndex = 0;
     this.registerDomEvent(this.contentEl, "keydown", (e) => this.handleKey(e));
@@ -1590,7 +1600,7 @@ export class TaskCenterView extends ItemView {
     const summary = [tr("area.taskCount", { n: totals.count }), tr("area.estimateTotal", { duration: formatMinutes(totals.estimate) })];
     if (totals.hasDone) {
       summary.push(tr("area.actualTotal", { duration: formatMinutes(totals.actual) })
-        + (totals.percent === null ? "" : `（${totals.percent}%）`));
+        + (totals.percent === null ? "" : tr("area.percent", { n: totals.percent })));
     }
     this.renderAreaHead(parent, areaIndex, area, { title: this.resolveAreaHeadTitle(area), summary: summary.join(" · ") });
 
