@@ -26,14 +26,21 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 | 字段 | 作用 |
 | --- | --- |
-| `id` / `name` | 稳定 id（定位用它，别用显示名）/ 显示名 |
-| `builtin` / `hidden` | 是否内置 / 是否在 Tab 栏隐藏 |
-| `view.layout` | **布局树**：决定页面上摆哪些组件、怎么嵌套，以及**每个组件各自筛什么**。 |
+| `id` | 稳定 id，定位用它，别用显示名。可省略（自动生成）。CLI `query-create` 总会分配新 id，`query-update` 总保留原 id，DSL 里写的 `id` 在这两条路径上都不生效。 |
+| `name` | 显示名，**必填**（`query-update` 时省略则沿用原名）。 |
+| `builtin` / `hidden` | 是否内置 / 是否在 Tab 栏隐藏。可省略，默认 `false`。 |
+| `view.layout` | **布局树**：决定页面上摆哪些组件、怎么嵌套，以及**每个组件各自筛什么**。省略 `view` 时默认是一个不过滤的 `list`。 |
 
-> ⚠️ 一个 Preset **只有身份 + 一棵 `view.layout`**。**没有** tab 级 `filters`，**没有** `summary`，**没有**「视图类型」枚举——这些在 1.0（US-109z2）已移除。
-> - 过滤**只存在于每个 area 自己的 `when`** 上（见 §2）。写在顶层的 `filters` 会被**静默忽略**，不报错也不生效。
-> - 旧的扁平形状（顶层 `search`/`tag`/`time`/`status`，无嵌套结构）会被**直接拒绝**，报 `invalid_query`。
-> - 旧 `view: {type, preset, sections, tray, matrix}` 形状会被**自动迁移**成 `{ layout }` 树。
+整份 DSL 也可以包一层 `{ "query": { … } }`，效果相同。
+
+> ⚠️ 一个 Preset **只有身份 + 一棵 `view.layout`**。**没有** tab 级 `filters`，**没有** `summary`，**没有**「视图类型」枚举——这些在 1.0 已移除（US-109z2）。
+>
+> 通过「编辑 Query」或 CLI（`query-create` / `query-update`）提交下列 1.0 前的旧写法会被**直接拒绝**（CLI 报 `invalid_query`，提示更新 skill 并改用 `view.layout` + area `when`，US-217a）：
+> - 顶层出现 `filters` 或 `summary`（哪怕是空对象 `{}`）；
+> - 顶层扁平的 `search` / `tag` / `time` / `status`；
+> - `view` 里没有 `layout`，却带 `type` / `preset` / `sections` / `tray` / `matrix`。
+>
+> 只有 `data.json` 里**已存的**旧数据会在插件加载时经升级闸门自动迁移成 `{ layout }` 树（US-414 / US-415），手写输入不会。
 
 一个视图长什么样，**完全由 `view.layout` 这棵布局树决定**。
 
@@ -45,57 +52,100 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 ```jsonc
 "when": {
-  "search": "周报",                          // 标题/标签包含的文本（大小写不敏感）
-  "tags": ["重要", "紧急"],                   // 标签数组（或逗号分隔串）；自动补 #；AND（须全含）
-  "status": ["todo"],                        // 见下；省略 = 全部
+  "search": "周报",                                // 标题或任一标签包含这段文字（大小写不敏感）
+  "tags": { "expr": "#工作 and not #someday" },     // 标签布尔表达式，见下
+  "status": ["todo"],                              // 见下；省略 = 全部
   "time": {
-    "scheduled": "today",                    // ⏳ 排期
-    "deadline":  "next-7-days",              // 📅 截止
-    "completed": "week",                     // ✅ 完成时间
-    "created":   "2026-01-01..2026-06-30"    // ➕ 创建时间
+    "scheduled": "today",                          // ⏳ 排期
+    "deadline":  "next-7-days",                    // 📅 截止
+    "completed": "week",                           // ✅ 完成时间
+    "created":   "2026-01-01..2026-06-30"          // ➕ 创建时间
   }
 }
 ```
 
-各条件之间是 **AND**：任务要进入这块区域，必须同时满足 `when` 里每一项。
+各条件之间是 **AND**：任务要进入这块区域，必须同时满足 `when` 里每一项。省略的条件不参与过滤。
+
+> `when` 内部的值目前**不做校验**：写错的值不会报错，而是被静默丢弃或匹配不到（见各小节）。提交前请核对拼写。
+
+### search
+
+字符串，去首尾空格后做大小写不敏感的子串匹配：任务**标题**或**任一标签**包含它即命中。
 
 ### status
 
-`todo` / `done` / `dropped`（数组，或单个字符串，或 `"all"`；省略 = 全部）。匹配的是终态继承后的 `effectiveStatus`。
+可选值：
 
-> 解析器还接受 `in_progress` / `cancelled` / `custom`，但 GUI 过滤面板只暴露上面三个常用值。
+| 值 | 对应的 checkbox |
+| --- | --- |
+| `todo` | `- [ ]` |
+| `done` | `- [x]` |
+| `dropped` | `- [-]` |
+| `in_progress` | `- [/]` |
+| `cancelled` | `- [>]` |
+| `custom` | 其它任意字符 |
 
-### tags
+写法：数组（多选，命中任一即可）、单个字符串，或 `"all"`；省略 = 全部。匹配的是终态继承后的 `effectiveStatus`（父任务已完成 / 放弃时，子任务按父任务的终态算）。GUI 状态面板只提供 全部 / TODO / 完成 / 放弃 四项。
 
-标签过滤是一个**布尔表达式**，canonical 形态是 `{ "expr": "…" }`（US-109d4）。
+> 不认识的值会被丢掉；如果全部都不认识，就退化成 `"all"`（不过滤状态），不会报错。归一化后的 DSL 里每个 `when` 都会显式带上 `"status": "all"` 或状态数组。
 
-- 语法：`#标签`、`and`、`or`、`not`、括号 `( )`；关键字大小写不敏感；优先级 `not` > `and` > `or`；`#` 可省略。
-- 例：`"tags": { "expr": "(#a or #b) and not #c" }` —— 含 a 或 b、且不含 c。
-- 匹配：解析表达式后对每个任务的标签求值。语法错误 → 该 area **不做标签过滤**（fail-open），不静默丢任务。
-- **向后兼容**：旧写法都会在归一化时**自动迁移**成等价 `{ expr }`，求值层只认表达式：
-  - 裸数组 `["#a","#b"]` 或逗号串 `"a,b"` → `"#a and #b"`
-  - `{ "values":["#a","#b"], "mode":"or" }` → `"#a or #b"`
-  - `{ "values":["#a"], "exclude":["#c"] }` → `"#a and not #c"`
-- 图形面板：标签 popover 有表达式输入框（实时校验、带示例）+ 标签列表，点列表里的标签会把 `#tag` 追加进表达式。
+### tags —— 标签表达式
 
-### time —— 字段与日期词汇
+标签过滤是一个**布尔表达式**，标准写法是 `{ "expr": "…" }`（US-109d4）。
 
-`time` 支持 4 个字段：`scheduled` / `deadline` / `completed` / `created`。每个字段取一个 DateToken：
+- 语法：标签、`and`、`or`、`not`、括号 `( )`。
+- 优先级 `not` > `and` > `or`，用括号改变结合顺序。
+- 关键字大小写不敏感；只有**不带 `#`** 的 `and` / `or` / `not` 才是关键字，`#and` 是一个名叫 and 的标签。
+- 标签前的 `#` 可省略；标签大小写不敏感；按**完整标签**精确匹配（`#a` 不会命中 `#a/b`，反之亦然）。
+- 必须显式写运算符：`#a #b` 是语法错误，不会当成 AND。
+- 标签名里不能含空格或括号（它们是分隔符）。
+
+例：`"tags": { "expr": "(#a or #b) and not #c" }` —— 含 a 或 b、且不含 c。
+
+语法错误时（如 `#a and (`）表达式会原样保存，但该 area **不做标签过滤**（fail-open），不会静默丢任务；GUI 输入框会就地标红。
+
+**旧写法**仍可输入，归一化时会自动改写成等价的 `{ expr }`，`query-show` 看到的总是表达式：
+
+| 旧写法 | 等价表达式 |
+| --- | --- |
+| `["#a", "#b"]` 或 `"a, b"` | `#a and #b` |
+| `{ "values": ["#a", "#b"], "mode": "or" }` | `#a or #b` |
+| `{ "values": ["#a"], "exclude": ["#c"] }` | `#a and not #c` |
+
+`tags` 写成数字等其它类型会被静默忽略。
+
+GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标签列表，点列表里的标签会把 `#tag` 用 `and` 追加进表达式。
+
+### time —— 时间字段与日期词汇
+
+`time` 是一个对象，支持 4 个字段：
+
+| 字段 | 取值来源 |
+| --- | --- |
+| `scheduled` | ⏳ 排期（含从父任务继承的排期） |
+| `deadline` | 📅 截止（含从父任务继承的截止） |
+| `completed` | ✅ 完成日期（任务自己那行） |
+| `created` | ➕ 创建日期（缺失时取继承值） |
+
+每个字段取一个日期 token：
 
 | Token | 含义 |
 | --- | --- |
 | `all` | 不限制 |
 | `today` / `tomorrow` | 今天 / 明天 |
-| `week` / `next-week` | 本周 / 下周 |
+| `week` / `next-week` | 本周 / 下周（周起始日跟随插件设置） |
 | `month` | 本月 |
-| `unscheduled` | **该字段为空**（如「没有排期」＝ `scheduled: "unscheduled"`） |
-| `overdue` | 已逾期（**仅 `deadline`**） |
-| `next-7-days` | 未来 7 天（**仅 `deadline`**） |
+| `unscheduled` | **该字段为空**（如「没有排期」＝ `scheduled: "unscheduled"`，「没有截止」＝ `deadline: "unscheduled"`） |
+| `overdue` | 早于今天（**仅 `deadline`**） |
+| `next-7-days` | 今天到 7 天后，含两端（**仅 `deadline`**） |
 | `2026-06-23` | 某一天（`YYYY-MM-DD`） |
-| `2026-06-01..2026-06-30` | 区间（`起..止`，任一端可空） |
+| `2026-06-01..2026-06-30` | 闭区间（`起..止`，任一端可空，如 `2026-06-01..`） |
 
-> - `unscheduled` 不是日期范围，它表示「这个时间字段是空的」。
-> - **没有 `yesterday` / `next-month`**——那是 `task-center:list` CLI 动词的词汇，不是 `when` 的，写了不会匹配。
+- 除 `all` 和 `unscheduled` 外，字段为空的任务一律不匹配。
+- 相对 token 的「今天」：list / grid 用真实的今天；week / month 用当前导航到的锚点日期（CLI 里是 `anchor=`）。
+- `overdue` / `next-7-days` 写在 `deadline` 以外的字段上**匹配不到任何任务**。
+- **没有 `yesterday` / `next-month`**（那是 `task-center:list` CLI 动词的词汇）。不认识的 token 不报错，但匹配不到任何任务。
+- 上表 4 个以外的字段名会被丢弃。
 
 ---
 
@@ -103,18 +153,30 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 布局树由两种节点组成：
 
-- **容器节点 Stack**：`row`（≈ HStack，横排）或 `col`（≈ VStack，竖排），用 `children` 嵌套子节点，可选 `weight` 控制伸缩比例。`children` 必须非空。
+- **容器节点 Stack**：`row`（≈ HStack，横排）或 `col`（≈ VStack，竖排），用 `children` 嵌套子节点，可选 `weight` 控制伸缩比例。
 - **叶子节点 Area**：真正渲染内容的组件（`list` / `grid` / `week` / `month` / `drop`）。
 
 ```jsonc
 "layout": {
-  "dir": "col",                 // col = 竖排；row = 横排
+  "dir": "col",                      // col = 竖排；row = 横排
   "children": [
-    { "type": "week" },         // 叶子：周网格
+    { "type": "week" },              // 叶子：周网格
     { "type": "list", "weight": 1 }  // 叶子：列表，占 1 份伸缩
   ]
 }
 ```
+
+结构校验（不通过则整份 DSL 被拒绝）：
+
+| 规则 | 错误码 |
+| --- | --- |
+| 节点必须是对象 | `invalid_layout` |
+| 带 `dir` 或 `children` 的节点视为 Stack，`dir` 必须是 `"row"` / `"col"` | `invalid_stack_dir` |
+| Stack 的 `children` 必须是非空数组 | `invalid_stack_children` |
+| area 的 `type` 必须是字符串（省略 = `list`） | `invalid_area_type` |
+| `drop` area 必须带 `onDrop` 对象 | `drop_requires_on_drop` |
+
+`weight` 必须是正数，否则被忽略。
 
 根节点既可以是 Stack，也可以**直接是一个 area**（不必包壳）。例如 TODO 视图的根就是单个 `list`：
 
@@ -122,44 +184,50 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 "layout": { "type": "list", "when": { "status": ["todo"] } }
 ```
 
-旧的「视图类型」现在升级成了「**area 类型**」：一个视图不再只有一种类型，而是可以自由组合多个 area —— 周视图 = `col[ 周网格, row[未排期, 放弃区] ]`，未排期 = `col[ 列表 ]`，你也可以 `row[ 工作列表, 个人列表 ]` 并排自定义。
+一个视图不是「一种类型」，而是自由组合多个 area：周视图 = `col[ 周网格, row[未排期, 放弃区] ]`，未排期 = `col[ 列表 ]`，你也可以 `row[ 工作列表, 个人列表 ]` 并排自定义。
 
 ---
 
 ## 4. Area 类型逐个看
 
-每个 area 的公共可选字段：`id`（稳定标识）、`title`（标题）、`weight`（伸缩比例）、`onDrop`（拖入写操作，见 §5.2）。
+每个 area 的公共可选字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 稳定标识。内置 id `overdue` / `today` / `unscheduled-rec` / `unscheduled-tray` 的标题会按界面语言本地化显示，覆盖 `title`。 |
+| `title` | 区域标题。省略时，第一个内容区借用 Tab 名，其余显示 area 类型名。 |
+| `weight` | 伸缩比例（正数）。 |
+| `onDrop` | 拖入时的写操作，见 §5.2。 |
 
 ### 4.1 list —— 任务列表
 
-最常用的组件：用 `when` 筛出一列任务卡。父子任务会自动嵌套。
+最常用的组件：用 `when` 筛出一列任务卡。父任务和子任务同时命中时，子任务嵌在父卡片里，不重复出现。
 
 ![list 视图](../assets/dsl/todo.png)
 
 ```jsonc
 {
   "type": "list",
-  "when": { "tags": ["工作"] },        // 这块区域的过滤（QueryFilters 结构，见 §2）
+  "when": { "tags": { "expr": "#工作" } },
   "orderBy": ["deadline_risk", "created_desc"],
-  "limit": 50,
-  "emptyText": "暂无任务"
+  "limit": 50
 }
 ```
 
 | 字段 | 说明 |
 | --- | --- |
-| `when` | 这块区域的过滤（`QueryFilters` 结构，见 §2）。图形过滤入口编辑的就是这个 `when`。 |
-| `orderBy` | 排序，见 [§5.3](#53-orderby-排序) |
-| `limit` | 最多显示多少条 |
-| `emptyText` | 空集合时显示的文案 |
+| `when` | 这块区域的过滤（见 §2）。图形过滤入口编辑的就是这个 `when`。 |
+| `orderBy` | 排序，见 [§5.3](#53-orderby-排序)。省略时保持 vault 里的原始顺序。 |
+| `limit` | 最多显示多少条（正数；字符串、0、负数会被忽略）。 |
+| `emptyText` | 会被保存，但**目前界面不使用**：空区域统一显示内置的空状态文案。 |
 
 #### 多段列表 —— 用 col 叠多个 list
 
-`list` 没有内部分组。要像「今日」那样把列表分成逾期 / 今天 / 未排期三段，就用 `col` 容器叠 3 个 `list` area，每个 area 自带完整 `when`、各自 filter 自己。它和 TODO 是同一个组件，差别只在布局树（见 §6「今日」的完整 DSL）。没有「一个 list 内部再分组」这回事——共享的过滤直接在每块的 `when` 里各写一遍。
+`list` 没有内部分组。要像「今日」那样把列表分成逾期 / 今天 / 未排期三段，就用 `col` 容器叠 3 个 `list` area，每个 area 自带完整 `when`、各自过滤（见 §6「今日」）。共享的条件直接在每块的 `when` 里各写一遍。
 
 ### 4.2 grid —— 卡片网格
 
-和 `list` 同字段、同投影，只是卡片以**响应式多列网格**排列。二维分类（四象限）用 `row`/`col` 嵌套多个带 `title` + `when` 的 grid 表达，**没有专门的 matrix 类型**。每个 grid 的 `when` 用「同时含两个标签」（AND）来圈一格：
+和 `list` 同字段、同过滤与排序，只是卡片以**响应式多列网格**排列。二维分类（四象限）用 `row` / `col` 嵌套多个带 `title` + `when` 的 grid 表达，**没有专门的 matrix 类型**：
 
 ![四象限 = row/col 嵌套 grid](../assets/dsl/quadrant.png)
 
@@ -168,12 +236,12 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
   "dir": "col",
   "children": [
     { "dir": "row", "children": [
-      { "type": "grid", "title": "重要 & 紧急",   "when": { "tags": ["重要", "紧急"] } },
-      { "type": "grid", "title": "重要 & 不紧急", "when": { "tags": ["重要", "不紧急"] } }
+      { "type": "grid", "title": "重要 & 紧急",   "when": { "tags": { "expr": "#重要 and #紧急" } } },
+      { "type": "grid", "title": "重要 & 不紧急", "when": { "tags": { "expr": "#重要 and not #紧急" } } }
     ] },
     { "dir": "row", "children": [
-      { "type": "grid", "title": "不重要 & 紧急",   "when": { "tags": ["不重要", "紧急"] } },
-      { "type": "grid", "title": "不重要 & 不紧急", "when": { "tags": ["不重要", "不紧急"] } }
+      { "type": "grid", "title": "不重要 & 紧急",   "when": { "tags": { "expr": "not #重要 and #紧急" } } },
+      { "type": "grid", "title": "不重要 & 不紧急", "when": { "tags": { "expr": "not #重要 and not #紧急" } } }
     ] }
   ]
 }
@@ -181,37 +249,44 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 ### 4.3 week —— 周网格
 
-按周展示的日期网格。每个日格内部自排布局，并隐式带 `onDrop: { setScheduled: <当日> }` —— 把卡片拖进某一天即写入该天的排期。`when` 决定这张周网格里显示哪些任务。
+按周展示的日期网格，带 `◀ 周 ▶` 导航。任务按 ⏳ 排期（含继承）落进对应的日格，没有排期的任务不会出现在这里。每个日格都是拖放目标：把卡片拖进某一天即写入该天的 ⏳。`when` 决定这张周网格里显示哪些任务。
 
 ![周视图 = col[ week, 未排期, 放弃区 ]](../assets/dsl/week.png)
 
 ```jsonc
-{ "type": "week", "when": { "status": ["todo"] }, "firstDayOfWeek": "monday" }   // monday | sunday
+{ "type": "week", "when": { "status": ["todo"] } }
 ```
+
+- 周起始日跟随插件设置。`firstDayOfWeek`（`monday` / `sunday`）会被保存，但**目前不生效**。
+- week 上的 `onDrop` 会被保存但不起作用，日格始终是「改排期到当日」。
 
 > 上图的完整布局见 [§6 周视图](#周视图)：周网格下面横排着「未排期」收纳格和「放弃区」。
 
 ### 4.4 month —— 月网格
 
-按月展示的日期网格，用法同 `week`，多一个密度选项。
+按月展示的日期网格，用法同 `week`，带月份导航。
 
 ![月视图](../assets/dsl/month.png)
 
 ```jsonc
-{ "type": "month", "when": { "status": ["todo"] }, "firstDayOfWeek": "monday", "density": "cards" } // compact | cards
+{ "type": "month", "when": { "status": ["todo"] } }
 ```
 
-### 4.5 drop —— 纯动作落区
+`firstDayOfWeek` 与 `density`（`compact` / `cards`）会被保存，但**目前都不生效**；移动端月视图固定是日历格 + 圆点密度。
 
-没有 query 的落区，只承接拖拽动作，`onDrop` 必填（缺了报 `drop_requires_on_drop`）。「放弃区」就是一个 drop area。
+### 4.5 drop —— 放弃区
+
+没有 query、不显示任务的落区，`onDrop` 必填（缺了报 `drop_requires_on_drop`）。
 
 ```jsonc
-{ "type": "drop", "title": "放弃区", "onDrop": { "setStatus": "dropped" } }
+{ "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
+
+> 当前实现里 drop area **只有一种行为：把拖入的任务标记为放弃**（含级联放弃仍为 todo 的子任务）。`onDrop` 只要是对象就能通过校验，写成 `{}`、`{ "setStatus": "done" }` 或 `{ "clearScheduled": true }` 都会被当成放弃。请只写 `{ "setStatus": "dropped" }`。drop area 的 `title` 不显示。
 
 ### 4.6 unknown —— 兜底
 
-不被支持的 area `type`（笔误，或已删除的旧类型如 matrix）**不是错误**：会被归一化成 `unknown`，保留原始 JSON，视图层渲染「未知类型 + JSON」，不会让整份配置加载失败。所以 `type` 拼错不会报错，只会渲染成一块没用的未知区——拼写要核对。
+不被支持的 area `type`（笔误，或已删除的旧类型如 `matrix`）**不是错误**：会被归一化成 `unknown`，保留原始 JSON，视图层渲染「未知类型 + JSON」，不会让整份配置加载失败。所以 `type` 拼错不会报错，只会渲染成一块没用的未知区。
 
 ---
 
@@ -219,22 +294,26 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 ### 5.1 过滤只属于 area
 
-每个 list/grid/week/month area 的过滤，就是它**自己的 `when`**，互不影响。
+每个 list / grid / week / month area 的过滤，就是它**自己的 `when`**，互不影响。
 
-- 没有作用于整个 Tab 的「基础集合 / 全局过滤」。要让整个 Tab 都只看 `todo`，就在每个 area 的 `when` 里各写一遍 `status: ["todo"]`（内置视图就是这么做的）。
+- 没有作用于整个 Tab 的「基础集合 / 全局过滤」。要让整个 Tab 都只看 `todo`，就在每个 area 的 `when` 里各写一遍 `"status": ["todo"]`（内置视图就是这么做的）。
 - 图形过滤入口直接编辑该 area 的 `when`，与 DSL 直编是同一份数据。
 
 ### 5.2 onDrop：拖拽写操作
 
-卡片被拖进某个 area 时执行的写操作，三种语义**互斥**：
+卡片被拖进某个 area 时执行的写操作。每个 area 只写**一个**键：
 
-| 字段 | 效果 |
-| --- | --- |
-| `setStatus: "dropped"` | 把任务标记为放弃（放弃区） |
-| `setScheduled: <DateToken>` | 写排期（`week`/`month` 的日格隐式用当日） |
-| `clearScheduled: true` | 清空被拖任务自己那行的 ⏳ 排期（未排期收纳格用） |
+| 写法 | 效果 | 在哪些 area 生效 |
+| --- | --- | --- |
+| `{ "setStatus": "dropped" }` | 把任务标记为放弃 | `drop` |
+| `{ "clearScheduled": true }` | 清空被拖任务自己那行的 ⏳（未排期收纳格用） | `list` / `grid` |
+| `{ "setScheduled": "2026-06-23" }` | 把 ⏳ 改到这一天 | `list` / `grid` |
 
-drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。「改到明天」「清空排期」「放弃」是卡片和 drop area 的**通用能力**，不绑定某个视图。
+- `setScheduled` 目前只接受字面日期 `YYYY-MM-DD`；写 `today` / `tomorrow` 等 token 会在拖入时报日期无效。
+- `list` / `grid` 上写 `setStatus` 不起作用。
+- `week` / `month` 不读 `onDrop`，日格本身就是改排期目标。
+- 排期继承自父任务（自己那行没有 ⏳）的卡片拖进 `clearScheduled` 区时，不会改写，只弹提示。
+- `setStatus` 只接受 `"dropped"`，其它值会被丢弃。校验不检查互斥，同时写多个键时以上表的生效规则为准，结果难以预期，别这么写。
 
 ### 5.3 orderBy 排序
 
@@ -242,29 +321,25 @@ drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。
 
 | Token | 含义 |
 | --- | --- |
-| `deadline_asc` / `deadline_desc` | 按截止日期升 / 降 |
-| `scheduled_asc` / `scheduled_desc` | 按排期升 / 降 |
-| `created_desc` | 按创建时间（倒序） |
-| `completed_desc` | 按完成时间（倒序） |
-| `deadline_risk` | 按「截止风险」（越紧迫越靠前） |
-| `priority_desc` | 按优先级 |
+| `deadline_asc` / `deadline_desc` | 按截止日期升 / 降（无截止的排最后） |
+| `scheduled_asc` / `scheduled_desc` | 按排期升 / 降（无排期的排最后） |
+| `created_desc` | 按创建时间倒序 |
+| `completed_desc` | 按完成时间倒序 |
+| `deadline_risk` | 按截止风险：已逾期 → 3 天内到期 → 更晚 → 无截止，同档再按截止日期升序 |
+| `priority_desc` | 按优先级从高到低（🔺 ⏫ 🔼 🔽 ⏬，无优先级最后） |
 | `title_asc` / `title_desc` | 按标题字母序 |
 
-> 表里没列的 token（如 `created_asc`）不被支持，会被忽略。
-
-### 5.4 limit / emptyText
-
-`limit` 限制单个 list 的最大条数；`emptyText` 自定义空集合时的提示文案。
+表里没列的 token（如 `created_asc`）会原样保存，但排序时被忽略。
 
 ---
 
 ## 6. 内置视图：完整范例
 
-下面是 7 个内置视图的**真实出厂 DSL**（取自 `src/builtin-views/*.json`），可直接当模板改。注意它们都**没有** tab 级 `filters`，状态等过滤一律落在各 area 的 `when` 上。
+下面是 7 个内置视图的**真实出厂 DSL**（取自 `src/builtin-views/*.json`，此处省略 `id` / `name` 等身份字段），可直接当模板改。它们都没有 tab 级过滤，状态等条件一律落在各 area 的 `when` 上。
 
 ### TODO
 
-一个不分组的 `list`，过滤落在 area 的 `when`：
+一个不分组的 `list`：
 
 ```jsonc
 { "view": { "layout": { "type": "list", "when": { "status": ["todo"] } } } }
@@ -272,7 +347,7 @@ drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。
 
 ### 今日
 
-**col** 叠 3 个 list（逾期 / 今天 / 未排期），每个 list 自带 `when`、各自 filter 自己（`todo` 写进每块的 `when`）：
+`col` 叠 3 个 list（逾期 / 今天 / 未排期推荐），每个 list 自带 `when`：
 
 ```jsonc
 { "view": { "layout": {
@@ -304,7 +379,7 @@ drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。
 
 ### 周视图
 
-`col[ week, row[ grid(未排期收纳), drop(放弃) ] ]`，每块各自带 `when`：
+`col[ week, row[ grid(未排期收纳), drop(放弃) ] ]`：
 
 ```jsonc
 { "view": { "layout": { "dir": "col", "children": [
@@ -359,7 +434,26 @@ drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。
 
 ## 7. 图形编辑 ↔ DSL ↔ CLI（同一份 schema）
 
-图形过滤入口、「编辑 Query」直编 JSON、CLI 查询管理，三者共用同一份 DSL 与校验：在界面上点过滤器改的就是某个 area 的 `when`，和你在这份 JSON 里手写完全等价。CLI 侧用 `obsidian task-center:query-*` 读写同一份 preset（`query-show` / `query-run` / `query-create` / `query-update` …）。
+图形过滤入口、「编辑 Query」直编 JSON、CLI 查询管理，三者共用同一份解析与校验（US-219）：在界面上点过滤器改的就是某个 area 的 `when`，和你在这份 JSON 里手写完全等价。
+
+CLI 命令（`obsidian task-center:<命令>`，目标一律用稳定 id）：
+
+| 命令 | 作用 |
+| --- | --- |
+| `query-list [hidden=true] [format=json]` | 列出 preset |
+| `query-show id=<id>` | 输出归一化后的完整 DSL |
+| `query-run id=<id> [view=list\|week\|month] [anchor=YYYY-MM-DD] [format=json]` | 执行查询并展示结果 |
+| `query-create dsl=<json>`（同 `query-save`） | 新建 preset，总是分配新 id |
+| `query-update id=<id> dsl=<json>` | 整体替换 preset，保留 id 与 builtin |
+| `query-rename` / `query-copy` / `query-hide` / `query-delete` / `query-set-default` | 重命名 / 复制 / 隐藏 / 删除 / 设默认 |
+
+`query-run` 的当前行为：
+
+- 只执行布局里**第一个内容 area**（深度优先、跳过 `drop`），其余 area 不参与。像「今日」这样的多段视图，CLI 只会输出第一段。
+- `view=` 临时把布局换成单个 list / week / month，沿用第一个内容 area 的 `when`。
+- `anchor=` 决定 week / month 显示哪一周 / 哪个月，也是它们相对 token 的「今天」。
+
+DSL 无法解析或校验失败时，`query-create` / `query-update` 返回 `invalid_query`，已有 preset 保持不变。
 
 > 🖼️ **配图 TODO** —— 并排展示「图形过滤弹窗」与对应的 `when` JSON 片段，标出二者一一对应。
 
@@ -370,9 +464,9 @@ drop area 必须有 `onDrop`；list/grid 等任意 area 也可选挂 `onDrop`。
 1. **Markdown 是唯一事实源**，DSL 只是派生层。
 2. **一个视图 = 一棵布局树**，没有视图类型枚举；渲染层不按 today / completed 等名字分支。
 3. **过滤只属于 area**：每个 area 的 `when` 就是它的全部过滤，没有 tab 级基础集、没有全局过滤状态。
-4. **动作是通用能力**：改排期 / 清排期 / 放弃由卡片和 drop area 提供，不绑定某个视图。
+4. **动作是通用能力**：改排期 / 清排期 / 放弃由卡片和落区提供，不绑定某个视图。
 5. **未知类型不报错**：归一化成 `unknown` 兜底。
-6. **没有 `summary`**：顶部统计已移除；估时/复盘类统计走 `task-center:stats` / `review` CLI。
+6. **没有 `summary`**：顶部统计已移除；估时 / 复盘类统计走 `task-center:stats` / `review` CLI。
 
 ---
 

@@ -6,7 +6,7 @@ Every Tab in Task Center is a **Query DSL** (a single `QueryPreset` object). The
 
 > This is the **SSOT (single source of truth)** for the DSL. If anything else (README, the skill, AI prompts) disagrees with this document, this document wins; change the DSL behaviour here first.
 >
-> Markdown is the single source of truth for data. The DSL only decides *how to filter, sort, and arrange* — the task data itself always lives in the Markdown lines of your vault. Views and filters are all derived from Markdown.
+> Markdown is the single source of truth for data. The DSL only decides *how to filter, sort, and arrange*; the task data itself always lives in the Markdown lines of your vault. Views and filters are all derived from Markdown.
 >
 > For the field-by-field TypeScript types, see [`ARCHITECTURE.md` §1.3](../../ARCHITECTURE.md#13-querypreset); the runtime shape is whatever `QueryPreset` in `src/types.ts` says.
 
@@ -26,14 +26,21 @@ Every Tab in Task Center is a **Query DSL** (a single `QueryPreset` object). The
 
 | Field | Role |
 | --- | --- |
-| `id` / `name` | Stable id (locate by this, not the display name) / display name |
-| `builtin` / `hidden` | Whether it's built-in / hidden from the Tab bar |
-| `view.layout` | The **layout tree**: which components to show, how they nest, and **what each component filters**. |
+| `id` | Stable id; locate presets by this, not the display name. Optional (generated if missing). CLI `query-create` always assigns a new id and `query-update` always keeps the existing one, so an `id` in the DSL has no effect on either path. |
+| `name` | Display name, **required** (on `query-update` it falls back to the existing name). |
+| `builtin` / `hidden` | Built-in / hidden from the Tab bar. Optional, default `false`. |
+| `view.layout` | The **layout tree**: which components to show, how they nest, and **what each component filters**. Without `view` you get a single unfiltered `list`. |
 
-> ⚠️ A preset is **identity + one `view.layout`, nothing more**. There is **no** tab-level `filters`, **no** `summary`, and **no** "view type" enum — all removed in 1.0 (US-109z2).
-> - Filtering lives **only on each area's own `when`** (see §2). A `filters` written at the top level is **silently ignored** — no error, no effect.
-> - The old flat shape (top-level `search`/`tag`/`time`/`status`) is **rejected outright** with `invalid_query`.
-> - The old `view: {type, preset, sections, tray, matrix}` shape is **auto-migrated** into a `{ layout }` tree.
+The whole DSL may also be wrapped as `{ "query": { … } }`; it behaves the same.
+
+> ⚠️ A preset is **identity + one `view.layout`, nothing more**. There is **no** tab-level `filters`, **no** `summary`, and **no** "view type" enum; all were removed in 1.0 (US-109z2).
+>
+> Submitting any of these pre-1.0 shapes through **Edit Query** or the CLI (`query-create` / `query-update`) is **rejected outright** (the CLI returns `invalid_query` and tells you to update the skill and use `view.layout` + area `when`, US-217a):
+> - a top-level `filters` or `summary` (even an empty `{}`);
+> - flat top-level `search` / `tag` / `time` / `status`;
+> - a `view` with no `layout` but with `type` / `preset` / `sections` / `tray` / `matrix`.
+>
+> Only legacy data **already stored** in `data.json` is migrated into a `{ layout }` tree, by the upgrade gate on plugin load (US-414 / US-415). Hand-written input is not.
 
 What a view looks like is **decided entirely by the `view.layout` tree**.
 
@@ -45,57 +52,100 @@ There is no "base set for the whole Tab". Every list / grid / week / month area 
 
 ```jsonc
 "when": {
-  "search": "report",                          // text in title / tags (case-insensitive)
-  "tags": ["important", "urgent"],             // array (or comma string); auto-prefixed #; AND (must contain all)
-  "status": ["todo"],                          // see below; omit = all
+  "search": "report",                                  // title or any tag contains this text (case-insensitive)
+  "tags": { "expr": "#work and not #someday" },        // tag boolean expression, see below
+  "status": ["todo"],                                  // see below; omit = all
   "time": {
-    "scheduled": "today",                      // ⏳ scheduled
-    "deadline":  "next-7-days",                // 📅 deadline
-    "completed": "week",                       // ✅ completed
-    "created":   "2026-01-01..2026-06-30"      // ➕ created
+    "scheduled": "today",                              // ⏳ scheduled
+    "deadline":  "next-7-days",                        // 📅 deadline
+    "completed": "week",                               // ✅ completed
+    "created":   "2026-01-01..2026-06-30"              // ➕ created
   }
 }
 ```
 
-All conditions are **AND-ed**: to enter this block a task must satisfy every key in `when`.
+All conditions are **AND-ed**: to enter this block a task must satisfy every key in `when`. Omitted keys don't filter.
+
+> Values inside `when` are currently **not validated**: a wrong value doesn't raise an error, it is silently dropped or matches nothing (see each subsection). Double-check spelling before submitting.
+
+### search
+
+A string, trimmed, matched as a case-insensitive substring: a task matches if its **title** or **any of its tags** contains it.
 
 ### status
 
-`todo` / `done` / `dropped` (an array, a single string, or `"all"`; omit = all). Matched against the terminal-inheritance-resolved `effectiveStatus`.
+Accepted values:
 
-> The parser also accepts `in_progress` / `cancelled` / `custom`, but the graphical filter UI only exposes the three common values above.
+| Value | Checkbox |
+| --- | --- |
+| `todo` | `- [ ]` |
+| `done` | `- [x]` |
+| `dropped` | `- [-]` |
+| `in_progress` | `- [/]` |
+| `cancelled` | `- [>]` |
+| `custom` | any other character |
 
-### tags
+Forms: an array (multi-select, any match), a single string, or `"all"`; omit = all. It matches the post-inheritance `effectiveStatus` (when a parent is done / dropped, its children count as that terminal status). The GUI status picker only offers All / TODO / Done / Dropped.
+
+> Unknown values are dropped; if none are recognised it falls back to `"all"` (no status filter), without an error. After normalization every `when` carries an explicit `"status": "all"` or status array.
+
+### tags: tag expression
 
 Tag filtering is a **boolean expression**; the canonical form is `{ "expr": "…" }` (US-109d4).
 
-- Syntax: `#tag`, `and`, `or`, `not`, parentheses `( )`; keywords are case-insensitive; precedence `not` > `and` > `or`; the `#` is optional.
-- Example: `"tags": { "expr": "(#a or #b) and not #c" }` — has a or b, and not c.
-- Match: the expression is parsed and evaluated against each task's tags. A syntax error → the area applies **no** tag filter (fail-open); tasks are never silently dropped.
-- **Back-compat**: older shapes are **auto-migrated** to an equivalent `{ expr }` at normalize time; the evaluator only reads the expression:
-  - bare array `["#a","#b"]` or comma string `"a,b"` → `"#a and #b"`
-  - `{ "values":["#a","#b"], "mode":"or" }` → `"#a or #b"`
-  - `{ "values":["#a"], "exclude":["#c"] }` → `"#a and not #c"`
-- Graphical panel: the tag popover has an expression input (live-validated, with an example) plus a tag list; clicking a tag appends `#tag` to the expression.
+- Syntax: tags, `and`, `or`, `not`, parentheses `( )`.
+- Precedence `not` > `and` > `or`; use parentheses to group.
+- Keywords are case-insensitive, and only **bare** `and` / `or` / `not` (no `#`) are keywords; `#and` is a tag named "and".
+- The leading `#` on a tag is optional; tags are case-insensitive and match the **whole tag** exactly (`#a` doesn't match `#a/b`, and vice versa).
+- Operators are required: `#a #b` is a syntax error, not an implicit AND.
+- Tag names can't contain spaces or parentheses (they are separators).
 
-### time — fields and date vocabulary
+Example: `"tags": { "expr": "(#a or #b) and not #c" }` means "has a or b, and does not have c".
 
-`time` supports 4 fields: `scheduled` / `deadline` / `completed` / `created`. Each takes one DateToken:
+On a syntax error (e.g. `#a and (`) the expression is saved as written, but that area **does no tag filtering** (fail-open), so tasks are never silently lost; the GUI input highlights the error in place.
+
+**Legacy forms** are still accepted and rewritten into the equivalent `{ expr }` on normalization, so `query-show` always shows an expression:
+
+| Legacy form | Equivalent expression |
+| --- | --- |
+| `["#a", "#b"]` or `"a, b"` | `#a and #b` |
+| `{ "values": ["#a", "#b"], "mode": "or" }` | `#a or #b` |
+| `{ "values": ["#a"], "exclude": ["#c"] }` | `#a and not #c` |
+
+`tags` of any other type (a number, say) is silently ignored.
+
+The GUI tag popover has an expression input (live validation, with examples) plus a tag list; clicking a tag in the list appends `#tag` to the expression with `and`.
+
+### time: fields and date vocabulary
+
+`time` is an object with 4 fields:
+
+| Field | Value source |
+| --- | --- |
+| `scheduled` | ⏳ scheduled date (including one inherited from a parent) |
+| `deadline` | 📅 deadline (including one inherited from a parent) |
+| `completed` | ✅ completion date (the task's own line) |
+| `created` | ➕ created date (inherited when missing) |
+
+Each field takes one date token:
 
 | Token | Meaning |
 | --- | --- |
 | `all` | no restriction |
 | `today` / `tomorrow` | today / tomorrow |
-| `week` / `next-week` | this week / next week |
+| `week` / `next-week` | this week / next week (week start follows the plugin setting) |
 | `month` | this month |
-| `unscheduled` | **this field is empty** (e.g. "no scheduled date" = `scheduled: "unscheduled"`) |
-| `overdue` | overdue (**`deadline` only**) |
-| `next-7-days` | next 7 days (**`deadline` only**) |
+| `unscheduled` | **the field is empty** (e.g. "not scheduled" = `scheduled: "unscheduled"`, "no deadline" = `deadline: "unscheduled"`) |
+| `overdue` | before today (**`deadline` only**) |
+| `next-7-days` | today through 7 days from now, inclusive (**`deadline` only**) |
 | `2026-06-23` | a single day (`YYYY-MM-DD`) |
-| `2026-06-01..2026-06-30` | a range (`from..to`, either end may be empty) |
+| `2026-06-01..2026-06-30` | inclusive range (`from..to`, either end may be empty, e.g. `2026-06-01..`) |
 
-> - `unscheduled` is not a date range — it means "this time field is empty".
-> - There is **no `yesterday` / `next-month`** — those belong to the `task-center:list` CLI verb, not to `when`, and won't match here.
+- Apart from `all` and `unscheduled`, a task whose field is empty never matches.
+- "Today" for relative tokens: list / grid use the real today; week / month use the anchor date you've navigated to (`anchor=` on the CLI).
+- `overdue` / `next-7-days` on any field other than `deadline` **match nothing**.
+- **There is no `yesterday` / `next-month`** (that's the vocabulary of the `task-center:list` CLI verb). Unknown tokens don't error, they just match nothing.
+- Field names other than the 4 above are dropped.
 
 ---
 
@@ -103,168 +153,193 @@ Tag filtering is a **boolean expression**; the canonical form is `{ "expr": "…
 
 The layout tree is made of two kinds of node:
 
-- **Container node (Stack)**: `row` (≈ HStack) or `col` (≈ VStack), nesting children via `children`, with optional `weight` for the flex ratio. `children` must be non-empty.
-- **Leaf node (Area)**: the components that actually render content (`list` / `grid` / `week` / `month` / `drop`).
+- **Container node (Stack)**: `row` (≈ HStack, horizontal) or `col` (≈ VStack, vertical), nesting children via `children`, with an optional `weight` for flex ratio.
+- **Leaf node (Area)**: the component that actually renders content (`list` / `grid` / `week` / `month` / `drop`).
 
 ```jsonc
 "layout": {
-  "dir": "col",                 // col = vertical; row = horizontal
+  "dir": "col",                      // col = vertical; row = horizontal
   "children": [
-    { "type": "week" },         // leaf: week grid
-    { "type": "list", "weight": 1 }  // leaf: list, takes 1 flex unit
+    { "type": "week" },              // leaf: week grid
+    { "type": "list", "weight": 1 }  // leaf: list, takes 1 flex share
   ]
 }
 ```
 
-The root can be a Stack, or **a single area directly** (no wrapper needed). For example, the TODO view's root is just one `list`:
+Structural validation (any failure rejects the whole DSL):
+
+| Rule | Error code |
+| --- | --- |
+| Every node must be an object | `invalid_layout` |
+| A node with `dir` or `children` is a Stack; `dir` must be `"row"` / `"col"` | `invalid_stack_dir` |
+| A Stack's `children` must be a non-empty array | `invalid_stack_children` |
+| An area's `type` must be a string (omitted = `list`) | `invalid_area_type` |
+| A `drop` area must have an `onDrop` object | `drop_requires_on_drop` |
+
+`weight` must be a positive number, otherwise it's ignored.
+
+The root can be a Stack, or **directly a single area** (no wrapper needed). For example, the TODO view's root is just one `list`:
 
 ```jsonc
 "layout": { "type": "list", "when": { "status": ["todo"] } }
 ```
 
-The old "view types" are now **area types**: a view is no longer limited to one type — you freely compose multiple areas. Week = `col[ week-grid, row[unscheduled, drop] ]`, Unscheduled = `col[ list ]`, and you can build your own `row[ work-list, personal-list ]` side by side.
+A view isn't "one type"; it freely combines several areas: Week = `col[ week grid, row[unscheduled, drop zone] ]`, Unscheduled = `col[ list ]`, or roll your own side-by-side `row[ work list, personal list ]`.
 
 ---
 
-## 4. The area types, one by one
+## 4. Area types, one by one
 
-Common optional fields on every area: `id` (stable identifier), `title`, `weight` (flex ratio), `onDrop` (drag-in write, see §5.2).
+Optional fields shared by every area:
 
-### 4.1 list — task list
+| Field | Description |
+| --- | --- |
+| `id` | Stable identifier. The built-in ids `overdue` / `today` / `unscheduled-rec` / `unscheduled-tray` show a title localized to the UI language, overriding `title`. |
+| `title` | Area title. If omitted, the first content area borrows the Tab name and the rest show the area type's label. |
+| `weight` | Flex ratio (positive number). |
+| `onDrop` | Write action on drop, see §5.2. |
 
-The workhorse: filters with `when` and renders a column of task cards. Parent/child tasks nest automatically.
+### 4.1 list: task list
+
+The most common component: `when` selects a column of task cards. When a parent and its child both match, the child is nested inside the parent card instead of appearing twice.
 
 ![list view](../assets/dsl/todo.png)
 
 ```jsonc
 {
   "type": "list",
-  "when": { "tags": ["work"] },        // this block's filter (QueryFilters shape, see §2)
+  "when": { "tags": { "expr": "#work" } },
   "orderBy": ["deadline_risk", "created_desc"],
-  "limit": 50,
-  "emptyText": "No tasks"
+  "limit": 50
 }
 ```
 
 | Field | Description |
 | --- | --- |
-| `when` | This block's filter (same `QueryFilters` shape, see §2). The graphical filter UI edits exactly this `when`. |
-| `orderBy` | Sorting, see [§5.3](#53-orderby-sorting) |
-| `limit` | Maximum number of cards |
-| `emptyText` | Text shown when the set is empty |
+| `when` | This block's filter (see §2). The graphical filter UI edits exactly this `when`. |
+| `orderBy` | Sorting, see [§5.3](#53-orderby-sorting). Omitted = original vault order. |
+| `limit` | Max number of items (positive number; strings, 0 and negatives are ignored). |
+| `emptyText` | Saved, but **not used by the UI today**: empty areas always show the built-in empty-state text. |
 
-#### Multi-segment lists — stack lists with col
+#### Multi-segment lists: stack several lists in a col
 
-A `list` has no internal grouping. To split a list into segments like "Today" does (Overdue / Today / Unscheduled), use a `col` container stacking 3 `list` areas, each carrying its own full `when` and filtering itself. It is the same component as TODO — the only difference is the layout tree (see the full Today DSL in §6). There is no "groups inside one list" — a shared filter is simply written into each block's `when`.
+`list` has no internal grouping. To split a list into overdue / today / unscheduled segments like Today does, stack 3 `list` areas in a `col`; each carries a full `when` and filters itself (see Today in §6). Shared conditions are simply repeated in each block's `when`.
 
-### 4.2 grid — card grid
+### 4.2 grid: card grid
 
-Same fields and projection as `list`, but cards are arranged in a **responsive multi-column grid**. Two-dimensional classification (the four quadrants) is expressed by nesting several `grid`s — each with a `title` + `when` — inside `row`/`col`. There is **no dedicated matrix type**. Each grid's `when` uses "contains both tags" (AND) to carve out one cell:
+Same fields, filtering and sorting as `list`, but cards are laid out in a **responsive multi-column grid**. Two-dimensional categorization (four quadrants) is expressed by nesting several grids with a `title` + `when` inside `row` / `col`; **there is no dedicated matrix type**:
 
-![Four quadrants = grids nested in row/col](../assets/dsl/quadrant.png)
+![four quadrants = row/col of nested grids](../assets/dsl/quadrant.png)
 
 ```jsonc
 "layout": {
   "dir": "col",
   "children": [
     { "dir": "row", "children": [
-      { "type": "grid", "title": "Important & Urgent",     "when": { "tags": ["important", "urgent"] } },
-      { "type": "grid", "title": "Important & Not urgent", "when": { "tags": ["important", "not-urgent"] } }
+      { "type": "grid", "title": "Important & Urgent",     "when": { "tags": { "expr": "#important and #urgent" } } },
+      { "type": "grid", "title": "Important & Not urgent", "when": { "tags": { "expr": "#important and not #urgent" } } }
     ] },
     { "dir": "row", "children": [
-      { "type": "grid", "title": "Not important & Urgent",     "when": { "tags": ["not-important", "urgent"] } },
-      { "type": "grid", "title": "Not important & Not urgent", "when": { "tags": ["not-important", "not-urgent"] } }
+      { "type": "grid", "title": "Not important & Urgent",     "when": { "tags": { "expr": "not #important and #urgent" } } },
+      { "type": "grid", "title": "Not important & Not urgent", "when": { "tags": { "expr": "not #important and not #urgent" } } }
     ] }
   ]
 }
 ```
 
-### 4.3 week — week grid
+### 4.3 week: week grid
 
-A date grid laid out by week. Each day cell arranges its own content and implicitly carries `onDrop: { setScheduled: <that day> }` — dragging a card onto a day writes that day as its scheduled date. `when` decides which tasks appear in the week grid.
+A date grid shown by week, with `◀ week ▶` navigation. Tasks land in the day cell of their ⏳ scheduled date (including inherited ones); unscheduled tasks don't appear here. Every day cell is a drop target: drag a card onto a day to write that day's ⏳. `when` decides which tasks this week grid shows.
 
-![Week view = col[ week, unscheduled, drop ]](../assets/dsl/week.png)
+![Week view = col[ week, unscheduled, drop zone ]](../assets/dsl/week.png)
 
 ```jsonc
-{ "type": "week", "when": { "status": ["todo"] }, "firstDayOfWeek": "monday" }   // monday | sunday
+{ "type": "week", "when": { "status": ["todo"] } }
 ```
 
-> See the full layout in [§6 Week](#week): below the week grid sits a row with an "Unscheduled" tray and a "Drop" zone.
+- The week start follows the plugin setting. `firstDayOfWeek` (`monday` / `sunday`) is saved but **has no effect yet**.
+- An `onDrop` on a week area is saved but ignored; day cells always "reschedule to that day".
 
-### 4.4 month — month grid
+> The full layout from the screenshot is in [§6 Week](#week): below the week grid sit the "Unscheduled" tray and the drop zone, side by side.
 
-A date grid laid out by month. Same usage as `week`, plus a density option.
+### 4.4 month: month grid
+
+A date grid shown by month, used like `week`, with month navigation.
 
 ![Month view](../assets/dsl/month.png)
 
 ```jsonc
-{ "type": "month", "when": { "status": ["todo"] }, "firstDayOfWeek": "monday", "density": "cards" } // compact | cards
+{ "type": "month", "when": { "status": ["todo"] } }
 ```
 
-### 4.5 drop — pure action drop zone
+`firstDayOfWeek` and `density` (`compact` / `cards`) are saved but **have no effect yet**; on mobile the month view is always a calendar grid with dot density.
 
-A drop zone with no query — it only accepts drag actions, so `onDrop` is required (missing it raises `drop_requires_on_drop`). The "Drop" zone is just a drop area.
+### 4.5 drop: drop zone
+
+A drop target with no query and no task cards; `onDrop` is required (missing it raises `drop_requires_on_drop`).
 
 ```jsonc
-{ "type": "drop", "title": "Drop", "onDrop": { "setStatus": "dropped" } }
+{ "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
 
-### 4.6 unknown — the fallback
+> In the current implementation a drop area **has exactly one behaviour: mark the dropped task as dropped** (cascading to children that are still todo). Any object passes validation, so `{}`, `{ "setStatus": "done" }` or `{ "clearScheduled": true }` are all treated as "drop". Only write `{ "setStatus": "dropped" }`. A drop area's `title` is not shown.
 
-An unsupported area `type` (a typo, or a removed legacy type such as the old matrix) is **not an error**: it is normalized to `unknown`, the original JSON is preserved, and the view renders "unknown type + JSON" instead of failing to load the whole config. So a misspelled `type` won't fail — it just renders as a useless unknown block; double-check the spelling.
+### 4.6 unknown: the fallback
+
+An unsupported area `type` (a typo, or a removed legacy type such as `matrix`) is **not an error**: it normalizes to `unknown`, keeps the raw JSON, and the view renders "unknown type + JSON" instead of failing to load the whole config. So a misspelled `type` won't error; it just renders a useless unknown block.
 
 ---
 
-## 5. Mechanisms
+## 5. Mechanics
 
 ### 5.1 Filtering belongs to the area
 
-Each list/grid/week/month area filters only via its **own `when`**, independent of the others.
+Each list / grid / week / month area's filter is **its own `when`**, independent of the others.
 
-- There is no "base set / global filter" for the whole Tab. To make a whole Tab show only `todo`, write `status: ["todo"]` in each area's `when` (that's exactly what the built-in views do).
-- The graphical filter UI edits that area's `when` directly — it is the same data as editing the DSL.
+- There is no Tab-wide "base set / global filter". To make a whole Tab show only `todo`, write `"status": ["todo"]` in every area's `when` (that's what the built-in views do).
+- The graphical filter UI edits that area's `when` directly; it is the same data as editing the DSL.
 
-### 5.2 onDrop: write on drag
+### 5.2 onDrop: drag-and-drop writes
 
-The write performed when a card is dropped onto an area. The three semantics are **mutually exclusive**:
+The write action performed when a card is dragged into an area. Write **one** key per area:
 
-| Field | Effect |
-| --- | --- |
-| `setStatus: "dropped"` | mark the task as dropped (the Drop zone) |
-| `setScheduled: <DateToken>` | write a scheduled date (`week`/`month` day cells implicitly use that day) |
-| `clearScheduled: true` | clear the ⏳ scheduled date on the dragged task's own line (the unscheduled tray) |
+| Form | Effect | Works on |
+| --- | --- | --- |
+| `{ "setStatus": "dropped" }` | mark the task as dropped | `drop` |
+| `{ "clearScheduled": true }` | clear the ⏳ on the dragged task's own line (the unscheduled tray) | `list` / `grid` |
+| `{ "setScheduled": "2026-06-23" }` | reschedule ⏳ to that day | `list` / `grid` |
 
-A drop area must have `onDrop`; any other area (list/grid/…) may optionally carry one too. "Reschedule to tomorrow", "clear schedule", and "drop" are **general capabilities** of cards and drop areas — not actions tied to any one view.
+- `setScheduled` currently only takes a literal `YYYY-MM-DD`; tokens like `today` / `tomorrow` fail with an invalid-date notice on drop.
+- `setStatus` on a `list` / `grid` has no effect.
+- `week` / `month` don't read `onDrop`; their day cells are reschedule targets already.
+- A card whose schedule is inherited from its parent (no ⏳ on its own line) is not rewritten when dropped into a `clearScheduled` area; you get a notice instead.
+- `setStatus` only accepts `"dropped"`; other values are dropped. Mutual exclusion isn't validated; with several keys the "works on" rules above decide, which is hard to predict, so don't.
 
 ### 5.3 orderBy sorting
 
-`orderBy` takes an array of tokens applied in order as multi-level sort keys:
+`orderBy` takes an array of tokens, applied in order as multi-level sort keys:
 
 | Token | Meaning |
 | --- | --- |
-| `deadline_asc` / `deadline_desc` | by deadline, ascending / descending |
-| `scheduled_asc` / `scheduled_desc` | by scheduled date |
-| `created_desc` | by created time (newest first) |
-| `completed_desc` | by completed time (newest first) |
-| `deadline_risk` | by "deadline risk" (most urgent first) |
-| `priority_desc` | by priority |
-| `title_asc` / `title_desc` | alphabetically by title |
+| `deadline_asc` / `deadline_desc` | by deadline, ascending / descending (no deadline last) |
+| `scheduled_asc` / `scheduled_desc` | by scheduled date, ascending / descending (unscheduled last) |
+| `created_desc` | by created date, newest first |
+| `completed_desc` | by completion date, newest first |
+| `deadline_risk` | by deadline risk: overdue → due within 3 days → later → no deadline, then by deadline ascending within a tier |
+| `priority_desc` | by priority, highest first (🔺 ⏫ 🔼 🔽 ⏬, none last) |
+| `title_asc` / `title_desc` | by title, alphabetical |
 
-> Tokens not in this table (e.g. `created_asc`) are unsupported and silently ignored.
-
-### 5.4 limit / emptyText
-
-`limit` caps the number of cards in a single list; `emptyText` customizes the message shown when the set is empty.
+Tokens not in the table (e.g. `created_asc`) are saved as written but ignored when sorting.
 
 ---
 
 ## 6. Built-in views: complete examples
 
-These are the **real factory DSLs** of the 7 built-in views (from `src/builtin-views/*.json`) — copy and tweak them as templates. Note they all have **no** tab-level `filters`; status and other filters always live on each area's `when`.
+Below is the **actual factory DSL** of the 7 built-in views (from `src/builtin-views/*.json`, identity fields like `id` / `name` omitted); use them as templates. None has a tab-level filter; status and other conditions all live on each area's `when`.
 
 ### TODO
 
-A single ungrouped `list`, filtered on the area's `when`:
+A single ungrouped `list`:
 
 ```jsonc
 { "view": { "layout": { "type": "list", "when": { "status": ["todo"] } } } }
@@ -272,7 +347,7 @@ A single ungrouped `list`, filtered on the area's `when`:
 
 ### Today
 
-**col** stacking 3 lists (Overdue / Today / Unscheduled); each list carries its own `when` and filters itself (`todo` is written into every block's `when`):
+A `col` stacking 3 lists (overdue / today / unscheduled picks), each with its own `when`:
 
 ```jsonc
 { "view": { "layout": {
@@ -292,7 +367,7 @@ A single ungrouped `list`, filtered on the area's `when`:
 
 ### Unscheduled
 
-`col[ list ]`, where the list's `when` selects "no scheduled date AND todo":
+`col[ list ]`, the list's `when` selecting "no schedule and todo":
 
 ```jsonc
 { "view": { "layout": { "dir": "col", "children": [
@@ -304,7 +379,7 @@ A single ungrouped `list`, filtered on the area's `when`:
 
 ### Week
 
-`col[ week, row[ grid(unscheduled tray), drop ] ]`, each block carrying its own `when`:
+`col[ week, row[ grid(unscheduled tray), drop ] ]`:
 
 ```jsonc
 { "view": { "layout": { "dir": "col", "children": [
@@ -359,9 +434,28 @@ A `list`, filtered on `dropped`:
 
 ## 7. Graphical editing ↔ DSL ↔ CLI (one shared schema)
 
-The graphical filter UI, editing the JSON directly via "Edit Query", and managing queries from the CLI all share the same DSL and validation: changing a filter in the UI edits some area's `when`, which is exactly equivalent to writing it by hand in this JSON. On the CLI side, `obsidian task-center:query-*` reads/writes the same preset (`query-show` / `query-run` / `query-create` / `query-update` …).
+The graphical filter UI, editing the JSON directly via "Edit Query", and managing queries from the CLI all share the same parsing and validation (US-219): changing a filter in the UI edits some area's `when`, which is exactly equivalent to writing it by hand in this JSON.
 
-> 🖼️ **Figure TODO** — show the graphical filter popover next to the corresponding `when` JSON snippet, with the one-to-one mapping called out.
+CLI commands (`obsidian task-center:<command>`, always targeting stable ids):
+
+| Command | Purpose |
+| --- | --- |
+| `query-list [hidden=true] [format=json]` | list presets |
+| `query-show id=<id>` | print the full normalized DSL |
+| `query-run id=<id> [view=list\|week\|month] [anchor=YYYY-MM-DD] [format=json]` | run the query and show the result |
+| `query-create dsl=<json>` (same as `query-save`) | create a preset, always with a new id |
+| `query-update id=<id> dsl=<json>` | replace a preset wholesale, keeping its id and builtin flag |
+| `query-rename` / `query-copy` / `query-hide` / `query-delete` / `query-set-default` | rename / duplicate / hide / delete / set default |
+
+Current `query-run` behaviour:
+
+- It only runs the **first content area** of the layout (depth-first, skipping `drop`); other areas are ignored. For a multi-segment view like Today, the CLI only prints the first segment.
+- `view=` temporarily swaps the layout for a single list / week / month, reusing the first content area's `when`.
+- `anchor=` picks which week / month a week or month view shows, and is the "today" for their relative tokens.
+
+If the DSL can't be parsed or fails validation, `query-create` / `query-update` return `invalid_query` and leave existing presets untouched.
+
+> 🖼️ **Figure TODO**: show the graphical filter popover next to the corresponding `when` JSON snippet, with the one-to-one mapping called out.
 
 ---
 
@@ -369,10 +463,10 @@ The graphical filter UI, editing the JSON directly via "Edit Query", and managin
 
 1. **Markdown is the single source of truth**; the DSL is only a derived layer.
 2. **One view = one layout tree**; no view-type enum, and the renderer never branches on names like today / completed.
-3. **Filtering belongs to the area**: each area's `when` is its entire filter — no tab-level base set, no global filter state.
-4. **Actions are general capabilities**: reschedule / clear-schedule / drop are provided by cards and drop areas, not bound to a view.
+3. **Filtering belongs to the area**: each area's `when` is its entire filter, with no tab-level base set and no global filter state.
+4. **Actions are general capabilities**: reschedule / clear schedule / drop are provided by cards and drop targets, not bound to a view.
 5. **Unknown types don't error**: they normalize to an `unknown` fallback.
-6. **No `summary`**: top-of-view metrics were removed; estimate/retro stats live in the `task-center:stats` / `review` CLI.
+6. **No `summary`**: top-of-view metrics were removed; estimate / retro stats live in the `task-center:stats` / `review` CLI.
 
 ---
 
