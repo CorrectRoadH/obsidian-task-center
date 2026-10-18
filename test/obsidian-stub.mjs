@@ -27,3 +27,13 @@ export function getLanguage() {
   } catch { /* ignore */ }
   return "en";
 }
+
+// External Daily Notes date-formatting boundary.
+export function moment() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return { format(pattern) {
+    const tokens = { YYYY: String(d.getFullYear()), YY: String(d.getFullYear()).slice(-2), MM: pad(d.getMonth()+1), DD: pad(d.getDate()), D: String(d.getDate()), ddd: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()], HH: pad(d.getHours()), mm: pad(d.getMinutes()) };
+    return pattern.replace(/YYYY|YY|MM|DD|ddd|HH|mm|D/g, token => tokens[token]);
+  }};
+}

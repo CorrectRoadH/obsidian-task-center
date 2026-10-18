@@ -7,9 +7,9 @@
 //          A crash mid-mutation cannot leave the file in a half-written
 //          state at the API layer.
 // see USER_STORIES.md
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile, normalizePath, moment } from "obsidian";
 import { ParsedTask, type TaskFormatFlavor } from "./types";
-import { parseTaskLine, formatMinutes } from "./parser";
+import { parseTaskLine, parseTaskFromLine, formatMinutes } from "./parser";
 
 // Re-exported so writer.test.mjs can construct TFile instances that pass
 // the bundled `instanceof TFile` checks in `nestUnder` / `addTask` /
@@ -119,11 +119,14 @@ export function setCheckbox(line: string, char: string): string {
   return line.replace(/^(\s*(?:>\s*)*[-+*]\s+\[).(\])/, `$1${char}$2`);
 }
 
+function tagPattern(tag: string): RegExp {
+  const bare = tag.replace(/^#/, "");
+  if (!/^[\p{L}\p{N}_/-]+$/u.test(bare)) throw new TaskWriterError("invalid_arg", `invalid tag: ${tag}`);
+  return new RegExp(`(^|\\s)#${bare}(?=$|\\s)`, "u");
+}
 export function addTagIfMissing(line: string, tag: string): string {
-  const bare = tag.startsWith("#") ? tag.slice(1) : tag;
-  const re = new RegExp(`#${bare}(?:\\b|$)`);
-  if (re.test(line)) return line;
-  return line.trimEnd() + ` #${bare}`;
+  if (tagPattern(tag).test(line)) return line;
+  return line.trimEnd() + ` #${tag.replace(/^#/, "")}`;
 }
 
 // US-147: every mutation is line-scoped — `mutate(raw)` only sees and
@@ -138,6 +141,7 @@ async function mutateLine(
   path: string,
   line: number,
   mutate: (raw: string) => string | null,
+  expected?: string,
 ): Promise<{ before: string; after: string; mtime: number }> {
   const af = app.vault.getAbstractFileByPath(path);
   if (!af || !(af instanceof TFile)) {
@@ -149,11 +153,12 @@ async function mutateLine(
     const lines = data.split("\n");
     if (line >= lines.length) {
       throw new TaskWriterError(
-        "not_found",
+        "write_conflict",
         `${path}:L${line + 1} — file has only ${lines.length} lines`,
       );
     }
     const original = lines[line];
+    if (expected !== undefined && original !== expected) throw new TaskWriterError("write_conflict", `${path}:L${line + 1}; reload and retry`);
     const parsed = parseTaskLine(original);
     if (!parsed) {
       throw new TaskWriterError(
@@ -184,7 +189,7 @@ export async function setScheduled(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = setScheduledLine(raw, date, flavor);
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -197,7 +202,7 @@ export async function setDeadline(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = setTaskDateLine(raw, "due", date, flavor);
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -209,7 +214,7 @@ export async function setActual(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = setInlineField(raw, "actual", formatMinutes(minutes));
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -218,8 +223,12 @@ export async function addToActual(
   task: ParsedTask,
   minutes: number,
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
-  const current = task.actual ?? 0;
-  return setActual(app, task, current + minutes);
+  const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
+    const current = parseTaskFromLine(task.path, task.line, raw, null, task.mtime);
+    if (!current || current.hash !== task.hash) throw new TaskWriterError("write_conflict", task.id);
+    return setInlineField(raw, "actual", formatMinutes(Math.max(0, (current.actual ?? 0) + minutes)));
+  });
+  return { before, after, unchanged: before === after };
 }
 
 export async function setEstimate(
@@ -230,7 +239,7 @@ export async function setEstimate(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = setInlineField(raw, "estimate", minutes === null ? null : formatMinutes(minutes));
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -250,15 +259,16 @@ export async function markDone(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     if (
       /^\s*(?:>\s*)*[-+*]\s+\[[xX]\]/.test(raw) &&
-      (new RegExp(`✅\\s*${dateStr}`).test(raw) ||
+      (at === null || new RegExp(`✅\\s*${dateStr}`).test(raw) ||
         new RegExp(`\\[completion::\\s*${dateStr}\\]`, "i").test(raw))
     ) {
       return null;
     }
     let nl = setCheckbox(raw, "x");
+    nl = setTaskDateLine(nl, "cancelled", null);
     nl = setTaskDateLine(nl, "completion", dateStr, flavor);
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -268,6 +278,7 @@ export async function markUndone(
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     if (
+      !raw.includes("❌") && !/\[cancelled::/i.test(raw) &&
       /^\s*(?:>\s*)*[-+*]\s+\[\s\]/.test(raw) &&
       !/✅\s*\d{4}-\d{2}-\d{2}/.test(raw) &&
       !/\[completion::\s*\d{4}-\d{2}-\d{2}\]/i.test(raw)
@@ -275,9 +286,10 @@ export async function markUndone(
       return null;
     }
     let nl = setCheckbox(raw, " ");
+    nl = setTaskDateLine(nl, "cancelled", null);
     nl = setTaskDateLine(nl, "completion", null);
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -297,17 +309,18 @@ export async function markDropped(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     if (
       /^\s*(?:>\s*)*[-+*]\s+\[-\]/.test(raw) &&
-      (new RegExp(`❌\\s*${dateStr}`).test(raw) ||
+      (at === null || new RegExp(`❌\\s*${dateStr}`).test(raw) ||
         new RegExp(`\\[cancelled::\\s*${dateStr}\\]`, "i").test(raw))
     ) {
       return null;
     }
     let nl = setCheckbox(raw, "-");
+    nl = setTaskDateLine(nl, "completion", null);
     nl = setTaskDateLine(nl, "cancelled", dateStr, flavor);
     // Cleanup legacy: strip a pre-existing #dropped tag (old convention)
     nl = nl.replace(/\s*#dropped\b/g, "");
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -357,13 +370,13 @@ export async function renameTask(
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
   const cleanNew = newTitle.trim();
   if (cleanNew === "") {
-    throw new TaskWriterError("invalid_date", "new title cannot be empty");
+    throw new TaskWriterError("missing_arg", "new title cannot be empty");
   }
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const rebuilt = rebuildTaskLineWithNewTitle(raw, cleanNew);
     if (rebuilt === null) return null;
     return rebuilt === raw ? null : rebuilt;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -375,7 +388,7 @@ export async function addTag(
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = addTagIfMissing(raw, tag);
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -384,12 +397,11 @@ export async function removeTag(
   task: ParsedTask,
   tag: string,
 ): Promise<{ before: string; after: string; unchanged: boolean }> {
-  const bare = tag.startsWith("#") ? tag.slice(1) : tag;
-  const re = new RegExp(`\\s*#${bare.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}(?=\\b|$)`);
+  const re = tagPattern(tag);
   const { before, after } = await mutateLine(app, task.path, task.line, (raw) => {
     const nl = raw.replace(re, "");
     return nl === raw ? null : nl;
-  });
+  }, task.rawLine);
   return { before, after, unchanged: before === after };
 }
 
@@ -409,28 +421,8 @@ export interface AddTaskOpts {
   inboxFallback?: string;
 }
 
-function pad(n: number): string {
-  return n.toString().padStart(2, "0");
-}
-
 function todayFilename(folder: string, format?: string): string {
-  const d = new Date();
-  // Respect the daily-notes plugin's moment-style format if provided. Subset
-  // of tokens that covers virtually all real-world daily-note formats.
-  // Unsupported tokens fall through to a literal YYYY-MM-DD.
-  let name: string;
-  if (format) {
-    name = format
-      .replace(/YYYY/g, d.getFullYear().toString())
-      .replace(/YY/g, String(d.getFullYear()).slice(-2))
-      .replace(/MM/g, pad(d.getMonth() + 1))
-      .replace(/DD/g, pad(d.getDate()))
-      .replace(/D/g, String(d.getDate()))
-      .replace(/ddd/g, ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()])
-      + ".md";
-  } else {
-    name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
-  }
+  const name = moment().format(format || "YYYY-MM-DD") + ".md";
   return normalizePath(folder ? `${folder}/${name}` : name);
 }
 
@@ -470,8 +462,11 @@ export async function addTask(
   opts: AddTaskOpts,
 ): Promise<{ path: string; line: number; created: string }> {
   if (!opts.text || !opts.text.trim()) {
-    throw new TaskWriterError("invalid_date", "task text cannot be empty");
+    throw new TaskWriterError("missing_arg", "task text cannot be empty");
   }
+  if (opts.parent && opts.targetPath && normalizePath(opts.targetPath) !== opts.parent.path) throw new TaskWriterError("invalid_arg", "to and parent must target the same file");
+  for (const tag of opts.tags ?? []) tagPattern(tag);
+  let template = "";
   let targetPath = opts.targetPath;
   if (!targetPath) {
     if (opts.parent) {
@@ -480,15 +475,16 @@ export async function addTask(
       // Priority: today's daily note. US-163 / US-701 removed the old inbox
       // fallback: when Daily Notes is disabled or has no folder, creation
       // must fail without writing to an arbitrary file.
-      const dnOpts =
+      const dailyNotes =
         (app as unknown as {
           internalPlugins?: {
             plugins?: Record<
               string,
-              { instance?: { options?: { folder?: string; format?: string } } }
+              { enabled?: boolean; instance?: { options?: { folder?: string; format?: string; template?: string } } }
             >;
           };
-        }).internalPlugins?.plugins?.["daily-notes"]?.instance?.options;
+        }).internalPlugins?.plugins?.["daily-notes"];
+      const dnOpts = dailyNotes?.enabled === false ? undefined : dailyNotes?.instance?.options;
       if (!dnOpts) {
         throw new TaskWriterError(
           "daily_notes_missing",
@@ -502,6 +498,10 @@ export async function addTask(
         );
       }
       targetPath = todayFilename(dnOpts.folder, dnOpts.format);
+      if (dnOpts.template && !app.vault.getAbstractFileByPath(targetPath)) {
+        const templateFile = app.vault.getAbstractFileByPath(dnOpts.template.endsWith(".md") ? dnOpts.template : `${dnOpts.template}.md`);
+        if (templateFile instanceof TFile) template = (await app.vault.cachedRead(templateFile)).replace(/\{\{date(?::([^}]+))?\}\}/g, (_match, format: string | undefined) => moment().format(format || dnOpts.format || "YYYY-MM-DD")).replace(/\{\{time(?::([^}]+))?\}\}/g, (_match, format: string | undefined) => moment().format(format || "HH:mm"));
+      }
     }
   }
   targetPath = normalizePath(targetPath);
@@ -517,7 +517,7 @@ export async function addTask(
         await app.vault.createFolder(folder).catch(() => undefined);
       }
     }
-    file = await app.vault.create(targetPath, "");
+    file = await app.vault.create(targetPath, template);
   } else if (!(af instanceof TFile)) {
     throw new TaskWriterError("not_found", `target is not a file: ${targetPath}`);
   } else {
@@ -538,6 +538,7 @@ export async function addTask(
       // stops before any trailing blank lines so the new item stays inside
       // the parent's list (a blank gap would detach it into a sibling).
       const parent = opts.parent;
+      if (lines[parent.line] !== parent.rawLine) throw new TaskWriterError("write_conflict", parent.id);
       const i = findChildrenEnd(lines, parent.line, parent.indent.length);
       insertedLine = i;
       lines.splice(i, 0, newLine);
@@ -887,6 +888,7 @@ export async function nestUnder(
     let capturedOps: UndoOp[] = [];
     await app.vault.process(file, (data) => {
       const lines = data.split("\n");
+      if (lines[child.line] !== child.rawLine || lines[parent.line] !== parent.rawLine) throw new TaskWriterError("write_conflict", child.id);
       const plan = planSameFileNest(lines, child.line, childIndentLen, {
         line: parent.line,
         indentLen: parent.indent.length,
@@ -915,7 +917,7 @@ export async function nestUnder(
   const childLinesSnapshot = childData.split("\n");
   if (childLinesSnapshot[child.line] !== child.rawLine) {
     throw new TaskWriterError(
-      "not_found",
+      "write_conflict",
       `${child.path}:L${child.line + 1} content drifted; reload tasks and retry`,
     );
   }
@@ -937,7 +939,7 @@ export async function nestUnder(
     const lines = data.split("\n");
     if (lines[parent.line] !== parent.rawLine) {
       throw new TaskWriterError(
-        "not_found",
+        "write_conflict",
         `${parent.path}:L${parent.line + 1} content drifted; reload tasks and retry`,
       );
     }
@@ -967,7 +969,7 @@ export async function nestUnder(
         if (lines[child.line + i] !== block[i]) {
           throw new TaskWriterError(
             "nest_partial",
-            `nested into ${parent.path} but ${child.path}:L${child.line + i + 1} drifted; remove the duplicate manually`,
+            `nested into ${parent.path}:L${parentInsertIndex + 1} but ${child.path}:L${child.line + i + 1} drifted; remove the old duplicate manually`,
           );
         }
       }
@@ -980,7 +982,7 @@ export async function nestUnder(
     if (e instanceof TaskWriterError) throw e;
     throw new TaskWriterError(
       "nest_partial",
-      `nested into ${parent.path} but failed to remove from ${child.path}: ${(e as Error).message}`,
+      `nested into ${parent.path}:L${parentInsertIndex + 1} but failed to remove ${child.path}:L${child.line + 1}; remove the old duplicate manually: ${(e as Error).message}`,
     );
   }
 

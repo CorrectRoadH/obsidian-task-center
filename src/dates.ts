@@ -23,7 +23,7 @@ export function fromISO(iso: string): Date {
 
 export function isValidISO(s: string | null | undefined): boolean {
   if (!s) return false;
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(fromISO(s).getTime());
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && toISO(fromISO(s)) === s;
 }
 
 export function addDays(iso: string, days: number): string {
@@ -116,9 +116,40 @@ export function resolveWhen(
     return { from: ns, to: endOfMonth(ns) };
   }
   // Range: FROM..TO
-  const range = w.match(/^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/);
-  if (range) return { from: range[1], to: range[2] };
-  // Exact ISO
-  if (/^\d{4}-\d{2}-\d{2}$/.test(w)) return { exact: w };
-  throw new Error(`invalid when: ${when}`);
+  if (w.includes("..")) {
+    const parts = w.split("..");
+    const from = resolveDateInput(parts[0], today);
+    const to = parts.length === 2 ? resolveDateInput(parts[1], today) : undefined;
+    if (from && to && from <= to) return { from, to };
+  } else {
+    const exact = resolveDateInput(w, today);
+    if (exact) return { exact };
+  }
+  throw Object.assign(new Error(`invalid when: ${when}`), { code: "invalid_date" });
+}
+
+const ZH_DAYS: Record<string, number> = {
+  周一: 1, 周二: 2, 周三: 3, 周四: 4, 周五: 5, 周六: 6, 周日: 0, 周天: 0,
+  星期一: 1, 星期二: 2, 星期三: 3, 星期四: 4, 星期五: 5, 星期六: 6, 星期日: 0, 星期天: 0,
+};
+
+/** Returns an ISO string, or null for blank, or undefined for invalid input. */
+export function resolveDateInput(raw: string, today: string = todayISO()): string | null | undefined {
+  const s = raw.trim();
+  if (s === "") return null;
+  const lc = s.toLowerCase();
+  if (lc === "today" || s === "今天" || s === "今日") return today;
+  if (lc === "tomorrow" || s === "明天" || s === "明日") return addDays(today, 1);
+  if (lc === "yesterday" || s === "昨天" || s === "昨日") return addDays(today, -1);
+  if (s === "后天") return addDays(today, 2);
+  if (lc === "next-week" || s === "下周") return addDays(today, 7);
+  if (s in ZH_DAYS) {
+    const target = ZH_DAYS[s];
+    const d = fromISO(today);
+    const cur = d.getDay();
+    const diff = (target - cur + 7) % 7 || 7;
+    return addDays(today, diff);
+  }
+  if (isValidISO(s)) return s;
+  return undefined;
 }

@@ -11,7 +11,7 @@
 
 import { App, EventRef, TFile } from "obsidian";
 import { ParsedTask } from "./types";
-import { parseFileTasks } from "./parser";
+import { parseFileTasks, parseTaskFromLine } from "./parser";
 import { TaskWriterError, parseTaskId } from "./writer";
 
 // Re-exported so cache.test.mjs can construct TFile instances that pass the
@@ -186,7 +186,9 @@ export class TaskCache {
         this.removeFromHash(t);
         // Persist the old hash mapping for stale-ref recovery (US-208, VAL-CLI-004).
         const ref = `${t.path}:L${t.line + 1}`;
-        this.staleHashByRef.set(ref, t.hash);
+        if (!this.staleHashByRef.has(ref)) {
+          this.staleHashByRef.set(ref, t.hash);
+        }
       }
     }
     this.byPath.set(path, next);
@@ -202,7 +204,7 @@ export class TaskCache {
       this.removeFromHash(t);
       // Persist hash for stale-ref recovery even after file deletion.
       const ref = `${t.path}:L${t.line + 1}`;
-      this.staleHashByRef.set(ref, t.hash);
+      if (!this.staleHashByRef.has(ref)) this.staleHashByRef.set(ref, t.hash);
     }
     this.byPath.delete(path);
     this._flatCache = null;
@@ -221,7 +223,7 @@ export class TaskCache {
       this.removeFromHash(t);
       // Persist old ref→hash for stale-ref recovery.
       const oldRef = `${t.path}:L${t.line + 1}`;
-      this.staleHashByRef.set(oldRef, t.hash);
+      if (!this.staleHashByRef.has(oldRef)) this.staleHashByRef.set(oldRef, t.hash);
     }
     const remapped: ParsedTask[] = prev.tasks.map((t) => ({
       ...t,
@@ -489,6 +491,7 @@ export class TaskCache {
       const staleRef = `${parsed.path}:L${(parsed.line ?? 0) + 1}`;
       const fallbackHash = this.staleHashByRef.get(staleRef);
       if (fallbackHash) {
+        await this.refreshHashCandidates(fallbackHash);
         let matches = this.byHash.get(fallbackHash);
         if (!matches || matches.length === 0) {
           await this.ensureAll();
@@ -511,6 +514,7 @@ export class TaskCache {
       );
     }
     if (parsed.hash) {
+      await this.refreshHashCandidates(parsed.hash);
       let matches = this.byHash.get(parsed.hash);
       if (!matches || matches.length === 0) {
         await this.ensureAll();
@@ -526,6 +530,22 @@ export class TaskCache {
       return matches[0];
     }
     return null;
+  }
+
+  /** US-203/227: an intentional rename preserves previously issued refs. */
+  recordRename(task: ParsedTask, after: string): void {
+    const renamed = parseTaskFromLine(task.path, task.line, after, null, task.mtime);
+    if (!renamed) return;
+    for (const [ref, hash] of this.staleHashByRef) {
+      if (hash === task.hash) this.staleHashByRef.set(ref, renamed.hash);
+    }
+    this.staleHashByRef.set(task.id, renamed.hash);
+  }
+
+  private async refreshHashCandidates(hash: string): Promise<void> {
+    if (!this.byHash.has(hash)) await this.ensureAll();
+    const paths = new Set((this.byHash.get(hash) ?? []).map(task => task.path));
+    for (const path of paths) await this.ensureFile(path);
   }
 
   /**
