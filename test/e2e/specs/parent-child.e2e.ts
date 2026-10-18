@@ -222,7 +222,8 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
       async ({ app }, p: string) => {
         // @ts-expect-error — runtime plugin access
         const plugin = (app as any).plugins?.getPlugin?.("task-center");
-        await plugin?.api?.rename("Tasks/Inbox.md:L1", "Renamed title");
+        const api = plugin.api.forSnapshot(await plugin.cache.ensureAll());
+        await api.rename("Tasks/Inbox.md:L1", "Renamed title");
       },
       path,
     );
@@ -357,7 +358,8 @@ describe("Task Center — 父子任务状态继承 (US-145/124/407)", function (
     await browser.executeObsidian(async ({ app }) => {
       // @ts-expect-error — runtime plugin access
       const plugin = (app as any).plugins?.getPlugin?.("task-center");
-      await plugin?.api?.schedule("Tasks/Inbox.md:L1", "2026-04-28");
+      const api = plugin.api.forSnapshot(await plugin.cache.ensureAll());
+      await api.schedule("Tasks/Inbox.md:L1", "2026-04-28");
     });
 
     await browser.waitUntil(

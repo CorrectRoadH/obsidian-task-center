@@ -419,7 +419,8 @@ export class TaskCache {
    * resolvable so callers don't need to chase line drift themselves.
    * see USER_STORIES.md
    */
-  async resolveRef(id: string): Promise<ParsedTask | null> {
+  async resolveRef(id: string, issuedHashes?: ReadonlyMap<string, string>): Promise<ParsedTask | null> {
+    const expectedHash = issuedHashes?.get(id);
     const parsed = parseTaskId(id);
     if (parsed.path && parsed.line !== undefined) {
       const entry = await this.ensureFile(parsed.path);
@@ -436,7 +437,7 @@ export class TaskCache {
         // hash for this position), fall through to hash-based recovery
         // instead of silently returning the wrong task.
         const staleRef = `${parsed.path}:L${(parsed.line ?? 0) + 1}`;
-        const originalHash = this.staleHashByRef.get(staleRef);
+        const originalHash = expectedHash ?? this.staleHashByRef.get(staleRef);
         if (!originalHash) {
           return t;
         }
@@ -458,7 +459,7 @@ export class TaskCache {
           const candidates = this.byHash.get(originalHash);
           if (candidates && candidates.length > 1) {
             let distributionChanged = false;
-            for (const [key, h] of this.staleHashByRef) {
+            for (const [key, h] of expectedHash === undefined ? this.staleHashByRef : issuedHashes!) {
               if (h !== originalHash || key === staleRef) continue;
               // Only check entries from the same file.
               if (!key.startsWith(parsed.path + ":L")) continue;
@@ -489,7 +490,7 @@ export class TaskCache {
       // previous cache entries, so even after the cache has been re-parsed
       // and the task moved, we can still find it by hash.
       const staleRef = `${parsed.path}:L${(parsed.line ?? 0) + 1}`;
-      const fallbackHash = this.staleHashByRef.get(staleRef);
+      const fallbackHash = expectedHash ?? this.staleHashByRef.get(staleRef);
       if (fallbackHash) {
         await this.refreshHashCandidates(fallbackHash);
         let matches = this.byHash.get(fallbackHash);
@@ -533,13 +534,14 @@ export class TaskCache {
   }
 
   /** US-203/227: an intentional rename preserves previously issued refs. */
-  recordRename(task: ParsedTask, after: string): void {
+  recordRename(task: ParsedTask, after: string): string | undefined {
     const renamed = parseTaskFromLine(task.path, task.line, after, null, task.mtime);
     if (!renamed) return;
     for (const [ref, hash] of this.staleHashByRef) {
       if (hash === task.hash) this.staleHashByRef.set(ref, renamed.hash);
     }
     this.staleHashByRef.set(task.id, renamed.hash);
+    return renamed.hash;
   }
 
   private async refreshHashCandidates(hash: string): Promise<void> {

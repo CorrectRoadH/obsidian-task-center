@@ -996,3 +996,24 @@ test('US-202/228 handler unchanged nest by hash returns the current task ref',as
  const f=cliFixture('- [ ] Parent\n    - [ ] Child');const tasks=JSON.parse(await f.run('list',{format:'json'}));
  const out=await f.run('nest',{ref:tasks[1].hash,under:tasks[0].hash});assert.match(out,/^ok  tasks.md:L2 /);assert.match(out,/unchanged/);
 });
+
+test('US-202/208 handler list reissues current refs after external replacement',async()=>{
+ const f=cliFixture('- [ ] Old');await f.run('list',{format:'json'});
+ f.put('tasks.md','- [ ] New');await f.plugin.cache.invalidateFile('tasks.md');
+ assert.match(await f.run('done',{ref:'tasks.md:L1'}),/^error not_found/);
+ await f.run('list',{format:'json'});
+ assert.match(await f.run('done',{ref:'tasks.md:L1'}),/^ok/);
+ assert.match(f.content.get('tasks.md'),/\[x\] New/);
+});
+
+test('US-128/208 current board snapshot does not invalidate issued CLI refs',async()=>{
+ const f=cliFixture('- [ ] Original');await f.run('list',{format:'json'});
+ f.put('tasks.md','- [ ] Current\n- [ ] Original');await f.plugin.cache.invalidateFile('tasks.md');
+ const board=f.plugin.api.forSnapshot(await f.plugin.cache.ensureAll());
+ await board.schedule('tasks.md:L1','2026-10-20');
+ assert.match(f.content.get('tasks.md'),/^- \[ \] Current ⏳ 2026-10-20\n- \[ \] Original$/);
+ assert.match(await f.run('done',{ref:'tasks.md:L1'}),/^ok/);
+ assert.match(f.content.get('tasks.md'),/\n- \[x\] Original/);
+ f.put('tasks.md','- [ ] Replacement\n- [x] Original');await f.plugin.cache.invalidateFile('tasks.md');
+ await assert.rejects(()=>board.done('tasks.md:L1'),e=>e.code==='not_found');
+});

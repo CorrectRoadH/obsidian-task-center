@@ -220,7 +220,9 @@ export async function callApi<T>(
       if (!plugin?.api) throw new Error("plugin api not found");
       // eslint-disable-next-line no-new-func
       const callable = new Function("api", "args", `return (${fnSrc})(api, ...args)`);
-      return await callable(plugin.api, fnArgs);
+      // These journeys act on freshly rendered tasks; keep CLI stale-ref tests separate.
+      const api = plugin.api.forSnapshot(await plugin.cache.ensureAll());
+      return await callable(api, fnArgs);
     },
     fn.toString(),
     args,

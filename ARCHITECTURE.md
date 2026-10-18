@@ -615,6 +615,7 @@ type TaskRef =
 - 若行号不再是同一任务，尝试用 hash 找回；找回则返回 warn `out_of_date`。
 - hash 多候选返回 `ambiguous_slug` + 候选列表，绝不猜。（US-208 / US-214）
 - 找不到返回 `not_found`。
+- 编号身份按调用方快照隔离：`TaskCenterApi.forSnapshot(tasks)` 绑定看板此次渲染的 `id → hash`；`list` 为该 API 实例重新签发返回任务的当前编号。普通缓存重解析不清除旧身份，看板刷新也不改变 CLI 已发出的旧编号；每次写仍以快照中的 hash 校验最新行，移动后找回，删除后拒绝写入。（US-202 / US-208 / US-403）
 
 Writer 在 `vault.process` 内再次校验目标 rawLine，防止读取后被外部修改。
 

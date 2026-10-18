@@ -179,6 +179,7 @@ export interface ReviewResult {
 }
 
 export class TaskCenterApi {
+  private readonly issuedHashes = new Map<string, string>();
   constructor(
     private readonly app: App,
     private readonly cache: TaskCache,
@@ -188,6 +189,22 @@ export class TaskCenterApi {
       weekStartsOn?: 0 | 1;
     } = () => ({}),
   ) {}
+
+  /** US-128/208: isolate current board identities from long-lived CLI refs. */
+  forSnapshot(tasks: ParsedTask[]): TaskCenterApi {
+    const api = new TaskCenterApi(this.app, this.cache, this.getWriteSettings);
+    api.issueRefs(tasks);
+    return api;
+  }
+
+  private issueRefs(tasks: ParsedTask[]): ParsedTask[] {
+    for (const task of tasks) this.issuedHashes.set(task.id, task.hash);
+    return tasks;
+  }
+
+  private resolveRef(id: string): Promise<ParsedTask | null> {
+    return this.cache.resolveRef(id, this.issuedHashes);
+  }
 
   /**
    * Whole-vault snapshot. Used by `list` / `stats` / formatters that need the
@@ -204,13 +221,13 @@ export class TaskCenterApi {
       const parent = await this.show(filters.parent);
       const ids = new Set(collectDescendants(parent, all.filter(t => t.path === parent.path)).map(t => t.id));
       const selected = filterTasks(all, { ...filters, parent: undefined, limit: undefined }, this.getWriteSettings().weekStartsOn).filter(t => ids.has(t.id));
-      return filters.limit ? selected.slice(0, filters.limit) : selected;
+      return this.issueRefs(filters.limit ? selected.slice(0, filters.limit) : selected);
     }
-    return filterTasks(all, filters, this.getWriteSettings().weekStartsOn);
+    return this.issueRefs(filterTasks(all, filters, this.getWriteSettings().weekStartsOn));
   }
 
   async show(id: string): Promise<ParsedTask> {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", `no task matches ${id}`);
     return task;
   }
@@ -256,7 +273,7 @@ export class TaskCenterApi {
     if (date !== null && !isValidISO(date)) {
       throw new TaskWriterError("invalid_date", `not ISO YYYY-MM-DD: ${date}`);
     }
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return await setScheduled(this.app, task, date, this.taskFormatFlavor());
   }
@@ -265,13 +282,13 @@ export class TaskCenterApi {
     if (date !== null && !isValidISO(date)) {
       throw new TaskWriterError("invalid_date", `not ISO YYYY-MM-DD: ${date}`);
     }
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return await setDeadline(this.app, task, date, this.taskFormatFlavor());
   }
 
   async actual(id: string, minutes: number, mode: "set" | "add" = "set") {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return mode === "add"
       ? await addToActual(this.app, task, minutes)
@@ -279,7 +296,7 @@ export class TaskCenterApi {
   }
 
   async estimate(id: string, minutes: number | null) {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return await setEstimate(this.app, task, minutes);
   }
@@ -288,7 +305,7 @@ export class TaskCenterApi {
     if (at && !isValidISO(at)) {
       throw new TaskWriterError("invalid_date", `--at requires YYYY-MM-DD: ${at}`);
     }
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     // US-145: completing a parent cascades to its `todo` descendants. Tasks
     // that are already `[x] / [-] / [>]` are left alone — overwriting their
@@ -320,7 +337,7 @@ export class TaskCenterApi {
   }
 
   async undone(id: string) {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return await markUndone(this.app, task);
   }
@@ -333,7 +350,7 @@ export class TaskCenterApi {
   // affected line so DnD/tray abandon callers can push a multi-op undo entry
   // that restores parent + all cascaded children atomically.
   async drop(id: string, cascade = true) {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     // Cascade only to descendants that are still `todo` — don't overwrite a
     // done `[x] ✅ …` with a dropped `[-] ❌ …`; that would destroy history.
@@ -379,7 +396,7 @@ export class TaskCenterApi {
   }) {
     let parent: ParsedTask | null = null;
     if (opts.parent) {
-      parent = await this.cache.resolveRef(opts.parent);
+      parent = await this.resolveRef(opts.parent);
       if (!parent) throw new TaskWriterError("not_found", `parent: ${opts.parent}`);
     }
     return await addTask(this.app, {
@@ -396,23 +413,28 @@ export class TaskCenterApi {
   }
 
   async rename(id: string, newTitle: string) {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     const result = await renameTask(this.app, task, newTitle);
-    this.cache.recordRename(task, result.after);
+    const renamedHash = this.cache.recordRename(task, result.after);
+    if (renamedHash) {
+      for (const [ref, hash] of this.issuedHashes) {
+        if (hash === task.hash) this.issuedHashes.set(ref, renamedHash);
+      }
+    }
     return result;
   }
 
   async tag(id: string, tag: string, remove = false) {
-    const task = await this.cache.resolveRef(id);
+    const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     return remove ? await removeTag(this.app, task, tag) : await addTag(this.app, task, tag);
   }
 
   async nest(childId: string, parentId: string) {
-    const child = await this.cache.resolveRef(childId);
+    const child = await this.resolveRef(childId);
     if (!child) throw new TaskWriterError("not_found", `child: ${childId}`);
-    const parent = await this.cache.resolveRef(parentId);
+    const parent = await this.resolveRef(parentId);
     if (!parent) throw new TaskWriterError("not_found", `parent: ${parentId}`);
     return await nestUnder(this.app, child, parent);
   }
