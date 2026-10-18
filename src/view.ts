@@ -588,6 +588,7 @@ export class TaskCenterView extends ItemView {
     // valid markdown (`- [ ] ⏳ 2026-04-25`) but produce no useful card.
     // Filtering here also removes them from tab counts and tree traversals.
     this.tasks = all.filter((t) => t.title.trim() !== "");
+    this.api = this.plugin.api.forSnapshot(this.tasks);
     this._effectiveTasks = [];
     this._childrenByParent = null;
   }
@@ -1609,7 +1610,7 @@ export class TaskCenterView extends ItemView {
     wrap.dataset.view = grid ? "grid" : "list";
     if (list.length === 0) {
       if (area.emptyText) {
-        wrap.createDiv({ text: area.emptyText, cls: "bt-empty" });
+        this.renderAreaEmptyState(wrap, area, areaIndex);
         return;
       }
       // 未排期 tray 为空时显示「没有未排期任务」，让空托盘仍是可见的可投放区，
@@ -1647,11 +1648,10 @@ export class TaskCenterView extends ItemView {
     area: ListAreaConfig | GridAreaConfig,
     areaIndex: number,
   ): void {
-    void area;
     void areaIndex;
     const empty = parent.createDiv({ cls: "bt-area-empty" });
     empty.dataset.emptyState = "area";
-    empty.createDiv({ text: tr("area.emptyArea"), cls: "bt-area-empty-title" });
+    empty.createDiv({ text: area.emptyText || tr("area.emptyArea"), cls: "bt-area-empty-title" });
   }
 
   // US-109x: write a list/grid area's `when` into the current tab draft, keyed

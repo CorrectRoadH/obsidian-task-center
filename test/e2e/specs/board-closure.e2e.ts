@@ -1,4 +1,5 @@
 import { browser, expect, $ } from "@wdio/globals";
+import { obsidianPage } from "wdio-obsidian-service";
 import { mkdir } from "node:fs/promises";
 
 const VAULT = "test/e2e/vaults/simple";
@@ -30,8 +31,8 @@ async function fixture(areas?: unknown[], body = "- [ ] closure one [estimate:: 
 
 describe("Board closure regressions", () => {
   beforeEach(async () => {
-    // Each fixture replaces task identities; keep US-208 aliases session-local.
-    await browser.reloadObsidian({ vault: VAULT });
+    await browser.keys("Escape");
+    await obsidianPage.resetVault(VAULT);
   });
 
   it("US-720b / US-303: expands only this area and shows totals before limiting", async () => {
@@ -72,6 +73,8 @@ describe("Board closure regressions", () => {
   });
 
   it("US-109s: desktop tab draft survives switching but not board close or plugin reload", async () => {
+    // resetVault removes installed assets; reinstall before exercising plugin reload.
+    await browser.reloadObsidian({ vault: VAULT });
     await fixture();
     await browser.executeObsidian(({ app }) => {
       const view = app.workspace.getLeavesOfType("task-center-board")[0].view as any;
