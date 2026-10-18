@@ -1,11 +1,13 @@
 ---
 name: obsidian-task-center
-description: Read and write tasks in an Obsidian vault through the Task Center plugin's CLI. Use when the user wants to list, schedule, complete, abandon, nest, or add tasks — or when they want estimate-accuracy / review / agent-brief stats. Obsidian must be running with the `task-center` plugin enabled; all verbs are namespaced `obsidian task-center:<verb>`.
+description: Read and write tasks in an Obsidian vault through the Task Center plugin's CLI. Use when the user wants to list, schedule, complete, abandon, nest, or add tasks — or when they want estimate-accuracy / review / agent-brief stats. Obsidian must be running with the task-center plugin enabled; commands use the obsidian task-center namespace.
 ---
 
 # Obsidian Task Center — CLI skill
 
 This skill is the AI interface to the obsidian-task-center plugin. The plugin registers its verbs to Obsidian's native CLI (1.12.2+), so calls go `obsidian task-center:<verb> key=value …`.
+
+Product behavior follows `USER_STORIES.md` §16. CLI is desktop-only (US-201 / US-501). A view / Tab is a saved layout with independent areas; filters belong only to each area's `when`, and GUI statistics appear in area headers, not in a tab-level summary.
 
 For a full command index, run:
 
@@ -28,7 +30,9 @@ Data stays inline markdown. Syntax:
 | `❌ YYYY-MM-DD` | cancelled | dropped stamp (written when `[-]`) |
 | `[estimate:: Nm]` | estimate | minutes planned |
 | `[actual:: Nm]` | actual | minutes actually spent |
-| `#1象限..#4象限` | quadrant | Covey quadrants (1=urgent+important, 2=not-urgent+important, 3=urgent, 4=neither) |
+| `#project` | tag | user-defined classification; no built-in methodology |
+
+Tasks emoji and Dataview fields are both readable; when both encode a field, emoji wins. Writes follow the user's task-format preference and remove the alternate encoding of the changed field (US-111 / US-407). Quadrant tags in examples are optional user conventions, never a plugin rule (US-301).
 
 ## When to use this skill
 
@@ -84,24 +88,28 @@ obsidian task-center:list status=todo search=示例
 
 Other flags: `overdue`, `has-deadline`, `status=todo|done|dropped`, `tag=<comma-sep>` (supports `#*象限`), `parent=<id>`, `search=<text>`, `limit=N`, `format=text|json` (JSON gives a structured array with every field — prefer it when you plan to parse).
 
+Scheduling filters use effective scheduled dates (inherit from parents when absent); `week` follows the configured first day of week. `list parent=<id>` includes all descendants (US-207 / US-212 / US-144).
+
 ### `task-center:show ref=<id>`
 
-Full single-task detail — scheduled/deadline/estimate/actual/created/completed/cancelled/parent/children/raw.
+Full single-task detail — raw text, status, all dates, tags, estimate/actual, parent and child ids (US-216a). `show` and JSON also include the title hash; every `ref=` accepts either `path:Lnn` or that hash. If a line moved, resolution must verify the task identity; never write to an unrelated replacement line (US-202 / US-208).
 
-### `task-center:stats [days=N] [group=<prefix>]`
+### `task-center:stats [days=N] [from=<date>] [to=<date>] [group=<text>] [format=text|json]`
 
-Rolling-window estimate accuracy + tag minutes breakdown. Default `days=7`. `group=象限` aggregates matching tags into a section (useful for Covey quadrants). Output includes:
+Rolling-window estimate accuracy + tag minutes breakdown. Default `days=7`, including today in every timezone. `group=象限` aggregates tags whose names contain that text (US-206). Output includes:
 
 - `sum actual / sum estimate` ratio (calibration signal)
 - `per-task mean / σ` for ratio variance
 - `within band 11/18 (61%)` share inside `[0.8, 1.25]`
 - per-tag minutes with ASCII bar chart
 
-Use this to **correct planning-fallacy** when suggesting estimates. If the 7-day `ratio` is 1.3, new estimates should be scaled up by that factor vs. the user's gut feel.
+Use historical ratios as context when the user asks for planning advice; do not automatically rewrite their estimates or impose a task-management method.
 
 ### `task-center:brief [today=YYYY-MM-DD] [limit=N] [format=text|json]`
 
 Agent brief for near-term planning. Shows overdue / today / unscheduled candidate counts, sample tasks, and executable next-action commands such as `done`, `abandon`, `schedule_today`, `schedule_tomorrow`, and `actual +15m`.
+
+`brief` overdue includes unfinished tasks with past scheduled dates or deadlines; today includes either date falling today. No unfinished task with a scheduled date or deadline on/before today may be omitted. This differs from the GUI Today view's deadline-only overdue area, whose unscheduled recommendations exclude overdue tasks (US-723 / US-720b).
 
 Use this when the user asks what to do next or wants a compact status overview before planning.
 
@@ -123,7 +131,8 @@ obsidian task-center:query-show id=preset-week
 obsidian task-center:query-run  id=preset-today [view=list|week|month] [anchor=YYYY-MM-DD] [format=json]
 ```
 
-- `query-run` renders the preset's saved view; `view=` is a temporary override (not saved back); `anchor=` is the week/month cursor (defaults to today).
+- `query-run` outputs every task area in layout order, with an area title for each section; drop areas are omitted. Lists/grids output task trees, week areas group all 7 days, month areas group by date; JSON contains all area results (US-220).
+- `view=` temporarily changes each task area's display type, retaining its own `when` and area order; it never collapses the layout into one area or writes back. `anchor=` is the week/month cursor (defaults to today) and accepts natural-language dates (US-410a).
 - Rows keep stable ids (`Tasks/Inbox.md:L42`) — pipe into `show` / `schedule` / `done` / `abandon`.
 
 Create / edit a view (the DSL is a layout tree; **filtering lives only in each area's `when`**):
@@ -138,19 +147,19 @@ obsidian task-center:query-delete id=…
 obsidian task-center:query-set-default id=…|null
 ```
 
-> ⚠️ Before writing DSL: filtering belongs **only** to each area's `when`. A top-level `filters` is **silently ignored**; the old flat shape (top-level `search`/`tag`/`time`/`status`) is **rejected** with `invalid_query`; `tags` is a `string[]`/comma string (**AND**) or `{values, mode:"and"|"or"}` (**OR** = any of the tags).
+Before writing DSL: filtering belongs **only** to each area's `when`. Top-level `filters` / `summary`, old flat `search` / `tag` / `time` / `status`, and old `view.type/preset/sections/tray/matrix` shapes are **rejected with `invalid_query`**. Update this skill and use `view.layout`; do not expect silent ignoring or automatic migration on CLI import (US-217a). Tags use `{ "expr": "(#work or #urgent) and not #waiting" }`; legacy tag-array / values-mode forms remain readable with the same meaning (US-109d4).
 
-**The DSL's SSOT is `docs/dsl/zh.md` (English `docs/dsl/en.md`) in the obsidian-task-center repo.** Before building/editing a view:
+**Product requirements come from `USER_STORIES.md`; grammar references are `docs/dsl/zh.md` (English `docs/dsl/en.md`).** If an older grammar example conflicts with current requirements, report the discrepancy instead of importing a rejected legacy shape. Before building/editing a view:
 
 - Full grammar (node types, Filters/`when`, onDrop, orderBy, real factory DSL) → read `docs/dsl/zh.md` or `en.md`; a condensed skill-local mirror is `reference/queries.md`.
 - Ready-made layouts: four quadrants → `examples/four-quadrant.md`; week + unscheduled tray + drop zone → `examples/week-with-tray.md`; simple / multi-segment list → `examples/simple-list.md`.
 - Unsure of the current shape? `query-show id=preset-today` (col of 3 lists) or `id=preset-week` (week + tray + drop), and mirror what it returns instead of guessing.
 
-Rules: builtin tabs can be hidden/copied/renamed/updated/set-default but never permanently deleted; deleting a custom tab removes only that view, never tasks; a hidden tab cannot be default; invalid DSL → `invalid_query` (settings unchanged); unknown id → `query_not_found`.
+Rules: builtin and custom tabs can be deleted; deletion removes only the view, never tasks. Deleted builtin tabs stay deleted after reload and can be restored explicitly in the GUI (US-109l / US-218). Saved layouts and mixed tab ordering survive reload, reopening the vault, and upgrades (US-109c2). A hidden tab cannot be default. Invalid DSL returns `invalid_query`, identifies the area and field, and leaves settings unchanged; successful changes refresh open boards (US-217 / US-219). Use `query-list` for current ids; the stories do not yet assign an error code for an unknown view id, so do not assume a separate `query_not_found` code.
 
-### Write verbs (idempotent, safe to retry)
+### Write verbs
 
-All write verbs return `ok <id>` with a `before / after` diff, or `unchanged` if already in the target state.
+State-setting verbs return `ok <id>` with `before / after` for every changed line, or `unchanged` if already in the target state. Repeating `done` on a completed task preserves its original completion date, even on a later day (US-203 / US-204). `add` returns the new task id and line; `nest` returns the moved task's new id. Do not blindly retry additive time updates or task creation after an uncertain result; inspect the task first (see the unresolved retry boundary below).
 
 ```
 obsidian task-center:schedule ref=Tasks/Inbox.md:L42 date=2026-04-25
@@ -163,6 +172,7 @@ obsidian task-center:estimate ref=… minutes=90m         # set [estimate::]
 obsidian task-center:estimate ref=… minutes=null        # clear
 obsidian task-center:actual   ref=… minutes=45m         # set [actual::]
 obsidian task-center:actual   ref=… minutes=+15m        # additive
+obsidian task-center:actual   ref=… minutes=-15m        # subtract, floor at zero
 
 obsidian task-center:done   ref=… [at=YYYY-MM-DD]       # [x] + ✅
 obsidian task-center:undone ref=…                        # reverse a done
@@ -172,49 +182,68 @@ obsidian task-center:drop   ref=…                        # deprecated alias fo
 obsidian task-center:tag    ref=… tag='#基建'            # add
 obsidian task-center:tag    ref=… tag='#基建' remove     # remove
 
+obsidian task-center:rename ref=… title="新的任务标题"  # preserves all metadata; empty title is missing_arg
+
 obsidian task-center:nest   ref=… under=…                # make ref a subtask of under
 
 obsidian task-center:add text="处理示例任务" tag='#3象限' scheduled=2026-04-26 [to=<path>] [deadline=…] [estimate=30m] [parent=<id>]
 ```
 
-`task-center:add` target priority: explicit `to=` → parent's file (if `parent=` given) → today's Daily Note. There is no inbox fallback: when neither `to=` nor `parent=` is supplied, the Daily Notes core plugin must be enabled and configured or the command fails with `daily_notes_unavailable`. Default stamps `➕ today` unless `stamp-created=false`.
+`task-center:add` uses explicit `to=`, or the parent's file when `parent=` is given, otherwise today's Daily Note. If `to=` and `parent=` name different files, return `invalid_arg`. If today's note does not exist, create it using Daily Notes' folder, filename format, and template before appending. There is no inbox fallback: the default Daily Note path requires the plugin enabled (`daily_notes_missing`) and a configured folder (`daily_notes_folder_missing`). Default stamps today's created date unless `stamp-created=false` (US-163 / US-213).
+
+`schedule` and `deadline` require `date=`: only explicit `date=null` clears the field, omission returns `missing_arg` (US-221). All CLI date parameters accept natural language such as `today`, `tomorrow`, `今天`, `明天`, `周六`, `next-week`; invalid/unrecognized/nonexistent dates return `invalid_date` and never enter Markdown as raw words (US-410a).
+
+Boolean parameters are parsed by value: `remove=false` does not remove a tag, `hidden=false` means visible. `days` and `limit` must be positive integers; invalid numeric, boolean, duration, or tag values return `invalid_arg` (US-413a / US-211).
+
+Time increments/decrements use the value in the file at write time, not cached values (US-209). Tags match whole tokens, including Chinese and hierarchical tags: removing `#work` does not remove `#work/sub`, and adding an existing tag is unchanged (US-223).
 
 `abandon` / `drop` cascades to todo descendants only. Already completed / abandoned / cancelled descendants keep their historical stamps. To abandon just one line, pass a leaf task.
+
+`done` also cascades to unfinished descendants while preserving completed descendants' history. Changing back to todo clears completion and dropped dates; dropped → done clears the dropped date (US-222). `nest` moves the entire subtree, clears only the moved root's own scheduled date, and preserves descendant metadata (US-228).
 
 ### Error shape
 
 Errors go to stderr as:
 
 ```
-error  <code>
-    <human message>
+error <code>
+<one human-readable sentence explaining what to do>
 ```
 
-Common codes: `task_not_found`, `ambiguous_slug`, `invalid_date`, `daily_notes_unavailable`, `invalid_nest`, `nest_partial`, `invalid_query`, `query_not_found`.
+The fixed code set is `not_found`, `ambiguous_slug`, `missing_arg`, `invalid_arg`, `invalid_date`, `invalid_query`, `daily_notes_missing`, `daily_notes_folder_missing`, `write_conflict` (US-211). Codes stay English; the second line follows Obsidian's language (US-412).
 
 Recover by:
-- `task_not_found` → re-run `task-center:list` to get fresh ids
+- `not_found` → re-run `task-center:list` to get fresh task ids
 - `ambiguous_slug` → the error message lists candidate ids; pick one
-- `invalid_date` → convert to `YYYY-MM-DD`
-- `daily_notes_unavailable` → enable/configure Daily Notes, or pass `to=<path>`
-- `invalid_nest` / `nest_partial` → inspect the named source/target tasks before retrying
+- `missing_arg` → supply the required parameter; omitted dates never mean clear
+- `invalid_arg` → correct the duration, positive integer, boolean, tag, or other argument
+- `invalid_date` → use a recognizable date or a valid `YYYY-MM-DD`
+- `daily_notes_missing` → enable Daily Notes, or use an explicitly requested `to=<path>` / parent target
+- `daily_notes_folder_missing` → configure its folder, or use an explicitly requested target
+- `write_conflict` → re-read the affected tasks and reconcile before retrying; do not overwrite concurrent edits
 - `invalid_query` → the message echoes the validation failure; fix the DSL per `docs/dsl/` (filtering must be per-area `when`)
-- `query_not_found` → re-run `task-center:query-list` for fresh tab ids
+
+Unresolved in the stories: US-203 says every write is repeatable, while US-209 explicitly makes `actual +Nm/-Nm` additive and US-213 creates a new task; retry/deduplication semantics for these commands are not specified. Unknown view-id and partial cross-file `nest` error classification also need clarification. Do not invent extra error codes or assume automatic rollback.
 
 ## Recommended workflows
 
-### End-of-day wrap-up
+### End-of-day wrap-up (US-210)
 
-1. `obsidian task-center:list done=today` → collect what got done.
-2. `toggl entry list --since today` → cross-reference actual time per task.
-3. For each completed task: `obsidian task-center:actual ref=… minutes=Nm` to record real time.
-4. `obsidian task-center:review days=7` → read today's / week's completion, abandonment, delay, and estimate summary.
-5. `obsidian task-center:stats days=7 group=象限` → read calibration.
-6. `obsidian task-center:brief` or `obsidian task-center:list scheduled=unscheduled` + `obsidian task-center:list scheduled=tomorrow` → candidate pool.
-7. Pick tomorrow's set (≤1 big, ≤2 small based on user's self-declared capacity), deadline-first, quadrant-2-first.
-8. `obsidian task-center:schedule ref=… date=<tomorrow>` per chosen task; use `add` for anything new.
+```bash
+obsidian task-center:list done=today
+# Use a real id from list; record the user's reported duration.
+obsidian task-center:actual ref='Daily/2026-10-18.md:L42' minutes=45m
+obsidian task-center:review days=7
+obsidian task-center:stats days=7
+obsidian task-center:list scheduled=unscheduled
+obsidian task-center:list scheduled=tomorrow
+# Schedule the task the user selected; replace this example id with the returned id.
+obsidian task-center:schedule ref='Tasks/Project.md:L12' date=tomorrow
+```
 
-### Quick capture
+Summarize completion, abandonment, delay, and estimate/actual totals. Choose follow-up tasks according to the user's priorities; no external time-tracker or quadrant method is required.
+
+### Quick capture (US-210)
 
 User says "don't forget to X". Default to today's daily note:
 
@@ -224,9 +253,18 @@ obsidian task-center:add text="X"
 
 Only set `scheduled=` / `deadline=` / `tag=` if the user specified them.
 
-### Backfill completions
+### Backfill completions (US-210)
 
-User says "I finished Y yesterday": `obsidian task-center:done ref=<id> at=<yesterday>`.
+User says “I finished Y yesterday”: locate the task first and verify it, then use the returned id (the id below is illustrative).
+
+```bash
+obsidian task-center:list search='Y'
+obsidian task-center:show ref='Tasks/Project.md:L12'
+obsidian task-center:done ref='Tasks/Project.md:L12' at=yesterday
+obsidian task-center:show ref='Tasks/Project.md:L12'
+```
+
+If several tasks match, ask which one. If it is already completed, `done` returns unchanged rather than overwriting the historical date (US-203).
 
 ## Output contract
 

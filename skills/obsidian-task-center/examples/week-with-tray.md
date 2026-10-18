@@ -1,6 +1,6 @@
-# 例：周视图 + 未排期托盘 + 放弃区
+# 例：周视图 + 未排期区 + 放弃区
 
-`dir:"col"` 顶部一个 `week` area，底部一行放 `grid` 托盘（未排期任务）+ `drop` 放弃区。拖动可改排期 / 放弃。
+`dir:"col"` 顶部一个 `week` area，底部一行放 `grid` 未排期区（未排期任务）+ `drop` 放弃区。拖动可改排期 / 放弃。
 
 布局（易读版）：
 
@@ -29,7 +29,7 @@ obsidian task-center:query-update id=sv-alpha dsl='{"name":"工作周","view":{"
 ```
 
 要点：
-- `week` area 用 `firstDayOfWeek` 控制周首日（默认 monday）。
-- 托盘用 `grid`（多列卡片）过滤 `scheduled:"unscheduled"`；`onDrop:{clearScheduled:true}` 表示拖进托盘即清掉排期。
+- 周历日期范围与区域过滤保持一致；未覆盖 `firstDayOfWeek` 时跟随全局周首日设置。（US-112）
+- 未排期区用 `grid`（多列卡片）过滤 `scheduled:"unscheduled"`；`onDrop:{clearScheduled:true}` 表示拖进未排期区即清掉任务自己的排期；有效排期来自父级时不能修改父任务，应提示先移出父级或编辑原文（US-122a）。
 - `drop` 是纯动作区，无查询；`onDrop:{setStatus:"dropped"}` 把拖入任务标为放弃。
-- `onDrop` 三选一：`setStatus` / `setScheduled` / `clearScheduled`。
+- 放弃区使用 `setStatus:"dropped"`；未排期区使用 `clearScheduled:true`；日期格隐式写入目标日期。不同动作不混写。
