@@ -116,6 +116,7 @@ describe("US-109x/z2 area filter model", function () {
     // remains in memory. Reinstall through the service before testing reload.
     await browser.reloadObsidian({ vault: VAULT });
     await resetSavedViewTestState();
+    await writeAndWait("Tasks/Inbox.md", "- [ ] Reload persistence task\n");
     const saved = await browser.executeObsidian(async ({ app }) => {
       const plugins = (app as any).plugins;
       const plugin = plugins.plugins["task-center"];
