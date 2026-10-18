@@ -2,9 +2,9 @@
 
 [简体中文](https://github.com/CorrectRoadH/obsidian-task-center/blob/main/README.zh-CN.md) / [English](https://github.com/CorrectRoadH/obsidian-task-center/blob/main/README.md)
 
-Task Center is an Obsidian plugin for planning markdown tasks on a daily, weekly, and monthly board.
+Task Center collects the `- [ ]` tasks scattered across your Obsidian vault into one board, so you can plan them by day, week, and month and look back on what got done.
 
-It keeps your tasks in plain markdown. No database. No private task format.
+Your tasks stay as plain markdown in the notes where you wrote them. There is no database and no new task format. Uninstall the plugin and your notes are unchanged.
 
 ```markdown
 - [ ] Plan the launch #work ⏳ 2026-05-15 📅 2026-05-20 [estimate:: 90m]
@@ -20,71 +20,78 @@ It keeps your tasks in plain markdown. No database. No private task format.
 
 <a href="https://obsidian.md/plugins?id=task-center"><img src="assets/install-button.svg" alt="Install in Obsidian" height="52"></a>
 
-Or find it in **Settings → Community plugins → Browse**.
+Or search for "Task Center" in **Settings → Community plugins → Browse**.
 
-Before using it:
+Two more things to set up:
 
-1. Enable at least one task-format companion: [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) or [Dataview](https://github.com/blacksmithgu/obsidian-dataview).
-2. Enable Obsidian's built-in **Daily Notes** core plugin and set its "New file location". Quick Add writes new tasks to today's Daily Note.
+1. Install and enable either [Obsidian Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) or [Dataview](https://github.com/blacksmithgu/obsidian-dataview). Task Center uses their task syntax.
+2. Turn on Obsidian's built-in **Daily notes** core plugin and set its "New file location". Quick Add writes new tasks into today's daily note.
 
-## What It Adds
+## What you get
 
-- A full-page task board: Today, Week, Month, Completed, and Unscheduled.
-- Drag-and-drop scheduling, nesting, and abandon actions.
-- Parent-child task cards with inherited schedule and status.
-- Spotlight-style Quick Add with English and Chinese date parsing.
-- Estimate and actual-time summaries from inline fields.
-- Mobile layout with long-press menus and swipe actions.
-- Agent-friendly `obsidian task-center:*` CLI commands.
+- A full-page board with Today, Week, Month, TODO, Unscheduled, Completed, and Dropped tabs.
+- Drag a card to a day to schedule it, onto another card to make it a subtask, or into the drop zone to abandon it.
+- Parent and child tasks share one card. A child without its own date follows its parent.
+- Build your own tabs: split a tab into areas, each with its own filters. An Eisenhower matrix, or work and personal side by side.
+- Quick Add: type one line, with dates like "tomorrow" or "周六" understood in English and Chinese.
+- Track estimated vs. actual time and see how accurate your estimates are.
+- On mobile: long-press for a menu, swipe left to complete, swipe right to drop.
+- Obsidian CLI commands so AI agents like Claude Code can read and update the same tasks.
 
-## Quick Start
+## Quick start
 
-1. Keep writing normal markdown checkboxes anywhere in your vault.
+1. Keep writing tasks in any note:
 
    ```markdown
-   - [ ] Review PR #work ⏳ today [estimate:: 30m]
+   - [ ] Review PR #work ⏳ 2026-05-15 [estimate:: 30m]
    - [ ] Renew passport 📅 2026-05-30
    ```
 
-2. Open Task Center from the ribbon icon, command palette, or `Ctrl/Cmd+Shift+T`.
-3. Use Quick Add with `Ctrl/Cmd+T` inside the board.
+2. Open the board from the ribbon icon, or run "Task Center: Open Task Center" from the command palette.
+3. Click `+` on the board, or run "Task Center: Quick add task":
 
    ```text
    Review beta feedback #work tomorrow [estimate:: 25m]
-   处理发布清单 #3象限 周六 [estimate:: 45m]
+   处理发布清单 #work 周六
    ```
 
-Natural-language dates such as `today`, `tomorrow`, `今天`, and `周六` are resolved to ISO dates before writing markdown.
+   Words like "today", "tomorrow", "Saturday", and "周六" become real dates (`2026-05-16`) before anything is written.
 
-## Task Formats
+To open the board with a shortcut, search for "Task Center" in **Settings → Hotkeys** and bind your own.
 
-Task Center reads both Tasks emoji fields and Dataview inline fields:
+## Task syntax
+
+Both common syntaxes are read:
 
 ```markdown
-- [ ] Tasks emoji ⏳ 2026-05-15 📅 2026-05-20 ➕ 2026-05-01
-- [ ] Dataview [scheduled:: 2026-05-15] [due:: 2026-05-20] [created:: 2026-05-01]
+- [ ] Tasks emoji style ⏳ 2026-05-15 📅 2026-05-20 ➕ 2026-05-01
+- [ ] Dataview style [scheduled:: 2026-05-15] [due:: 2026-05-20] [created:: 2026-05-01]
 ```
 
-The write format is controlled by **Settings → Task Center → Task format flavor**.
+| Meaning | Tasks emoji | Dataview |
+| --- | --- | --- |
+| Scheduled (the day you plan to do it) | `⏳` | `[scheduled::]` |
+| Due | `📅` | `[due::]` |
+| Created | `➕` | `[created::]` |
+| Completed | `✅` | `[completion::]` |
+| Dropped | `❌` | `[cancelled::]` |
 
-- **Tasks emoji** writes fields such as `⏳`, `📅`, `➕`, `✅`, and `❌`.
-- **Dataview inline fields** writes fields such as `[scheduled::]`, `[due::]`, `[created::]`, `[completion::]`, and `[cancelled::]`.
+Pick which syntax the plugin writes in **Settings → Task Center → Task format flavor**. Dragging, date pickers, Quick Add, and the CLI all follow it. If a line has the same field in both syntaxes, the emoji one wins.
 
-Drag scheduling, date prompts, Quick Add, and CLI mutations all use the selected flavor. If both formats exist for the same field on one line, the Tasks emoji value wins.
-
-Estimate summaries use regular inline fields:
+Estimates and actual time are regular inline fields:
 
 ```markdown
 [estimate:: 90m] [estimate:: 1h30m] [actual:: 75m]
 ```
 
-Unknown inline fields and tags are preserved.
+Fields and tags the plugin doesn't know are left exactly as they are.
 
-## CLI
+## CLI for AI agents
 
-Task Center registers commands with Obsidian's native CLI:
+Task Center registers commands with Obsidian's built-in CLI (desktop only, CLI must be enabled in Obsidian):
 
 ```bash
+obsidian task-center                                   # list all commands
 obsidian task-center:list scheduled=today
 obsidian task-center:show ref=Tasks/Inbox.md:L42
 obsidian task-center:add text="Review launch checklist" tag='#work' scheduled=2026-05-15
@@ -93,9 +100,13 @@ obsidian task-center:done ref=Tasks/Inbox.md:L42 at=2026-04-28
 obsidian task-center:review days=7 format=json
 ```
 
-CLI output is stable and greppable: task ids use `path:Lnn`, writes are idempotent, and mutations print `before` / `after` lines.
+Built so agents can rely on it:
 
-To install the companion AI skill:
+- Every task has a fixed id, `path:L<line>`. If the line moves, the task is found again by its title.
+- Running the same command twice gives the same result. Running `done` on a completed task returns `unchanged` instead of writing again.
+- Every change prints a before line and an after line so you can check it.
+
+Install the companion AI skill so your agent knows how to use these commands:
 
 ```bash
 npx skills add CorrectRoadH/obsidian-task-center
@@ -103,15 +114,15 @@ npx skills add CorrectRoadH/obsidian-task-center
 
 ## Settings
 
-| Setting | Default | Controls |
+| Setting | Default | What it does |
 | --- | --- | --- |
-| Default view | Week | First tab shown when the board opens |
-| Week starts on | Monday | Week and calendar boundaries |
-| Open on startup | Off | Whether Task Center opens with the vault |
-| Stamp created date | On | Whether new tasks get a created date |
-| Task format flavor | Tasks emoji | Tasks emoji vs Dataview inline-field writes |
-| Force mobile layout | Off | Use phone layout on wider screens |
+| Default query tab | First visible tab | Which tab shows when the board opens |
+| Week starts on | Monday | Column order and what counts as "this week" |
+| Open Task Center on startup | Off | Open the board when Obsidian starts |
+| Stamp created date | On | Add a created date to new tasks |
+| Task format flavor | Tasks emoji | Write emoji fields or Dataview fields |
+| Force mobile layout | Off | Use the phone layout on tablets and large screens |
 
 ## License
 
-MIT.
+MIT

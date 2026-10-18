@@ -49,7 +49,7 @@ Task Center
    └─ 移动端动作 sheet
 ```
 
-设置页只承载全局偏好和恢复动作，不作为日常 Query 编辑工作区。（US-109n2 / US-110 / US-111 / US-112）
+设置页只承载全局偏好和恢复动作，不作为日常 Query 编辑工作区。（US-109n2 / US-110 / US-112 / US-120）
 
 ## 2. Query Tab Strip
 
@@ -798,7 +798,7 @@ entry card 视觉与桌面完全一致（§8.1 / §8.1.1）：同一套字号、
 | 设置 | 默认 | 说明 |
 | --- | --- | --- |
 | 启动时自动开看板 | 关 | US-110 |
-| 默认 tab | 当前启用 tab 中的一个 | 引用 tab id，不引用名称；US-111 |
+| 默认 tab | 当前启用 tab 中的一个 | 引用 tab id，不引用名称；US-120 |
 | 一周第一天 | 周一 | 影响 week view 与本周边界；US-112 |
 | 恢复默认 tabs | 手动动作 | 清空“已删除预设”名单、找回并重置所有内建，不删除用户 tab；US-109l |
 | AI skill 安装指引 | 文本命令 | `npx skills add CorrectRoadH/obsidian-task-center`；US-215 |

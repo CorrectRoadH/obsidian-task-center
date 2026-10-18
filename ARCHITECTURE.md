@@ -449,7 +449,7 @@ TaskCache.flatten()
 `applyQueryFilters` 必须按用户故事实现：
 
 - `search`：标题关键字匹配。
-- `tags`：合法 hashtag。包含组（`values`）默认 AND、可切 OR；对象形态可带 `exclude` 排除组。匹配 = （包含组为空，或按 `mode` 命中）且（`exclude` 一个都不命中）。归一化：纯 AND 且无 `exclude` → 收敛成裸数组 `string[]`，否则用 `{values, mode, exclude?}` 对象形态。（US-109d2 / US-109d3）
+- `tags`：合法 hashtag。包含组（`values`）默认 AND、可切 OR；对象形态可带 `exclude` 排除组。匹配 = （包含组为空，或按 `mode` 命中）且（`exclude` 一个都不命中）。归一化：纯 AND 且无 `exclude` → 收敛成裸数组 `string[]`，否则用 `{values, mode, exclude?}` 对象形态。（US-109d3 / US-109d4）
 - `tags` 的第三形态 `{ expr: "…" }`：自由布尔表达式（`#tag` / `and` / `or` / `not` / 括号；关键字大小写不敏感；优先级 `not`>`and`>`or`；`#` 可省略）。`src/query/tag-expr.ts` 的 `parseTagExpr` 把字符串解析成 AST（纯逻辑、可单测）；`normalizeQueryFilters` 解析**一次**存进 `NormalizedQueryFilters.tagExpr`，再对每个 task 用 `evalTagExpr(ast, task.tags)` 求值——不每条任务重解析。解析失败（语法错误 / 空）→ 该 area **不做标签过滤**（fail-open），GUI 就地标红，不静默丢任务。三态与 `{expr}` 互斥，是同一份 `when.tags` 的两种形态。（US-109d4）
 - `status`：todo / done / dropped 多选；undefined 表示全部。
 - `time.scheduled`：只看有效 `⏳`；`unscheduled` 表示有效排期为空。
