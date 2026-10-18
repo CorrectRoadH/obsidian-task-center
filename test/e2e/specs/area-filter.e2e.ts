@@ -102,7 +102,7 @@ describe("US-109z2 area filter editor", function () {
     expect(await expression.getAttribute("placeholder")).toBe("#a and (#b or #c) and not #d");
     await expression.setValue("#long #b");
     await expect($(".bt-area-tag-expr-error.is-visible")).toHaveText(expect.stringContaining("7"));
-    await $(".modal-close-button").click();
+    await browser.keys("Escape");
     await expect($('[data-query-editor-scope="area"]')).not.toExist();
   });
 
@@ -136,7 +136,7 @@ describe("US-109z2 area filter editor", function () {
     expect(firstDays).toEqual({ week: "2026-05-03", month: "2026-04-26" });
     await mkdir("test/e2e/screenshots", { recursive: true });
     await browser.saveScreenshot("test/e2e/screenshots/dsl-calendar-first-day.png");
-    await $(".bt-area-drop").scrollIntoView();
+    await browser.execute(() => document.querySelector(".bt-area-drop")?.scrollIntoView());
     await browser.saveScreenshot("test/e2e/screenshots/dsl-calendar-drop.png");
   });
 
