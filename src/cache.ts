@@ -534,14 +534,21 @@ export class TaskCache {
   }
 
   /** US-203/227: an intentional rename preserves previously issued refs. */
-  recordRename(task: ParsedTask, after: string): string | undefined {
+  recordRename(task: ParsedTask, after: string, issuedHashes?: Map<string, string>): void {
     const renamed = parseTaskFromLine(task.path, task.line, after, null, task.mtime);
     if (!renamed) return;
-    for (const [ref, hash] of this.staleHashByRef) {
-      if (hash === task.hash) this.staleHashByRef.set(ref, renamed.hash);
+    const candidates = this.byHash.get(task.hash) ?? [];
+    // A metadata event may already have removed the renamed task from this
+    // index. A remaining namesake is not an alias of the renamed task.
+    const unique = candidates.length === 0 || (candidates.length === 1 &&
+      candidates[0].path === task.path && candidates[0].line === task.line);
+    for (const refs of [this.staleHashByRef, issuedHashes]) {
+      if (!refs) continue;
+      for (const [ref, hash] of refs) {
+        if (ref === task.id || (unique && hash === task.hash)) refs.set(ref, renamed.hash);
+      }
+      refs.set(task.id, renamed.hash);
     }
-    this.staleHashByRef.set(task.id, renamed.hash);
-    return renamed.hash;
   }
 
   private async refreshHashCandidates(hash: string): Promise<void> {

@@ -1017,3 +1017,10 @@ test('US-128/208 current board snapshot does not invalidate issued CLI refs',asy
  f.put('tasks.md','- [ ] Replacement\n- [x] Original');await f.plugin.cache.invalidateFile('tasks.md');
  await assert.rejects(()=>board.done('tasks.md:L1'),e=>e.code==='not_found');
 });
+
+test('US-208/214/403 handler rename does not redirect a different same-title task',async()=>{
+ const f=cliFixture('- [ ] Duplicate #first\n- [ ] Duplicate #second');await f.run('list',{format:'json'});
+ assert.match(await f.run('rename',{ref:'tasks.md:L1',title:'Renamed'}),/^ok/);
+ assert.match(await f.run('done',{ref:'tasks.md:L2'}),/^ok/);
+ assert.match(f.content.get('tasks.md'),/^- \[ \] Renamed #first\n- \[x\] Duplicate #second/);
+});

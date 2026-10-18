@@ -416,12 +416,7 @@ export class TaskCenterApi {
     const task = await this.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
     const result = await renameTask(this.app, task, newTitle);
-    const renamedHash = this.cache.recordRename(task, result.after);
-    if (renamedHash) {
-      for (const [ref, hash] of this.issuedHashes) {
-        if (hash === task.hash) this.issuedHashes.set(ref, renamedHash);
-      }
-    }
+    this.cache.recordRename(task, result.after, this.issuedHashes);
     return result;
   }
 
