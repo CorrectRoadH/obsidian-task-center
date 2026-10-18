@@ -542,3 +542,15 @@
   margin: 0;
   color: var(--text-normal);
 }
+
+/* US-303 / US-720b: quiet, wrapping totals and an explicit area-local expander. */
+.task-center-view .bt-area-summary {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: normal;
+  min-width: 0;
+}
+.task-center-view .bt-area-more {
+  align-self: flex-start;
+  margin: 8px 0;
+}

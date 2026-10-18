@@ -70,7 +70,10 @@ export function openContextMenu(v: TaskCenterView, e: MouseEvent, task: Effectiv
     i.setTitle(tr("ctx.scheduleToday")).onClick(async () => {
       const target = todayISO();
       if ((task.scheduled ?? null) !== target) {
-        await v.runWithRemoveAnim(task.id, () => v.api.schedule(task.id, target));
+        await v.runWithRemoveAnim(task.id, async () => {
+          const result = await v.api.schedule(task.id, target);
+          v.recordUndoableWrite("schedule", task, result);
+        });
       } else {
         v.scheduleRefresh();
       }
@@ -80,7 +83,10 @@ export function openContextMenu(v: TaskCenterView, e: MouseEvent, task: Effectiv
     i.setTitle(tr("ctx.scheduleTomorrow")).onClick(async () => {
       const target = addDays(todayISO(), 1);
       if ((task.scheduled ?? null) !== target) {
-        await v.runWithRemoveAnim(task.id, () => v.api.schedule(task.id, target));
+        await v.runWithRemoveAnim(task.id, async () => {
+          const result = await v.api.schedule(task.id, target);
+          v.recordUndoableWrite("schedule", task, result);
+        });
       } else {
         v.scheduleRefresh();
       }
@@ -89,7 +95,10 @@ export function openContextMenu(v: TaskCenterView, e: MouseEvent, task: Effectiv
   m.addItem((i) =>
     i.setTitle(tr("ctx.clearSchedule")).onClick(async () => {
       if (task.scheduled) {
-        await v.runWithRemoveAnim(task.id, () => v.api.schedule(task.id, null));
+        await v.runWithRemoveAnim(task.id, async () => {
+          const result = await v.api.schedule(task.id, null);
+          v.recordUndoableWrite("clear schedule", task, result);
+        });
       } else {
         v.scheduleRefresh();
       }
@@ -97,7 +106,10 @@ export function openContextMenu(v: TaskCenterView, e: MouseEvent, task: Effectiv
   );
   m.addItem((i) =>
     i.setTitle(tr("ctx.drop")).onClick(async () => {
-      await v.runWithRemoveAnim(task.id, () => v.api.drop(task.id));
+      await v.runWithRemoveAnim(task.id, async () => {
+        const result = await v.api.drop(task.id);
+        v.recordUndoableWrite("drop", task, result);
+      });
     }),
   );
   m.showAtMouseEvent(e);
@@ -106,7 +118,18 @@ export function openContextMenu(v: TaskCenterView, e: MouseEvent, task: Effectiv
 export function openQuickAdd(v: TaskCenterView): void {
   new QuickAddModal(
     v.app,
-    v.api,
+    new Proxy(v.api, {
+      get(target, key, receiver) {
+        if (key !== "add") return Reflect.get(target, key, receiver) as unknown;
+        return async (...args: Parameters<typeof target.add>) => {
+          const result = await target.add(...args);
+          v.undoStack.push({ label: "quick add", ops: [{
+            path: result.path, line: result.line, before: [], after: [result.created],
+          }] });
+          return result;
+        };
+      },
+    }),
     () => v.scheduleRefresh(),
     v.plugin.settings,
     v.collectKnownTags(),

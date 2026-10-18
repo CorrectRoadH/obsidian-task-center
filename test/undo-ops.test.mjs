@@ -67,3 +67,15 @@ test("US-145/US-124: cascade `results` map to one op per CHANGED line, forward o
     after: ["- [x] parent ✅"],
   });
 });
+
+test("US-128: undo retains only the latest 20 board writes", async () => {
+  const { UndoStack } = await import("../test/.compiled/undo.js");
+  const labels = [];
+  const stack = new UndoStack({}, { onApplied() {}, notify: label => labels.push(label) });
+  for (let i = 0; i < 25; i++) stack.push({ label: String(i), ops: [] });
+  assert.equal(stack.size(), 20);
+  for (let i = 0; i < 20; i++) await stack.pop();
+  assert.equal(labels[0], "undo: 24");
+  assert.equal(labels[19], "undo: 5");
+  assert.equal(stack.size(), 0);
+});

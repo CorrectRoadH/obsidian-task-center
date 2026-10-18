@@ -42,10 +42,11 @@
             "status": ["todo"],
             "time": {
               "scheduled": "unscheduled",
-              "deadline": "unscheduled"
+              "deadline": "not-overdue"
             }
           },
           "orderBy": [
+            "deadline_asc",
             "created_desc"
           ],
           "limit": 3

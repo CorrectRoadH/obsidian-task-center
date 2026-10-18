@@ -177,13 +177,6 @@ const EN = {
   // — the setting is gone, so the i18n keys for its label/description
   // are dead. Daily-note path now reads from Obsidian's built-in Daily
   // Notes core plugin config exclusively (see writer.ts).
-  "settings.defaultView.name": "Default view",
-  "settings.defaultView.desc": "Which tab to show when Task Center opens.",
-  "settings.defaultView.today": "Today",
-  "settings.defaultView.week": "Week",
-  "settings.defaultView.month": "Month",
-  "settings.defaultView.completed": "Completed",
-  "settings.defaultView.unscheduled": "Unscheduled",
   "settings.defaultSavedView.name": "Default query tab",
   "settings.defaultSavedView.desc": "Optional saved query tab to open on cold start. If unset, Task Center falls back to the first visible tab.",
   "settings.defaultSavedView.none": "Follow the first visible tab",
@@ -480,6 +473,10 @@ const EN = {
   "area.unknownHint": "This area type is not supported. Edit the Query DSL to fix it.",
 
   // US-109w: per-area filter + empty state
+  "area.more": "{n} more tasks",
+  "area.taskCount": "{n} tasks",
+  "area.estimateTotal": "Est {duration}",
+  "area.actualTotal": "Actual {duration}",
   "area.emptyArea": "No tasks match here.",
   "area.emptyTray": "No unscheduled tasks.",
   "area.clearAreaFilter": "Clear this area's filter",
@@ -670,13 +667,6 @@ const ZH: Partial<typeof EN> = {
   "ribbon.open": "打开任务看板",
 
   "settings.header": "Task Center",
-  "settings.defaultView.name": "默认视图",
-  "settings.defaultView.desc": "打开看板时默认展示哪个 tab。",
-  "settings.defaultView.today": "今日",
-  "settings.defaultView.week": "本周",
-  "settings.defaultView.month": "本月",
-  "settings.defaultView.completed": "已完成",
-  "settings.defaultView.unscheduled": "未排期",
   "settings.defaultSavedView.name": "默认 Query Tab",
   "settings.defaultSavedView.desc": "可选：冷启动时优先打开这个已保存的 Query Tab；未设置时回退到当前第一个可见 Tab。",
   "settings.defaultSavedView.none": "跟随首个可见 Tab",
@@ -950,6 +940,10 @@ const ZH: Partial<typeof EN> = {
   "area.unknownType": "未知视图类型：{type}",
   "area.unknownHint": "这个 area 类型不被支持。请编辑 Query DSL 修正。",
 
+  "area.more": "还有 {n} 条",
+  "area.taskCount": "{n} 条",
+  "area.estimateTotal": "估 {duration}",
+  "area.actualTotal": "实 {duration}",
   "area.emptyArea": "本区无匹配任务。",
   "area.emptyTray": "没有未排期任务。",
   "area.clearAreaFilter": "清空本区筛选",

@@ -48,7 +48,7 @@ export class QueryEditorView {
   constructor(private readonly v: TaskCenterView) {}
 
   // US-109p10: open the Query editor sheet in one of two scopes.
-  open(opts: { scope?: QueryEditorScope; areaIndex?: number | null; areaTab?: QueryEditorAreaTab } = {}): void {
+  open(opts: { scope?: QueryEditorScope; areaIndex?: number | null; areaTab?: QueryEditorAreaTab; focusSearch?: boolean } = {}): void {
     const scope = opts.scope ?? (opts.areaIndex != null ? "area" : "tab");
     this.scope = scope;
     this.areaIndex = scope === "area" ? (opts.areaIndex ?? null) : null;
@@ -78,6 +78,11 @@ export class QueryEditorView {
       },
     });
     sheet.open();
+    if (opts.focusSearch) {
+      const search = body!.querySelector<HTMLInputElement>(".bt-area-search");
+      search?.focus();
+      search?.select();
+    }
   }
 
   // US-109p10: dispatch to one of the two scoped editors. Both project the same

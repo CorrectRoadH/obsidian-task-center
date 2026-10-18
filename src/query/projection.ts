@@ -10,7 +10,7 @@
 //     separate list areas in the layout, not embedded here.
 // Pure functions, no DOM, no Obsidian dependency.
 
-import type { EffectiveTask } from "../task-tree";
+import { recomputeTopLevelInQuery, type EffectiveTask } from "../task-tree";
 import type {
   AreaConfig,
   AreaType,
@@ -36,6 +36,8 @@ export interface MonthCellModel {
 
 export interface ListViewModel {
   type: "list";
+  /** Matching top-level cards before the area limit (US-720b). */
+  total: number;
   // A list area is a single flat task list — no internal grouping.
   tasks: EffectiveTask[];
 }
@@ -68,6 +70,7 @@ type AreaProjector = (
 
 const emptyListModel = (): ListViewModel => ({
   type: "list",
+  total: 0,
   tasks: [],
 });
 
@@ -197,11 +200,23 @@ export function projectListArea(
   const base = area.when && queryFilterHasActiveConditions(area.when)
     ? applyQueryFilters(tasks, area.when, weekStartsOn, undefined, exemptStatusIds)
     : tasks;
-  const sorted = sortTasks(base, area.orderBy);
-  const limited = area.limit !== undefined && area.limit > 0
-    ? sorted.slice(0, area.limit)
-    : sorted;
-  return { type: "list", tasks: limited };
+  const sorted = sortTasks(recomputeTopLevelInQuery(base), area.orderBy);
+  const roots = sorted.filter((task) => task.isTopLevelInQuery);
+  const selected = new Set((area.limit !== undefined && area.limit > 0
+    ? roots.slice(0, area.limit) : roots).map((task) => task.id));
+  const byId = new Map(sorted.map((task) => [task.id, task]));
+  const limited = sorted.filter((task) => {
+    let root = task;
+    const visited = new Set<string>();
+    while (!root.isTopLevelInQuery && root.renderParentId && !visited.has(root.id)) {
+      visited.add(root.id);
+      const parent = byId.get(root.renderParentId);
+      if (!parent) break;
+      root = parent;
+    }
+    return selected.has(root.id);
+  });
+  return { type: "list", tasks: limited, total: roots.length };
 }
 
 export function projectWeekArea(

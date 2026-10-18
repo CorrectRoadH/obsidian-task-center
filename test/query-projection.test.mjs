@@ -506,3 +506,42 @@ test("US-109h: area-level when {status} filters the area's own cards", async () 
 // US-720d2: 全空布局不再折叠成一个 view 级居中空状态（areasAllEmpty 已删除）——
 // 每个 area 各自渲染各自的空状态。对应的视图层行为由 today-view.e2e.ts /
 // four-quadrant 的 e2e 守。
+
+test("US-720b: limit counts top-level cards and retains the filtered total", async () => {
+  const { projectListArea } = await import("./.compiled/projection.js");
+  const tasks = [effectiveTask({ id: "parent" }), effectiveTask({ id: "child", isTopLevelInQuery: false, renderParentId: "parent" }), effectiveTask({ id: "other" })];
+  const model = projectListArea(tasks, { type: "list", limit: 1 }, 1);
+  assert.equal(model.total, 2);
+  assert.deepEqual(model.tasks.map(t => t.id), ["parent", "child"]);
+  assert.deepEqual(model.tasks.filter(t => t.isTopLevelInQuery).map(t => t.id), ["parent"]);
+  const all = projectListArea(tasks, { type: "list" }, 1);
+  assert.equal(all.total, 2);
+  assert.equal(all.tasks.length, 3);
+});
+
+test("US-720b: an area promotes a matching child when its parent is filtered out", async () => {
+  const { projectListArea } = await import("./.compiled/projection.js");
+  const model = projectListArea([
+    effectiveTask({ id: "parent", title: "excluded" }),
+    effectiveTask({ id: "child", title: "match", isTopLevelInQuery: false, renderParentId: "parent" }),
+  ], { type: "list", when: { search: "match" }, limit: 1 }, 1);
+  assert.equal(model.total, 1);
+  assert.equal(model.tasks[0].isTopLevelInQuery, true);
+});
+
+
+test("US-720b: factory recommendation includes future deadlines, excludes overdue and sorts deadline then created", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const preset = JSON.parse(await readFile(new URL("../src/builtin-views/today.json", import.meta.url), "utf8"));
+  const area = preset.view.layout.children.find(a => a.id === "unscheduled-rec");
+  const { projectListArea } = await import("./.compiled/projection.js");
+  const model = projectListArea([
+    effectiveTask({ id: "none" }),
+    effectiveTask({ id: "future-old", effectiveDeadline: "2099-01-01", effectiveCreated: "2020-01-01" }),
+    effectiveTask({ id: "future-new", effectiveDeadline: "2099-01-01", effectiveCreated: "2026-01-01" }),
+    effectiveTask({ id: "overdue", effectiveDeadline: "2000-01-01" }),
+    effectiveTask({ id: "scheduled", effectiveScheduled: "2099-01-01" }),
+    effectiveTask({ id: "done", effectiveStatus: "done" }),
+  ], { ...area, limit: undefined }, 1);
+  assert.deepEqual(model.tasks.map(t => t.id), ["future-new", "future-old", "none"]);
+});

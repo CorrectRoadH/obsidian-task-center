@@ -27,7 +27,7 @@ import { BottomSheet } from "./view/bottom-sheet";
 import { openMobileDatePicker, openMobileTagEditor, type TagEditResult } from "./view/mobile-task-sheet";
 import { shouldCloseFilterPopoverOnPointerDown, isClickInsideFilterControls } from "./view/filter-popover";
 import { isMobileMode } from "./platform";
-import { classifyPaneLayout } from "./view/presentation";
+import { classifyPaneLayout, summarizeAreaTasks } from "./view/presentation";
 import { weekMinHeightFromViewHeightPx } from "./view/layout";
 import { defaultExpandedAreaIndex, resolveExpandedAreaIndex, nextExpandedAreaIndex } from "./view/area-accordion";
 import { QueryDslModal, type QueryDslSubmitMode } from "./view/query-dsl-modal";
@@ -272,6 +272,7 @@ export class TaskCenterView extends ItemView {
   private pendingDateRangeStart: string | null = null;
   private viewResizeObserver: ResizeObserver | null = null;
   tabDrafts = new Map<string, QueryPreset>();
+  private expandedListAreas = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, plugin: TaskCenterPlugin) {
     super(leaf);
@@ -316,8 +317,8 @@ export class TaskCenterView extends ItemView {
   }
 
   private initialSavedViewFromSettings(): QueryPreset | null {
-    const preferredId = this.plugin.settings.lastSavedViewId ?? this.plugin.settings.defaultSavedViewId;
-    if (preferredId) {
+    for (const preferredId of [this.plugin.settings.lastSavedViewId, this.plugin.settings.defaultSavedViewId]) {
+      if (!preferredId) continue;
       const match = this.plugin.settings.queryPresets.find((view) => view.id === preferredId);
       if (match) {
         const normalized = normalizeQueryPreset(match);
@@ -409,6 +410,8 @@ export class TaskCenterView extends ItemView {
     this.viewResizeObserver?.disconnect();
     this.viewResizeObserver = null;
     this.dwellTracker.reset();
+    this.tabDrafts.clear();
+    this.expandedListAreas.clear();
     return Promise.resolve();
   }
 
@@ -508,11 +511,8 @@ export class TaskCenterView extends ItemView {
    */
   async toggleDone(t: EffectiveTask): Promise<void> {
     const wasDone = t.effectiveStatus === "done";
-    if (wasDone) {
-      await this.api.undone(t.id);
-    } else {
-      await this.api.done(t.id);
-    }
+    const result = wasDone ? await this.api.undone(t.id) : await this.api.done(t.id);
+    this.recordUndoableWrite(wasDone ? "mark undone" : "mark done", t, result);
     // Exempt this id from status filtering regardless of direction, so the card
     // stays put after either done or undone.
     this.justCompletedIds.add(t.id);
@@ -754,7 +754,7 @@ export class TaskCenterView extends ItemView {
   // the two-row rule (§6.2) keeps the date nav in the toolbar's first row.
   // `data-action="nav-*"` is the stable e2e selector regardless of where the
   // nav lives in the DOM.
-  renderRangeNav(parent: HTMLElement) {
+  renderRangeNav(parent: HTMLElement, weekStartsOn: 0 | 1 = this.plugin.settings.weekStartsOn) {
     if (this.state.tab !== "week" && this.state.tab !== "month") return;
     const nav = parent.createDiv({ cls: "bt-nav" });
     const prev = nav.createEl("button", { text: "◀" });
@@ -768,7 +768,7 @@ export class TaskCenterView extends ItemView {
     const next = nav.createEl("button", { text: "▶" });
     next.dataset.action = "nav-next";
     const label = nav.createSpan({ cls: "bt-nav-label" });
-    label.setText(this.navLabel());
+    label.setText(this.navLabel(weekStartsOn));
     // US-109p9: week / month no longer carry a bespoke filter chip here. Their
     // filter / summary / title edit entry is the shared area head 编辑 button
     // (renderAreaHead), same as list / grid.
@@ -1009,9 +1009,9 @@ export class TaskCenterView extends ItemView {
     return null;
   }
 
-  private navLabel(): string {
+  private navLabel(weekStartsOn: 0 | 1 = this.plugin.settings.weekStartsOn): string {
     if (this.state.tab === "week") {
-      const start = startOfWeek(this.state.anchorISO, this.plugin.settings.weekStartsOn);
+      const start = startOfWeek(this.state.anchorISO, weekStartsOn);
       const end = addDays(start, 6);
       // Compact MM-DD → MM-DD; the year is already implied by the week button.
       return `${start.slice(5)} → ${end.slice(5)}`;
@@ -1034,9 +1034,9 @@ export class TaskCenterView extends ItemView {
   // source of per-area filtering). Week / month areas must scope by this — they
   // previously used the removed global getTextFilter and so ignored area `when`.
   // `today` = the active anchor; justCompletedIds keeps US-153 linger semantics.
-  scopeTasksToArea(tasks: EffectiveTask[], when: QueryPresetFilters | undefined): EffectiveTask[] {
+  scopeTasksToArea(tasks: EffectiveTask[], when: QueryPresetFilters | undefined, weekStartsOn: 0 | 1 = this.plugin.settings.weekStartsOn): EffectiveTask[] {
     return when && queryFilterHasActiveConditions(when)
-      ? applyQueryFilters(tasks, when, this.plugin.settings.weekStartsOn, this.state.anchorISO, this.justCompletedIds)
+      ? applyQueryFilters(tasks, when, weekStartsOn, this.state.anchorISO, this.justCompletedIds)
       : tasks;
   }
 
@@ -1566,7 +1566,10 @@ export class TaskCenterView extends ItemView {
   ): void {
     const filter = this.getTextFilter();
     const filtered = recomputeTopLevelInQuery(this.getEffectiveTasks().filter(filter));
-    const model = projectListArea(filtered, area, this.plugin.settings.weekStartsOn, this.justCompletedIds);
+    const expansionKey = `${this.state.savedViewId}:${areaIndex}`;
+    const all = projectListArea(filtered, { ...area, limit: undefined }, this.plugin.settings.weekStartsOn, this.justCompletedIds);
+    const model = this.expandedListAreas.has(expansionKey) ? all
+      : projectListArea(filtered, area, this.plugin.settings.weekStartsOn, this.justCompletedIds);
     const cardsCls = grid ? "bt-list-grid" : "";
 
     if (area.onDrop?.clearScheduled) {
@@ -1579,12 +1582,22 @@ export class TaskCenterView extends ItemView {
     // US-109p9: every list/grid area (including the unscheduled tray) gets the
     // one shared area head — title + a single 编辑 entry → unified Query editor.
     // US-511: title resolution is the shared resolveAreaHeadTitle rule.
-    this.renderAreaHead(parent, areaIndex, area, { title: this.resolveAreaHeadTitle(area) });
+    const totals = summarizeAreaTasks(all.tasks);
+    const summary = [tr("area.taskCount", { n: totals.count }), tr("area.estimateTotal", { duration: formatMinutes(totals.estimate) })];
+    if (totals.hasDone) {
+      summary.push(tr("area.actualTotal", { duration: formatMinutes(totals.actual) })
+        + (totals.percent === null ? "" : `（${totals.percent}%）`));
+    }
+    this.renderAreaHead(parent, areaIndex, area, { title: this.resolveAreaHeadTitle(area), summary: summary.join(" · ") });
 
     const list = model.tasks.filter((t) => t.isTopLevelInQuery);
     const wrap = parent.createDiv({ cls: `bt-list-view ${cardsCls}`.trim() });
     wrap.dataset.view = grid ? "grid" : "list";
     if (list.length === 0) {
+      if (area.emptyText) {
+        wrap.createDiv({ text: area.emptyText, cls: "bt-empty" });
+        return;
+      }
       // 未排期 tray 为空时显示「没有未排期任务」，让空托盘仍是可见的可投放区，
       // 而不是整块消失（US-122a）。
       if (area.onDrop?.clearScheduled) {
@@ -1598,6 +1611,15 @@ export class TaskCenterView extends ItemView {
       return;
     }
     for (const task of list) renderCard(this, wrap, task);
+    const remaining = model.total - list.length;
+    if (remaining > 0) {
+      const more = parent.createEl("button", { cls: "bt-area-more", text: tr("area.more", { n: remaining }) });
+      more.dataset.areaMore = String(areaIndex);
+      more.addEventListener("click", () => {
+        this.expandedListAreas.add(expansionKey);
+        this.render();
+      });
+    }
   }
 
   // US-109w: per-area empty state. An area empty because of *its own* `when`
@@ -1671,12 +1693,13 @@ export class TaskCenterView extends ItemView {
     parent: HTMLElement,
     areaIndex: number,
     area: AreaConfig,
-    opts: { title: string; renderNav?: (host: HTMLElement) => void },
+    opts: { title: string; summary?: string; renderNav?: (host: HTMLElement) => void },
   ): void {
     parent.addClass("bt-has-head");
     const head = parent.createDiv({ cls: "bt-area-head" });
     head.dataset.areaHead = String(areaIndex);
     if (opts.title) head.createSpan({ cls: "bt-area-head-title", text: opts.title });
+    if (opts.summary) head.createSpan({ cls: "bt-area-summary", text: opts.summary });
     // week/month 把日期导航（「功能」）放进同一行 head，不再单独占一行。
     if (opts.renderNav) {
       const nav = head.createDiv({ cls: "bt-area-head-nav" });
@@ -2187,6 +2210,8 @@ export class TaskCenterView extends ItemView {
   // see USER_STORIES.md
   handleKey(e: KeyboardEvent): void {
     if (Platform.isMobile) return;
+    const focused = activeDocument.activeElement;
+    if (focused instanceof HTMLElement && (focused.isContentEditable || focused.matches("input, textarea, select"))) return;
 
     // US-109q: Esc closes the desktop overflow tabs dropdown.
     if (e.key === "Escape" && this.overflowTabsMenuOpen) {
@@ -2223,11 +2248,8 @@ export class TaskCenterView extends ItemView {
       const active = activeDocument.activeElement;
       if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
       e.preventDefault();
-      const search = this.contentEl.querySelector<HTMLInputElement>(".bt-search");
-      if (search) {
-        search.focus();
-        search.select();
-      }
+      const areaIndex = collectAreas(this.currentQueryPresetViewConfig().layout).findIndex(areaSupportsWhen);
+      if (areaIndex >= 0) this.queryEditor.open({ scope: "area", areaIndex, areaTab: "filter", focusSearch: true });
       return;
     }
 
