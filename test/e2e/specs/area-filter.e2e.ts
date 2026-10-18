@@ -107,7 +107,6 @@ describe("US-109z2 area filter editor", function () {
   });
 
   it("US-109t/US-109z2/US-109p9: calendar weekday overrides and title-only abandon head", async () => {
-    await browser.setWindowSize(1200, 1600);
     await writeAndWait("Tasks/Inbox.md", "- [ ] Calendar sample ⏳ 2026-05-03\n");
     await browser.executeObsidian(async ({ app }) => {
       const plugin = (app as any).plugins.plugins["task-center"];
@@ -137,6 +136,8 @@ describe("US-109z2 area filter editor", function () {
     expect(firstDays).toEqual({ week: "2026-05-03", month: "2026-04-26" });
     await mkdir("test/e2e/screenshots", { recursive: true });
     await browser.saveScreenshot("test/e2e/screenshots/dsl-calendar-first-day.png");
+    await $(".bt-area-drop").scrollIntoView();
+    await browser.saveScreenshot("test/e2e/screenshots/dsl-calendar-drop.png");
   });
 
 });
