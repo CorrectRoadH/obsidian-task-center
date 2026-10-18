@@ -15,13 +15,13 @@ import type {
   QueryStatus,
   QueryTimeFilters,
   StackConfig,
-  TaskStatus,
 } from "./types";
+import { t as tr } from "./i18n";
 import { BUILTIN_VIEW_DATA } from "./builtin-views/index";
 // US-109z2 / REFACTOR.md D5: status schema lives in the query layer so the pure
 // query pipeline (filter / projection) never imports up into saved-views.
 // Re-exported here for the view layer's existing import sites.
-import { KNOWN_STATUS_VALUES, normalizeQueryStatus, resolveTagFilter, tagsToExpr } from "./query/schema";
+import { validateAreaWhen, validateAreaDrop, normalizeQueryStatus, resolveTagFilter, tagsToExpr } from "./query/schema";
 export { normalizeQueryStatus, resolveTagFilter, tagsToExpr };
 const BUILTIN_QUERY_TABS = ["today", "week", "month", "todo", "unscheduled", "completed", "dropped"] as const;
 type BuiltinQueryTab = typeof BUILTIN_QUERY_TABS[number];
@@ -86,7 +86,7 @@ function normalizeQueryViewType(type: string | null | undefined): QueryViewType 
 function normalizeTimeFilters(time: unknown): QueryTimeFilters {
   const raw = isRecord(time) ? time : {};
   const out: QueryTimeFilters = {};
-  for (const key of ["scheduled", "deadline", "completed", "created"] as const) {
+  for (const key of ["scheduled", "deadline", "completed", "created", "dropped"] as const) {
     const value = raw[key];
     const trimmed = typeof value === "string" ? value.trim() : "";
     if (trimmed) out[key] = trimmed;
@@ -112,10 +112,10 @@ function parseDslRoot(text: string): Record<string, unknown> {
     parsed = JSON.parse(text);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`DSL 当前只支持 JSON，解析失败：${detail}`);
+    throw new Error(tr("dsl.json", { detail }));
   }
   if (!isRecord(parsed)) {
-    throw new Error("DSL 根节点必须是对象。");
+    throw new Error(tr("dsl.object", { path: "DSL" }));
   }
   return parsed;
 }
@@ -131,9 +131,6 @@ function stringOrFallback(value: unknown, fallback: string): string {
 function booleanOrFallback(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
-
-const LEGACY_QUERY_DSL_ERROR =
-  "无效 Query DSL：检测到 Task Center 1.0 前的旧 DSL。1.0 已移除 tab 级 filters / summary / view.type；请更新 skill：npx skills add CorrectRoadH/obsidian-task-center，并改用 view.layout + 每个 area 自己的 when。";
 
 // ── QueryPreset DSL — canonical model (VAL-CORE-005, VAL-CORE-006, VAL-CROSS-002) ──
 
@@ -157,7 +154,7 @@ function normalizeQueryPresetFilters(raw: unknown): QueryPresetFilters {
   const search = typeof filters.search === "string" ? filters.search.trim() : "";
   // US-109d4: tags 统一迁移成单一 { expr } 形态——任何旧形态（裸数组 / 逗号串 /
   // 三态 { values, mode, exclude }）在归一化时一次性转成等价表达式字符串，求值层
-  // 只认 { expr }。这是旧 data.json 的迁移点：加载即升级，落库即 canonical。
+  // 也兼容旧输入。这是旧 data.json 的迁移点：加载即升级，落库即 canonical。
   const tagExpr = tagsToExpr(filters.tags).trim();
   const status = normalizeQueryStatus(filters.status);
   const time = normalizeTimeFilters(filters.time);
@@ -256,7 +253,7 @@ function normalizeLayoutNode(raw: unknown): LayoutNode {
 function normalizeDropEffect(raw: unknown): DropEffect | undefined {
   if (!isRecord(raw)) return undefined;
   const out: DropEffect = {};
-  if (raw.setStatus === "dropped") out.setStatus = "dropped";
+  if (raw.setStatus === "dropped" || raw.setStatus === "done") out.setStatus = raw.setStatus;
   if (typeof raw.setScheduled === "string" && raw.setScheduled.trim()) out.setScheduled = raw.setScheduled.trim();
   if (raw.clearScheduled === true) out.clearScheduled = true;
   return Object.keys(out).length > 0 ? out : undefined;
@@ -295,7 +292,6 @@ function normalizeArea(raw: unknown): AreaConfig {
         type: "month",
         ...(dateWhen && Object.keys(dateWhen).length > 0 ? { when: dateWhen } : {}),
         ...(cfg.firstDayOfWeek === "monday" || cfg.firstDayOfWeek === "sunday" ? { firstDayOfWeek: cfg.firstDayOfWeek } : {}),
-        ...(cfg.density === "compact" || cfg.density === "cards" ? { density: cfg.density } : {}),
       };
     case "drop":
       return { ...base, type: "drop", onDrop: onDrop ?? { setStatus: "dropped" } };
@@ -370,35 +366,60 @@ function normalizeQueryTray(raw: unknown): QueryTray | undefined {
 // 受支持的 area 类型：list / grid / week / month / drop。其它字符串 type 不
 // 报错，归一化成 unknown area 后由视图层渲染「未知类型 + JSON」。
 
+function validationIssue(errors: QueryPresetValidationError[], path: string, rule: string, code = "invalid_field", position?: number): void {
+  errors.push({ section: "view", code, message: tr(`dsl.${rule}` as Parameters<typeof tr>[0], { path, n: position ?? 1 }) });
+}
+
 function validateLayoutNode(raw: unknown, errors: QueryPresetValidationError[], path: string): void {
   if (!isRecord(raw)) {
-    errors.push({ section: "view", code: "invalid_layout", message: `${path} 必须是对象。` });
+    validationIssue(errors, path, "object", "invalid_layout");
     return;
   }
-  if ("dir" in raw || Array.isArray(raw.children)) {
-    if (raw.dir !== "row" && raw.dir !== "col") {
-      errors.push({ section: "view", code: "invalid_stack_dir", message: `${path}.dir 必须是 "row" 或 "col"。` });
+  if (raw.weight !== undefined && (typeof raw.weight !== "number" || !Number.isFinite(raw.weight) || raw.weight <= 0)) {
+    validationIssue(errors, `${path}.weight`, "positive");
+  }
+  if ("dir" in raw || "children" in raw) {
+    if (raw.dir !== "row" && raw.dir !== "col") validationIssue(errors, `${path}.dir`, "direction", "invalid_stack_dir");
+    if (!Array.isArray(raw.children) || raw.children.length === 0) validationIssue(errors, `${path}.children`, "children", "invalid_stack_children");
+    else raw.children.forEach((c, i) => validateLayoutNode(c, errors, `${path}.children[${i}]`));
+    return;
+  }
+  const type = raw.type === undefined ? "list" : raw.type;
+  if (typeof type !== "string") {
+    validationIssue(errors, `${path}.type`, "string", "invalid_area_type");
+    return;
+  }
+  // Unknown area types retain their JSON for the existing diagnostic renderer.
+  if (!["list", "grid", "week", "month", "drop"].includes(type)) return;
+  const fields = ["type", "id", "title", "weight", "when", "onDrop", "firstDayOfWeek", "density", "emptyText", "limit", "orderBy"];
+  for (const key of Object.keys(raw)) {
+    if (!fields.includes(key)) validationIssue(errors, `${path}.${key}`, "unsupported");
+  }
+  for (const key of ["id", "title", "emptyText"]) {
+    if (raw[key] !== undefined && typeof raw[key] !== "string") validationIssue(errors, `${path}.${key}`, "string");
+  }
+  if (raw.when !== undefined) {
+    if (type === "drop") validationIssue(errors, `${path}.when`, "unsupported");
+    else for (const issue of validateAreaWhen(raw.when)) {
+      validationIssue(errors, `${path}.when${issue.field ? `.${issue.field}` : ""}`, issue.rule, `invalid_${issue.field.split(".")[0] || "when"}`, issue.position);
     }
-    if (!Array.isArray(raw.children) || raw.children.length === 0) {
-      errors.push({ section: "view", code: "invalid_stack_children", message: `${path}.children 必须是非空数组。` });
-    } else {
-      raw.children.forEach((c, i) => validateLayoutNode(c, errors, `${path}.children[${i}]`));
-    }
-    return;
   }
-  // area 叶子。type 缺失时归一化成 list；type 是字符串但不被支持时不报错——
-  // 归一化会把它变成 unknown area，视图层渲染「未知类型 + JSON」。
-  const type = raw.type;
-  if (type !== undefined && typeof type !== "string") {
-    errors.push({
-      section: "view",
-      code: "invalid_area_type",
-      message: `${path}.type 必须是字符串。`,
-    });
-    return;
+  if (type === "drop" && raw.onDrop === undefined) validationIssue(errors, `${path}.onDrop`, "abandonOnly", "drop_requires_on_drop");
+  else if (raw.onDrop !== undefined) for (const issue of validateAreaDrop(type, raw.onDrop)) {
+    validationIssue(errors, `${path}.${issue.field}`, issue.rule, "invalid_on_drop");
   }
-  if (type === "drop" && !isRecord(raw.onDrop)) {
-    errors.push({ section: "view", code: "drop_requires_on_drop", message: `${path} 的 drop area 必须有 onDrop。` });
+  if (raw.firstDayOfWeek !== undefined && (!["week", "month"].includes(type) || (raw.firstDayOfWeek !== "monday" && raw.firstDayOfWeek !== "sunday"))) {
+    validationIssue(errors, `${path}.firstDayOfWeek`, "weekStart");
+  }
+  if (raw.density !== undefined) validationIssue(errors, `${path}.density`, "unsupported");
+  if (raw.emptyText !== undefined && type !== "list" && type !== "grid") validationIssue(errors, `${path}.emptyText`, "unsupported");
+  if (raw.limit !== undefined && (typeof raw.limit !== "number" || !Number.isInteger(raw.limit) || raw.limit <= 0)) validationIssue(errors, `${path}.limit`, "positive");
+  if (raw.orderBy !== undefined) {
+    const orderTokens = ["deadline_asc", "deadline_desc", "scheduled_asc", "scheduled_desc", "created_desc", "completed_desc", "deadline_risk", "priority_desc", "title_asc", "title_desc"];
+    if (!Array.isArray(raw.orderBy) || !raw.orderBy.every(v => typeof v === "string" && orderTokens.includes(v))) validationIssue(errors, `${path}.orderBy`, "sort");
+  }
+  for (const key of ["limit", "orderBy"]) {
+    if (raw[key] !== undefined && type !== "list" && type !== "grid") validationIssue(errors, `${path}.${key}`, "unsupported");
   }
 }
 
@@ -433,100 +454,22 @@ export function validateQueryPreset(raw: unknown): QueryPresetValidationResult {
   const errors: QueryPresetValidationError[] = [];
 
   if (!isRecord(raw)) {
-    errors.push({ section: "filters", code: "not_object", message: "QueryPreset 根节点必须是对象。" });
+    errors.push({ section: "filters", code: "not_object", message: tr("dsl.object", { path: "QueryPreset" }) });
     return { valid: false, errors };
   }
 
   // Name
   const name = typeof raw.name === "string" ? raw.name.trim() : "";
   if (!name) {
-    errors.push({ section: "filters", code: "missing_name", message: "QueryPreset 缺少 name。" });
+    errors.push({ section: "filters", code: "missing_name", message: tr("dsl.name") });
   }
 
-  // Filters section
-  const filters = raw.filters;
-  if (filters !== undefined && !isRecord(filters)) {
-    errors.push({ section: "filters", code: "invalid_filters", message: "filters 必须是对象。" });
-  } else if (isRecord(filters)) {
-    // Validate status
-    if (filters.status !== undefined) {
-      const rawStatus = filters.status;
-      if (rawStatus !== "all" && !Array.isArray(rawStatus) && typeof rawStatus !== "string") {
-        errors.push({
-          section: "filters",
-          code: "invalid_status",
-          message: "status 值无效。允许: \"all\", \"todo\", \"done\", \"dropped\", 或其数组。",
-        });
-      } else if (typeof rawStatus === "string" && rawStatus !== "all") {
-        // Single string status — validate it's a known value
-        if (!KNOWN_STATUS_VALUES.includes(rawStatus as TaskStatus)) {
-          errors.push({
-            section: "filters",
-            code: "invalid_status",
-            message: `status 值 "${rawStatus}" 无效。允许: todo, done, dropped。`,
-          });
-        }
-      } else if (Array.isArray(rawStatus)) {
-        for (const s of rawStatus) {
-          if (typeof s !== "string" || !KNOWN_STATUS_VALUES.includes(s as TaskStatus)) {
-            errors.push({
-              section: "filters",
-              code: "invalid_status",
-              message: `status 数组中包含无效值 "${String(s)}"。允许: todo, done, dropped。`,
-            });
-            break;
-          }
-        }
-      }
-    }
-    // Validate tags
-    if (filters.tags !== undefined) {
-      if (!Array.isArray(filters.tags) && typeof filters.tags !== "string") {
-        errors.push({
-          section: "filters",
-          code: "invalid_tags",
-          message: "tags 必须是字符串或字符串数组。",
-        });
-      }
-    }
-    // Validate time
-    if (filters.time !== undefined && !isRecord(filters.time)) {
-      errors.push({
-        section: "filters",
-        code: "invalid_time",
-        message: "time 必须是对象。",
-      });
-    }
-    // Validate search
-    if (filters.search !== undefined && typeof filters.search !== "string") {
-      errors.push({
-        section: "filters",
-        code: "invalid_search",
-        message: "search 必须是字符串。",
-      });
-    }
+  if (isLegacyQueryDslInput(raw)) {
+    errors.push({ section: "view", code: "legacy_query", message: tr("dsl.legacy") });
   }
-
-  // View section — 新形状是一棵 area 布局树（view.layout）；旧形状
-  // （view.type 等）仍可被接受并迁移，校验只对显式提供的字段把关。
   const view = raw.view;
-  if (view !== undefined && !isRecord(view)) {
-    errors.push({ section: "view", code: "invalid_view", message: "view 必须是对象。" });
-  } else if (isRecord(view)) {
-    if ("layout" in view) {
-      validateLayoutNode(view.layout, errors, "view.layout");
-    } else {
-      // 旧形状兜底：仍校验 type 合法，以便给出清晰错误。
-      const viewType = view.type;
-      if (typeof viewType === "string" && !["list", "week", "month"].includes(viewType)) {
-        errors.push({
-          section: "view",
-          code: "unknown_view_type",
-          message: `未知 view.type "${viewType}"，允许: list, week, month。`,
-        });
-      }
-    }
-  }
+  if (view !== undefined && !isRecord(view)) validationIssue(errors, "view", "object", "invalid_view");
+  else if (isRecord(view) && "layout" in view) validateLayoutNode(view.layout, errors, "view.layout");
 
   return { valid: errors.length === 0, errors };
 }
@@ -586,7 +529,7 @@ function isLegacyQueryDslInput(obj: unknown): boolean {
   if (isLegacySavedTaskView(obj)) return true;
   if ("filters" in obj || "summary" in obj) return true;
   const view = obj.view;
-  if (isRecord(view) && !("layout" in view)) {
+  if (isRecord(view)) {
     return (
       "type" in view
       || "preset" in view
@@ -665,23 +608,23 @@ export function parseQueryDsl(
   // rejected so old `filters` / `summary` / `view.type` fields are not silently
   // dropped into an accidental full-vault query.
   if (isLegacyQueryDslInput(base)) {
-    throw new Error(LEGACY_QUERY_DSL_ERROR);
+    throw new Error(tr("dsl.legacy"));
   }
 
   const name = stringOrFallback(base.name, existing.name ?? "");
   if (!name.trim()) {
-    throw new Error("DSL 缺少 name。");
+    throw new Error(tr("dsl.name"));
   }
 
   // VAL-CORE-006: validate raw input BEFORE normalization so invalid
   // values (e.g. unknown view type, bad tags, bad summary) are caught
   // rather than silently coerced to defaults.
-  const validation = validateQueryPreset(base);
+  const validation = validateQueryPreset({ ...base, name });
   if (!validation.valid) {
     const details = validation.errors
       .map((e) => `[${e.section}] ${e.code}: ${e.message}`)
       .join("；");
-    throw new Error(`Query DSL 校验失败：${details}`);
+    throw new Error(tr("dsl.validation", { details }));
   }
 
   return normalizeQueryPreset({

@@ -777,3 +777,15 @@ test("VAL-CORE-007: task with no time field still passes when no time filter", a
   const result = applyQueryFilters(tasks, { status: ["todo"] }, 1);
   assert.equal(result.length, 1, "Task should pass status filter without time filters");
 });
+
+test('US-109d/d3/d4: evaluator accepts unnormalized arrays and legacy include/exclude shapes', async () => {
+  const { applyQueryFilters } = await import('../test/.compiled/filter.js');
+  const tasks = [effectiveTask({ id: 'a', tags: ['#a'] }), effectiveTask({ id: 'ab', tags: ['#a', '#b'] })];
+  assert.deepEqual(applyQueryFilters(tasks, { tags: ['#a', '#b'] }, 1).map(t => t.id), ['ab']);
+  assert.deepEqual(applyQueryFilters(tasks, { tags: { values: ['#a'], exclude: ['#b'] } }, 1).map(t => t.id), ['a']);
+});
+test('US-720b: not-overdue includes missing deadlines and today, excludes past deadlines', async () => {
+  const { applyQueryFilters } = await import('../test/.compiled/filter.js');
+  const tasks = [null, '2026-10-17', '2026-10-18', '2026-10-19'].map((date, i) => effectiveTask({ id: String(i), effectiveDeadline: date }));
+  assert.deepEqual(applyQueryFilters(tasks, { time: { deadline: 'not-overdue' } }, 1, '2026-10-18').map(t => t.id), ['0', '2', '3']);
+});

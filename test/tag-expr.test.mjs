@@ -112,5 +112,21 @@ test("US-109d4: appendTagToExpr inserts a tag into the expression", async () => 
   const { appendTagToExpr } = await load();
   assert.equal(appendTagToExpr("", "#a"), "#a");
   assert.equal(appendTagToExpr("#a", "#b"), "#a and #b");
-  assert.equal(appendTagToExpr("#a or #b", "c"), "#a or #b and #c"); // normalizes the appended tag
+  assert.equal(appendTagToExpr("#a or #b", "c"), "(#a or #b) and #c"); // normalizes the appended tag
+});
+
+test('US-109d4: tag insertion completes trailing operators and preserves OR grouping', async () => {
+  const { appendTagToExpr, parseTagExpr, evalTagExpr } = await load();
+  for (const expr of ['#a and', '#a or', '#a and not', 'not']) {
+    assert.equal(appendTagToExpr(expr, '#c'), `${expr} #c`);
+  }
+  const expr = appendTagToExpr('#a or #b', '#c');
+  assert.equal(expr, '(#a or #b) and #c');
+  assert.equal(evalTagExpr(parseTagExpr(expr).ast, ['#a']), false);
+});
+test('US-109d4: parser errors report one-based character positions including whitespace', async () => {
+  const { parseTagExpr } = await load();
+  assert.equal(parseTagExpr('  #long #b').position, 9);
+  assert.equal(parseTagExpr('#a and').position, 7);
+  assert.equal(parseTagExpr('(#a').position, 4);
 });

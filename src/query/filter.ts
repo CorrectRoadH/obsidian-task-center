@@ -5,7 +5,7 @@
 //
 // ARCHITECTURE.md §4.2 defines the filter semantics:
 //   - search: title/tag keyword match (case-insensitive)
-//   - tags: AND match (all specified tags must be present)
+//   - tags: boolean expressions (legacy arrays / include-exclude shapes supported)
 //   - status: multi-select over effectiveStatus
 //   - time: per-field date token matching using effective dates
 //   - unscheduled: means effectiveScheduled is null
@@ -16,7 +16,7 @@ import type {
   QueryTimeField,
   QueryTimeFilters,
 } from "../types";
-import { normalizeQueryStatus, resolveTagFilter } from "./schema";
+import { normalizeQueryStatus, tagsToExpr } from "./schema";
 import { type TagExprNode, parseTagExpr, evalTagExpr } from "./tag-expr";
 import { taskMatchesTimeToken, timeTokenAppliesToField } from "../time-filter";
 import { todayISO } from "../dates";
@@ -70,11 +70,8 @@ function normalizeQueryFilters(
   filters: QueryPresetFilters,
 ): NormalizedQueryFilters {
   const time = filters.time ?? {};
-  // US-109d4: tag filtering is unified on the `{ expr }` form. Legacy array /
-  // three-state shapes are migrated to `{ expr }` at normalize time, so the
-  // evaluator only reads `expr` here (no back-compat shape handling). A syntax
-  // error yields a null AST → no tag filtering (fail-open).
-  const exprStr = resolveTagFilter(filters.tags).expr ?? "";
+  // Resolve all accepted tag shapes before parsing once per query.
+  const exprStr = tagsToExpr(filters.tags);
   const tagExpr = exprStr.trim() ? parseTagExpr(exprStr).ast : null;
   return {
     searchQ: (filters.search ?? "").trim().toLowerCase(),

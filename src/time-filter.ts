@@ -13,6 +13,7 @@ export function taskMatchesTimeToken(
 ): boolean {
   const filter = token.trim();
   if (!filter || filter === "all") return true;
+  if (filter === "not-overdue") return !value || value >= today;
   if (!value) return false;
 
   if (filter === "overdue") return value < today;
@@ -45,6 +46,6 @@ export function taskMatchesTimeToken(
 export function timeTokenAppliesToField(field: QueryTimeField, token: string): boolean {
   const value = token.trim();
   if (!value) return true;
-  if ((value === "overdue" || value === "next-7-days") && field !== "deadline") return false;
+  if ((value === "overdue" || value === "not-overdue" || value === "next-7-days") && field !== "deadline") return false;
   return true;
 }

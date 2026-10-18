@@ -21,15 +21,17 @@ export type TagExprNode =
 export interface TagExprParseResult {
   ast: TagExprNode | null;
   error: string | null;
+  /** One-based character position in the original input (EOF = length + 1). */
+  position?: number;
 }
 
-type Token =
+type Token = { start: number } & (
   | { kind: "and" }
   | { kind: "or" }
   | { kind: "not" }
   | { kind: "lparen" }
   | { kind: "rparen" }
-  | { kind: "tag"; tag: string };
+  | { kind: "tag"; tag: string });
 
 function normalizeTag(raw: string): string {
   const trimmed = raw.trim();
@@ -47,12 +49,12 @@ function tokenize(input: string): { tokens: Token[]; error: string | null } {
       continue;
     }
     if (ch === "(") {
-      tokens.push({ kind: "lparen" });
+      tokens.push({ kind: "lparen", start: i });
       i++;
       continue;
     }
     if (ch === ")") {
-      tokens.push({ kind: "rparen" });
+      tokens.push({ kind: "rparen", start: i });
       i++;
       continue;
     }
@@ -60,13 +62,14 @@ function tokenize(input: string): { tokens: Token[]; error: string | null } {
     let j = i;
     while (j < input.length && !" \t\n\r()".includes(input[j])) j++;
     const word = input.slice(i, j);
+    const start = i;
     i = j;
     const lower = word.toLowerCase();
     // Bare keywords (no leading #) are operators; anything else is a tag.
     if (!word.startsWith("#") && (lower === "and" || lower === "or" || lower === "not")) {
-      tokens.push({ kind: lower });
+      tokens.push({ kind: lower, start });
     } else {
-      tokens.push({ kind: "tag", tag: normalizeTag(word) });
+      tokens.push({ kind: "tag", tag: normalizeTag(word), start });
     }
   }
   return { tokens, error: null };
@@ -74,9 +77,9 @@ function tokenize(input: string): { tokens: Token[]; error: string | null } {
 
 export function parseTagExpr(input: string): TagExprParseResult {
   const trimmed = (input ?? "").trim();
-  if (!trimmed) return { ast: null, error: "empty" };
-  const { tokens } = tokenize(trimmed);
-  if (tokens.length === 0) return { ast: null, error: "empty" };
+  if (!trimmed) return { ast: null, error: "empty", position: 1 };
+  const { tokens } = tokenize(input);
+  if (tokens.length === 0) return { ast: null, error: "empty", position: 1 };
 
   let pos = 0;
   const peek = (): Token | undefined => tokens[pos];
@@ -127,11 +130,11 @@ export function parseTagExpr(input: string): TagExprParseResult {
   try {
     const ast = parseOr();
     if (pos !== tokens.length) {
-      return { ast: null, error: `unexpected token at position ${pos}` };
+      return { ast: null, error: "unexpected token", position: (peek()?.start ?? input.length) + 1 };
     }
     return { ast, error: null };
   } catch (e) {
-    return { ast: null, error: e instanceof Error ? e.message : "parse error" };
+    return { ast: null, error: e instanceof Error ? e.message : "parse error", position: (peek()?.start ?? input.length) + 1 };
   }
 }
 
@@ -181,7 +184,12 @@ export function tagSelectionToExpr(
 export function appendTagToExpr(expr: string, tag: string): string {
   const t = normalizeTag(tag);
   const trimmed = expr.trim();
-  return trimmed ? `${trimmed} and ${t}` : t;
+  if (!trimmed) return t;
+  const { tokens } = tokenize(trimmed);
+  const last = tokens[tokens.length - 1];
+  if (last && ["and", "or", "not", "lparen"].includes(last.kind)) return `${trimmed} ${t}`;
+  const { ast } = parseTagExpr(trimmed);
+  return `${ast?.type === "or" ? `(${trimmed})` : trimmed} and ${t}`;
 }
 
 export { normalizeTag };

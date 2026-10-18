@@ -19,6 +19,29 @@ function detectLocale(): Locale {
 }
 
 const EN = {
+  // US-219: localized, path-specific DSL diagnostics.
+  "dsl.json": "DSL only supports JSON; parsing failed: {detail}",
+  "dsl.object": "{path} must be an object.",
+  "dsl.name": "DSL requires name.",
+  "dsl.validation": "Query DSL validation failed: {details}",
+  "dsl.legacy": "Invalid Query DSL: pre-1.0 fields detected. Update skill: npx skills add CorrectRoadH/obsidian-task-center; use view.layout + each area’s when.",
+  "dsl.string": "{path} must be a string.",
+  "dsl.unsupported": "{path} is not supported for this area.",
+  "dsl.status": "{path} must be all or known task statuses: todo, done, dropped, in_progress, cancelled, custom.",
+  "dsl.date": "{path} must be a supported date token, valid ISO date or ordered date range.",
+  "dsl.tags": "{path} must contain valid tags or a tag expression.",
+  "dsl.tagMode": "{path} must be and or or.",
+  "dsl.expression": "{path}: invalid tag expression near character {n}.",
+  "dsl.dropAction": "{path} must specify exactly one action: setStatus (done/dropped), setScheduled (ISO date/today/tomorrow/next-week), or clearScheduled: true.",
+  "dsl.abandonOnly": "{path}: a drop area only accepts {\"setStatus\":\"dropped\"}.",
+  "dsl.positive": "{path} must be a positive number (limit must be an integer).",
+  "dsl.direction": "{path} must be row or col.",
+  "dsl.children": "{path} must be a non-empty array.",
+  "dsl.weekStart": "{path} must be monday or sunday on a week/month area.",
+  "dsl.sort": "{path} must be an array of supported sort tokens.",
+  "savedViews.timeDropped": "Dropped",
+  "savedViews.dateNotOverdue": "Not overdue (including no deadline)",
+
   // View tabs
   "tab.today": "Today",
   "tab.week": "Week",
@@ -315,7 +338,7 @@ const EN = {
   "savedViews.tagInsert": "Insert a tag…",
   "savedViews.tagEmpty": "No tags found. Add #hashtags to your tasks to filter by tag.",
   "savedViews.tagExprExample": "e.g. #a and #b · #a or #b · not #c · (#a or #b) and not #c",
-  "savedViews.tagExprError": "Invalid expression — check tags, and/or/not, and parentheses.",
+  "savedViews.tagExprError": "Near character {n}: check tags, operators and parentheses.",
   "savedViews.emptyHint": "Set filters, then save a new query tab.",
   "savedViews.timeScheduled": "Schedule",
   "savedViews.timeDeadline": "Deadline",
@@ -514,6 +537,29 @@ const EN = {
 };
 
 const ZH: Partial<typeof EN> = {
+  // US-219: localized, path-specific DSL diagnostics.
+  "dsl.json": "DSL 当前只支持 JSON，解析失败：{detail}",
+  "dsl.object": "{path} 必须是对象。",
+  "dsl.name": "DSL 缺少 name。",
+  "dsl.validation": "Query DSL 校验失败：{details}",
+  "dsl.legacy": "无效 Query DSL：检测到 1.0 前的字段。请更新 skill：npx skills add CorrectRoadH/obsidian-task-center，并改用 view.layout + 每个 area 自己的 when。",
+  "dsl.string": "{path} 必须是字符串。",
+  "dsl.unsupported": "{path} 不受该区域支持。",
+  "dsl.status": "{path} 必须是 all 或已知状态：todo、done、dropped、in_progress、cancelled、custom。",
+  "dsl.date": "{path} 必须是支持的日期 token、有效 ISO 日期或起止有序的日期范围。",
+  "dsl.tags": "{path} 必须包含合法标签或标签表达式。",
+  "dsl.tagMode": "{path} 必须是 and 或 or。",
+  "dsl.expression": "{path}：第 {n} 个字符附近的标签表达式有误。",
+  "dsl.dropAction": "{path} 必须且只能指定一项：setStatus（done/dropped）、setScheduled（ISO 日期/today/tomorrow/next-week）或 clearScheduled: true。",
+  "dsl.abandonOnly": "{path}：放弃区只接受 {\"setStatus\":\"dropped\"}。",
+  "dsl.positive": "{path} 必须是正数（limit 必须为整数）。",
+  "dsl.direction": "{path} 必须是 row 或 col。",
+  "dsl.children": "{path} 必须是非空数组。",
+  "dsl.weekStart": "{path} 只能用于周/月区域，且必须为 monday 或 sunday。",
+  "dsl.sort": "{path} 必须是支持的排序 token 数组。",
+  "savedViews.timeDropped": "放弃于",
+  "savedViews.dateNotOverdue": "未逾期（含无截止）",
+
   "tab.today": "今日",
   "tab.week": "本周",
   "tab.month": "本月",
@@ -768,7 +814,7 @@ const ZH: Partial<typeof EN> = {
   "savedViews.tagInsert": "插入标签…",
   "savedViews.tagEmpty": "未找到标签。在任务中添加 #hashtag 即可按标签筛选。",
   "savedViews.tagExprExample": "例：#a and #b · #a or #b · not #c · (#a or #b) and not #c",
-  "savedViews.tagExprError": "表达式有误——检查标签、and / or / not 与括号。",
+  "savedViews.tagExprError": "第 {n} 个字符附近表达式有误——检查标签、运算符与括号。",
   "savedViews.emptyHint": "设置过滤条件后可保存为新的 query tab。",
   "savedViews.timeScheduled": "排期",
   "savedViews.timeDeadline": "截止",

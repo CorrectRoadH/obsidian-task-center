@@ -38,7 +38,7 @@ The whole DSL may also be wrapped as `{ "query": { … } }`; it behaves the same
 > Submitting any of these pre-1.0 shapes through **Edit Query** or the CLI (`query-create` / `query-update`) is **rejected outright** (the CLI returns `invalid_query` and tells you to update the skill and use `view.layout` + area `when`, US-217a):
 > - a top-level `filters` or `summary` (even an empty `{}`);
 > - flat top-level `search` / `tag` / `time` / `status`;
-> - a `view` with no `layout` but with `type` / `preset` / `sections` / `tray` / `matrix`.
+> - a `view` with `type` / `preset` / `sections` / `tray` / `matrix`.
 >
 > Only legacy data **already stored** in `data.json` is migrated into a `{ layout }` tree, by the upgrade gate on plugin load (US-414 / US-415). Hand-written input is not.
 
@@ -66,7 +66,7 @@ There is no "base set for the whole Tab". Every list / grid / week / month area 
 
 All conditions are **AND-ed**: to enter this block a task must satisfy every key in `when`. Omitted keys don't filter.
 
-> Values inside `when` are currently **not validated**: a wrong value doesn't raise an error, it is silently dropped or matches nothing (see each subsection). Double-check spelling before submitting.
+> Fields, types, statuses, dates and tag expressions inside `when` are validated before normalization (US-219). Invalid input rejects the whole DSL (`invalid_query` in CLI). Localized messages include the area path, e.g. `view.layout.children[0].when.time.scheduled`.
 
 ### search
 
@@ -87,7 +87,7 @@ Accepted values:
 
 Forms: an array (multi-select, any match), a single string, or `"all"`; omit = all. It matches the post-inheritance `effectiveStatus` (when a parent is done / dropped, its children count as that terminal status). The GUI status picker only offers All / TODO / Done / Dropped.
 
-> Unknown values are dropped; if none are recognised it falls back to `"all"` (no status filter), without an error. After normalization every `when` carries an explicit `"status": "all"` or status array.
+> Unknown statuses are rejected instead of falling back to `all`. Normalized `when` includes an explicit status array or `"all"`.
 
 ### tags: tag expression
 
@@ -102,7 +102,7 @@ Tag filtering is a **boolean expression**; the canonical form is `{ "expr": "…
 
 Example: `"tags": { "expr": "(#a or #b) and not #c" }` means "has a or b, and does not have c".
 
-On a syntax error (e.g. `#a and (`) the expression is saved as written, but that area **does no tag filtering** (fail-open), so tasks are never silently lost; the GUI input highlights the error in place.
+Syntax errors reject the edit. The GUI highlights the error and shows its character position, retaining the saved filter.
 
 **Legacy forms** are still accepted and rewritten into the equivalent `{ expr }` on normalization, so `query-show` always shows an expression:
 
@@ -112,13 +112,13 @@ On a syntax error (e.g. `#a and (`) the expression is saved as written, but that
 | `{ "values": ["#a", "#b"], "mode": "or" }` | `#a or #b` |
 | `{ "values": ["#a"], "exclude": ["#c"] }` | `#a and not #c` |
 
-`tags` of any other type (a number, say) is silently ignored.
+Invalid tag types, mixed arrays and malformed objects return `invalid_query`. Do not mix `expr` with `values/mode/exclude`.
 
-The GUI tag popover has an expression input (live validation, with examples) plus a tag list; clicking a tag in the list appends `#tag` to the expression with `and`.
+The GUI provides a live-validated expression input and a tag list. Insertion preserves precedence: `#a or #b` plus `#c` becomes `(#a or #b) and #c`. After a trailing `and/or/not`, only the tag is appended.
 
 ### time: fields and date vocabulary
 
-`time` is an object with 4 fields:
+`time` is an object with 5 fields:
 
 | Field | Value source |
 | --- | --- |
@@ -126,6 +126,7 @@ The GUI tag popover has an expression input (live validation, with examples) plu
 | `deadline` | 📅 deadline (including one inherited from a parent) |
 | `completed` | ✅ completion date (the task's own line) |
 | `created` | ➕ created date (inherited when missing) |
+| `dropped` | ❌ dropped date (the task’s own line) |
 
 Each field takes one date token:
 
@@ -133,19 +134,20 @@ Each field takes one date token:
 | --- | --- |
 | `all` | no restriction |
 | `today` / `tomorrow` | today / tomorrow |
-| `week` / `next-week` | this week / next week (week start follows the plugin setting) |
+| `week` / `next-week` | this week / next week (week start uses the area firstDayOfWeek override, otherwise the plugin setting) |
 | `month` | this month |
 | `unscheduled` | **the field is empty** (e.g. "not scheduled" = `scheduled: "unscheduled"`, "no deadline" = `deadline: "unscheduled"`) |
 | `overdue` | before today (**`deadline` only**) |
+| `not-overdue` | no deadline or deadline on/after today (**`deadline` only**, US-720b) |
 | `next-7-days` | today through 7 days from now, inclusive (**`deadline` only**) |
 | `2026-06-23` | a single day (`YYYY-MM-DD`) |
 | `2026-06-01..2026-06-30` | inclusive range (`from..to`, either end may be empty, e.g. `2026-06-01..`) |
 
-- Apart from `all` and `unscheduled`, a task whose field is empty never matches.
+- Apart from `all`, `unscheduled` and `not-overdue`, a task whose field is empty never matches.
 - "Today" for relative tokens: list / grid use the real today; week / month use the anchor date you've navigated to (`anchor=` on the CLI).
-- `overdue` / `next-7-days` on any field other than `deadline` **match nothing**.
-- **There is no `yesterday` / `next-month`** (that's the vocabulary of the `task-center:list` CLI verb). Unknown tokens don't error, they just match nothing.
-- Field names other than the 4 above are dropped.
+- `overdue` / `not-overdue` / `next-7-days` are rejected on any field other than `deadline`.
+- **There is no `yesterday` / `next-month`**. Unknown tokens, invalid calendar dates and reversed ranges are rejected; a range needs at least one endpoint.
+- Unknown time field names are rejected.
 
 ---
 
@@ -176,7 +178,7 @@ Structural validation (any failure rejects the whole DSL):
 | An area's `type` must be a string (omitted = `list`) | `invalid_area_type` |
 | A `drop` area must have an `onDrop` object | `drop_requires_on_drop` |
 
-`weight` must be a positive number, otherwise it's ignored.
+`weight` must be positive; invalid values are rejected.
 
 The root can be a Stack, or **directly a single area** (no wrapper needed). For example, the TODO view's root is just one `list`:
 
@@ -218,8 +220,8 @@ The most common component: `when` selects a column of task cards. When a parent 
 | --- | --- |
 | `when` | This block's filter (see §2). The graphical filter UI edits exactly this `when`. |
 | `orderBy` | Sorting, see [§5.3](#53-orderby-sorting). Omitted = original vault order. |
-| `limit` | Max number of items (positive number; strings, 0 and negatives are ignored). |
-| `emptyText` | Saved, but **not used by the UI today**: empty areas always show the built-in empty-state text. |
+| `limit` | Maximum items (positive integer; other values are rejected). |
+| `emptyText` | Custom empty-state text for list/grid, including empty trays. Missing/blank text uses the built-in message. |
 
 #### Multi-segment lists: stack several lists in a col
 
@@ -257,8 +259,8 @@ A date grid shown by week, with `◀ week ▶` navigation. Tasks land in the day
 { "type": "week", "when": { "status": ["todo"] } }
 ```
 
-- The week start follows the plugin setting. `firstDayOfWeek` (`monday` / `sunday`) is saved but **has no effect yet**.
-- An `onDrop` on a week area is saved but ignored; day cells always "reschedule to that day".
+- `firstDayOfWeek` (`monday` / `sunday`) overrides the global setting for both this area’s calendar and week predicates. Omit it to follow the global setting.
+- Week/month reject explicit `onDrop`; day cells always reschedule to that day.
 
 > The full layout from the screenshot is in [§6 Week](#week): below the week grid sit the "Unscheduled" tray and the drop zone, side by side.
 
@@ -272,7 +274,7 @@ A date grid shown by month, used like `week`, with month navigation.
 { "type": "month", "when": { "status": ["todo"] } }
 ```
 
-`firstDayOfWeek` and `density` (`compact` / `cards`) are saved but **have no effect yet**; on mobile the month view is always a calendar grid with dot density.
+`firstDayOfWeek` works as on week areas. `density` has been removed: new DSL input is rejected and old stored values are ignored. Mobile retains the calendar grid and dots.
 
 ### 4.5 drop: drop zone
 
@@ -282,7 +284,7 @@ A drop target with no query and no task cards; `onDrop` is required (missing it 
 { "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
 
-> In the current implementation a drop area **has exactly one behaviour: mark the dropped task as dropped** (cascading to children that are still todo). Any object passes validation, so `{}`, `{ "setStatus": "done" }` or `{ "clearScheduled": true }` are all treated as "drop". Only write `{ "setStatus": "dropped" }`. A drop area's `title` is not shown.
+> A drop area is an abandon zone (US-100 / US-123). It accepts only `{ "setStatus": "dropped" }`, with exactly that one key. Empty objects, done, scheduling, clearing or multiple keys return `invalid_query`. Abandoning cascades to todo children. The drop title is not shown.
 
 ### 4.6 unknown: the fallback
 
@@ -305,15 +307,14 @@ The write action performed when a card is dragged into an area. Write **one** ke
 
 | Form | Effect | Works on |
 | --- | --- | --- |
-| `{ "setStatus": "dropped" }` | mark the task as dropped | `drop` |
+| `{ "setStatus": "dropped" }` | abandon the task and todo descendants | `drop` / `list` / `grid` |
+| `{ "setStatus": "done" }` | complete the task and todo descendants | `list` / `grid` |
 | `{ "clearScheduled": true }` | clear the ⏳ on the dragged task's own line (the unscheduled tray) | `list` / `grid` |
 | `{ "setScheduled": "2026-06-23" }` | reschedule ⏳ to that day | `list` / `grid` |
 
-- `setScheduled` currently only takes a literal `YYYY-MM-DD`; tokens like `today` / `tomorrow` fail with an invalid-date notice on drop.
-- `setStatus` on a `list` / `grid` has no effect.
-- `week` / `month` don't read `onDrop`; their day cells are reschedule targets already.
+- `setScheduled` accepts a valid ISO date or `today` / `tomorrow` / `next-week`. Tokens resolve against the actual day at drop time, before the ISO-only write API; `next-week` means seven days later. Range tokens such as `week` are rejected.
+- `week` / `month` reject explicit `onDrop`; day cells already reschedule tasks.
 - A card whose schedule is inherited from its parent (no ⏳ on its own line) is not rewritten when dropped into a `clearScheduled` area; you get a notice instead.
-- `setStatus` only accepts `"dropped"`; other values are dropped. Mutual exclusion isn't validated; with several keys the "works on" rules above decide, which is hard to predict, so don't.
 
 ### 5.3 orderBy sorting
 
@@ -329,7 +330,7 @@ The write action performed when a card is dragged into an area. Write **one** ke
 | `priority_desc` | by priority, highest first (🔺 ⏫ 🔼 🔽 ⏬, none last) |
 | `title_asc` / `title_desc` | by title, alphabetical |
 
-Tokens not in the table (e.g. `created_asc`) are saved as written but ignored when sorting.
+Sort tokens not in the table (e.g. `created_asc`) are rejected instead of saved without effect.
 
 ---
 
@@ -359,8 +360,8 @@ A `col` stacking 3 lists (overdue / today / unscheduled picks), each with its ow
     { "type": "list", "id": "today", "title": "Today",
       "when": { "status": ["todo"], "time": { "scheduled": "today" } }, "limit": 3 },
     { "type": "list", "id": "unscheduled-rec", "title": "Unscheduled",
-      "when": { "status": ["todo"], "time": { "scheduled": "unscheduled", "deadline": "unscheduled" } },
-      "orderBy": ["created_desc"], "limit": 3 }
+      "when": { "status": ["todo"], "time": { "scheduled": "unscheduled", "deadline": "not-overdue" } },
+      "orderBy": ["deadline_asc", "created_desc"], "limit": 3 }
   ]
 } } }
 ```

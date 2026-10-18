@@ -38,7 +38,7 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 > 通过「编辑 Query」或 CLI（`query-create` / `query-update`）提交下列 1.0 前的旧写法会被**直接拒绝**（CLI 报 `invalid_query`，提示更新 skill 并改用 `view.layout` + area `when`，US-217a）：
 > - 顶层出现 `filters` 或 `summary`（哪怕是空对象 `{}`）；
 > - 顶层扁平的 `search` / `tag` / `time` / `status`；
-> - `view` 里没有 `layout`，却带 `type` / `preset` / `sections` / `tray` / `matrix`。
+> - `view` 里带 `type` / `preset` / `sections` / `tray` / `matrix`。
 >
 > 只有 `data.json` 里**已存的**旧数据会在插件加载时经升级闸门自动迁移成 `{ layout }` 树（US-414 / US-415），手写输入不会。
 
@@ -66,7 +66,7 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 各条件之间是 **AND**：任务要进入这块区域，必须同时满足 `when` 里每一项。省略的条件不参与过滤。
 
-> `when` 内部的值目前**不做校验**：写错的值不会报错，而是被静默丢弃或匹配不到（见各小节）。提交前请核对拼写。
+> `when` 的字段、类型、状态、日期和标签表达式会在归一化前严格校验（US-219）。错误拒绝整份 DSL，CLI 返回 `invalid_query`，文案跟随 Obsidian 语言，并包含完整区域路径，例如 `view.layout.children[0].when.time.scheduled`。
 
 ### search
 
@@ -87,7 +87,7 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 写法：数组（多选，命中任一即可）、单个字符串，或 `"all"`；省略 = 全部。匹配的是终态继承后的 `effectiveStatus`（父任务已完成 / 放弃时，子任务按父任务的终态算）。GUI 状态面板只提供 全部 / TODO / 完成 / 放弃 四项。
 
-> 不认识的值会被丢掉；如果全部都不认识，就退化成 `"all"`（不过滤状态），不会报错。归一化后的 DSL 里每个 `when` 都会显式带上 `"status": "all"` 或状态数组。
+> 不认识的状态会报错，不会退化成 `all`。归一化后的 `when` 显式带 `status: "all"` 或状态数组。
 
 ### tags —— 标签表达式
 
@@ -102,7 +102,7 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 
 例：`"tags": { "expr": "(#a or #b) and not #c" }` —— 含 a 或 b、且不含 c。
 
-语法错误时（如 `#a and (`）表达式会原样保存，但该 area **不做标签过滤**（fail-open），不会静默丢任务；GUI 输入框会就地标红。
+语法错误时拒绝保存；GUI 就地标红并显示“第 N 个字符附近…”，保留已保存的过滤条件。
 
 **旧写法**仍可输入，归一化时会自动改写成等价的 `{ expr }`，`query-show` 看到的总是表达式：
 
@@ -112,13 +112,13 @@ Task Center 里每一个 Tab 都是一份 **Query DSL**（一个 `QueryPreset` �
 | `{ "values": ["#a", "#b"], "mode": "or" }` | `#a or #b` |
 | `{ "values": ["#a"], "exclude": ["#c"] }` | `#a and not #c` |
 
-`tags` 写成数字等其它类型会被静默忽略。
+`tags` 写成数字、混合类型数组或非法对象时返回 `invalid_query`。表达式与旧 `values/mode/exclude` 字段不能混写。
 
-GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标签列表，点列表里的标签会把 `#tag` 用 `and` 追加进表达式。
+GUI 的标签 popover 有实时校验的表达式输入框与标签列表。追加标签时保留原表达式优先级：`#a or #b` 追加 `#c` → `(#a or #b) and #c`；末尾为 `and/or/not` 时只补标签。
 
 ### time —— 时间字段与日期词汇
 
-`time` 是一个对象，支持 4 个字段：
+`time` 是一个对象，支持 5 个字段：
 
 | 字段 | 取值来源 |
 | --- | --- |
@@ -126,6 +126,7 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 | `deadline` | 📅 截止（含从父任务继承的截止） |
 | `completed` | ✅ 完成日期（任务自己那行） |
 | `created` | ➕ 创建日期（缺失时取继承值） |
+| `dropped` | ❌ 放弃日期（任务自己那行） |
 
 每个字段取一个日期 token：
 
@@ -133,19 +134,20 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 | --- | --- |
 | `all` | 不限制 |
 | `today` / `tomorrow` | 今天 / 明天 |
-| `week` / `next-week` | 本周 / 下周（周起始日跟随插件设置） |
+| `week` / `next-week` | 本周 / 下周（周起始日优先使用区域 firstDayOfWeek，否则跟随插件设置） |
 | `month` | 本月 |
 | `unscheduled` | **该字段为空**（如「没有排期」＝ `scheduled: "unscheduled"`，「没有截止」＝ `deadline: "unscheduled"`） |
 | `overdue` | 早于今天（**仅 `deadline`**） |
+| `not-overdue` | 无截止日期或不早于今天（**仅 `deadline`**，US-720b） |
 | `next-7-days` | 今天到 7 天后，含两端（**仅 `deadline`**） |
 | `2026-06-23` | 某一天（`YYYY-MM-DD`） |
 | `2026-06-01..2026-06-30` | 闭区间（`起..止`，任一端可空，如 `2026-06-01..`） |
 
-- 除 `all` 和 `unscheduled` 外，字段为空的任务一律不匹配。
+- 除 `all`、`unscheduled` 和 `not-overdue` 外，字段为空的任务一律不匹配。
 - 相对 token 的「今天」：list / grid 用真实的今天；week / month 用当前导航到的锚点日期（CLI 里是 `anchor=`）。
-- `overdue` / `next-7-days` 写在 `deadline` 以外的字段上**匹配不到任何任务**。
-- **没有 `yesterday` / `next-month`**（那是 `task-center:list` CLI 动词的词汇）。不认识的 token 不报错，但匹配不到任何任务。
-- 上表 4 个以外的字段名会被丢弃。
+- `overdue` / `not-overdue` / `next-7-days` 只允许用于 `deadline`，用在其它字段会报错。
+- **没有 `yesterday` / `next-month`**。未知 token、无效日历日期、倒置范围会报错；范围至少有一端日期。
+- 未知时间字段会报错。
 
 ---
 
@@ -176,7 +178,7 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 | area 的 `type` 必须是字符串（省略 = `list`） | `invalid_area_type` |
 | `drop` area 必须带 `onDrop` 对象 | `drop_requires_on_drop` |
 
-`weight` 必须是正数，否则被忽略。
+`weight` 必须是正数，否则报错。
 
 根节点既可以是 Stack，也可以**直接是一个 area**（不必包壳）。例如 TODO 视图的根就是单个 `list`：
 
@@ -218,8 +220,8 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 | --- | --- |
 | `when` | 这块区域的过滤（见 §2）。图形过滤入口编辑的就是这个 `when`。 |
 | `orderBy` | 排序，见 [§5.3](#53-orderby-排序)。省略时保持 vault 里的原始顺序。 |
-| `limit` | 最多显示多少条（正数；字符串、0、负数会被忽略）。 |
-| `emptyText` | 会被保存，但**目前界面不使用**：空区域统一显示内置的空状态文案。 |
+| `limit` | 最多显示多少条（正整数；其它值报错）。 |
+| `emptyText` | list/grid 的自定义空状态文案（包括空托盘）；省略或空白则使用内置文案。 |
 
 #### 多段列表 —— 用 col 叠多个 list
 
@@ -257,8 +259,8 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 { "type": "week", "when": { "status": ["todo"] } }
 ```
 
-- 周起始日跟随插件设置。`firstDayOfWeek`（`monday` / `sunday`）会被保存，但**目前不生效**。
-- week 上的 `onDrop` 会被保存但不起作用，日格始终是「改排期到当日」。
+- `firstDayOfWeek`（`monday` / `sunday`）覆盖全局周起始日，同时作用于本区域的日历与周日期过滤；省略时跟随全局设置。
+- week/month 不接受显式 `onDrop`；日格始终是“改排期到当日”。
 
 > 上图的完整布局见 [§6 周视图](#周视图)：周网格下面横排着「未排期」收纳格和「放弃区」。
 
@@ -272,7 +274,7 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 { "type": "month", "when": { "status": ["todo"] } }
 ```
 
-`firstDayOfWeek` 与 `density`（`compact` / `cards`）会被保存，但**目前都不生效**；移动端月视图固定是日历格 + 圆点密度。
+`firstDayOfWeek` 的覆盖规则同 week。`density` 已从 DSL 删除：新输入报错，读取旧存储时忽略；移动端仍使用日历格和圆点。
 
 ### 4.5 drop —— 放弃区
 
@@ -282,7 +284,7 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 { "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
 
-> 当前实现里 drop area **只有一种行为：把拖入的任务标记为放弃**（含级联放弃仍为 todo 的子任务）。`onDrop` 只要是对象就能通过校验，写成 `{}`、`{ "setStatus": "done" }` 或 `{ "clearScheduled": true }` 都会被当成放弃。请只写 `{ "setStatus": "dropped" }`。drop area 的 `title` 不显示。
+> drop 是放弃区（US-100 / US-123），只接受 `{ "setStatus": "dropped" }`，且只能有这个键。空对象、done、改期、清排期或多键都返回 `invalid_query`，不会静默变成放弃。放弃会级联仍为 todo 的子任务。drop 的 `title` 不显示。
 
 ### 4.6 unknown —— 兜底
 
@@ -305,15 +307,15 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 
 | 写法 | 效果 | 在哪些 area 生效 |
 | --- | --- | --- |
-| `{ "setStatus": "dropped" }` | 把任务标记为放弃 | `drop` |
+| `{ "setStatus": "dropped" }` | 放弃任务（含 todo 子任务级联） | `drop` / `list` / `grid` |
+| `{ "setStatus": "done" }` | 完成任务（含 todo 子任务级联） | `list` / `grid` |
 | `{ "clearScheduled": true }` | 清空被拖任务自己那行的 ⏳（未排期收纳格用） | `list` / `grid` |
 | `{ "setScheduled": "2026-06-23" }` | 把 ⏳ 改到这一天 | `list` / `grid` |
 
-- `setScheduled` 目前只接受字面日期 `YYYY-MM-DD`；写 `today` / `tomorrow` 等 token 会在拖入时报日期无效。
-- `list` / `grid` 上写 `setStatus` 不起作用。
-- `week` / `month` 不读 `onDrop`，日格本身就是改排期目标。
+- `setScheduled` 接受有效 ISO 日期或 `today` / `tomorrow` / `next-week`，在拖入时按真实今天解析为 ISO 后写回；`next-week` 指七天后。范围 token（如 `week`）不支持。
+- `week` / `month` 拒绝显式 `onDrop`；日格本身是改排期目标。
 - 排期继承自父任务（自己那行没有 ⏳）的卡片拖进 `clearScheduled` 区时，不会改写，只弹提示。
-- `setStatus` 只接受 `"dropped"`，其它值会被丢弃。校验不检查互斥，同时写多个键时以上表的生效规则为准，结果难以预期，别这么写。
+- `onDrop` 必须且只能有一个有效操作键；非法值、未知键及组合操作均在保存前报错。
 
 ### 5.3 orderBy 排序
 
@@ -329,7 +331,7 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
 | `priority_desc` | 按优先级从高到低（🔺 ⏫ 🔼 🔽 ⏬，无优先级最后） |
 | `title_asc` / `title_desc` | 按标题字母序 |
 
-表里没列的 token（如 `created_asc`）会原样保存，但排序时被忽略。
+表里没列的排序 token（如 `created_asc`）会报错，不会保存一个无效排序。
 
 ---
 
@@ -359,8 +361,8 @@ GUI 的标签 popover 有表达式输入框（实时校验、带示例）和标�
     { "type": "list", "id": "today", "title": "Today",
       "when": { "status": ["todo"], "time": { "scheduled": "today" } }, "limit": 3 },
     { "type": "list", "id": "unscheduled-rec", "title": "Unscheduled",
-      "when": { "status": ["todo"], "time": { "scheduled": "unscheduled", "deadline": "unscheduled" } },
-      "orderBy": ["created_desc"], "limit": 3 }
+      "when": { "status": ["todo"], "time": { "scheduled": "unscheduled", "deadline": "not-overdue" } },
+      "orderBy": ["deadline_asc", "created_desc"], "limit": 3 }
   ]
 } } }
 ```

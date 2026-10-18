@@ -10,6 +10,7 @@ function compilePure() {
     [
       "esbuild",
       "src/saved-views.ts",
+      "--alias:obsidian=./test/obsidian-stub.mjs",
       "--bundle=true",
       "--format=esm",
       "--platform=node",

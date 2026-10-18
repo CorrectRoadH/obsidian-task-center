@@ -191,7 +191,7 @@ function renderAreaTagList(
   const exprInput = sec.createEl("input", {
     type: "text",
     cls: "bt-area-tag-expr",
-    placeholder: "#a and (#b or #c) not #d",
+    placeholder: "#a and (#b or #c) and not #d",
   });
   exprInput.dataset.areaTagExpr = "";
   exprInput.value = currentExpr;
@@ -200,9 +200,9 @@ function renderAreaTagList(
   const validate = (text: string): boolean => {
     const t = text.trim();
     if (!t) { errEl.toggleClass("is-visible", false); return true; }
-    const { error } = parseTagExpr(t);
+    const { error, position } = parseTagExpr(text);
     if (error) {
-      errEl.setText(tr("savedViews.tagExprError"));
+      errEl.setText(tr("savedViews.tagExprError", { n: position ?? 1 }));
       errEl.toggleClass("is-visible", true);
       return false;
     }
@@ -215,7 +215,7 @@ function renderAreaTagList(
       if (hasExpr) v.setAreaWhen(areaIndex, { ...when, tags: [] }, rerenderControls);
       return;
     }
-    if (!validate(text)) return; // invalid → don't write, keep last saved value
+    if (!validate(exprInput.value)) return; // invalid → don't write, keep last saved value
     if (text !== currentExpr) v.setAreaWhen(areaIndex, { ...when, tags: { expr: text } }, rerenderControls);
   };
   exprInput.addEventListener("input", () => validate(exprInput.value));
@@ -284,7 +284,8 @@ function renderAreaTagList(
       if (opt.count > 0) row.createSpan({ text: String(opt.count), cls: "bt-area-tag-row-count" });
       row.addEventListener("click", () => {
         const next = appendTagToExpr(exprInput.value, opt.tag);
-        v.setAreaWhen(areaIndex, { ...when, tags: { expr: next } }, rerenderControls);
+        exprInput.value = next;
+        if (validate(next)) v.setAreaWhen(areaIndex, { ...when, tags: { expr: next } }, rerenderControls);
       });
     }
     if (filtered.length > CAP) {

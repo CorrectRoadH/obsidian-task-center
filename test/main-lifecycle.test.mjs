@@ -28,10 +28,11 @@ async function compile() {
             path: "obsidian",
             namespace: "main-lifecycle-stub",
           }));
-          build.onResolve({ filter: /^\.\/(types|settings|view|cli|api|cache|status-bar|dep-health|quickadd|i18n|dates|parser|writer|platform)$/ }, (args) => ({
-            path: args.path,
-            namespace: "main-lifecycle-stub",
-          }));
+          build.onResolve({ filter: /^\.\/(types|settings|view|cli|api|cache|status-bar|dep-health|quickadd|i18n|dates|parser|writer|platform)$/ }, (args) => {
+            // US-219: exercise real DSL translations; stub only the Obsidian language boundary.
+            if (args.path === "./i18n" && args.importer.endsWith("/saved-views.ts")) return undefined;
+            return { path: args.path, namespace: "main-lifecycle-stub" };
+          });
           build.onLoad({ filter: /.*/, namespace: "main-lifecycle-stub" }, (args) => {
             switch (args.path) {
               case "obsidian":
@@ -67,6 +68,7 @@ async function compile() {
                   }
                   export class Notice { constructor(message) { globalThis.__taskCenterNotices?.push(message); } }
                   export class WorkspaceLeaf {}
+                  export function getLanguage() { return "zh"; }
                 `);
               case "./types":
                 return stubModule(`
@@ -883,7 +885,7 @@ test("query-update rejects invalid QueryPreset DSL (unknown view type) with inva
   assert.equal(calls.refresh, 0);
 });
 
-test("query-update rejects invalid QueryPreset DSL (missing name) with invalid_query", async () => {
+test("US-219: query-update without name preserves the existing name", async () => {
   const { plugin, calls } = await createPluginForQueryCli({
     queryPresets: [
       {
@@ -902,16 +904,14 @@ test("query-update rejects invalid QueryPreset DSL (missing name) with invalid_q
     view: { layout: { type: "list" } },
   });
 
-  await assert.rejects(
-    () => plugin.cliQueryUpdate({ id: "sv-alpha", dsl: invalidDsl }),
-    (err) => err.code === "invalid_query" && /缺少 name/.test(err.message),
-  );
+  await plugin.cliQueryUpdate({ id: "sv-alpha", dsl: invalidDsl });
+  assert.equal(plugin.settings.queryPresets[0].name, "Alpha");
 
-  // Existing preset unchanged
+  // Identity and name preserved; layout is updated.
   assert.equal(plugin.settings.queryPresets.length, 1);
   assert.equal(plugin.settings.queryPresets[0].id, "sv-alpha");
-  assert.equal(calls.save, 0);
-  assert.equal(calls.refresh, 0);
+  assert.equal(calls.save, 1);
+  assert.equal(calls.refresh, 1);
 });
 
 test("query-update rejects invalid QueryPreset DSL (multi-section errors) with invalid_query", async () => {

@@ -5,7 +5,7 @@
 // (ARCHITECTURE.md §2.1 依赖规则; REFACTOR.md D5)
 
 import type { TaskStatus } from "../types";
-import { tagSelectionToExpr } from "./tag-expr";
+import { parseTagExpr, tagSelectionToExpr } from "./tag-expr";
 
 export const KNOWN_STATUS_VALUES: TaskStatus[] = [
   "todo",
@@ -83,4 +83,91 @@ export function normalizeQueryStatus(status: unknown): "all" | TaskStatus[] {
     out.push(value);
   }
   return out.length > 0 ? out : "all";
+}
+
+
+/** US-219: strict input validation, separate from forgiving stored-data normalization. */
+export interface QueryFieldIssue { field: string; rule: string; position?: number }
+
+export function isQueryDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function validTimeToken(field: string, value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const token = value.trim();
+  if (["", "all", "unscheduled", "today", "tomorrow", "week", "next-week", "month"].includes(token)) return true;
+  if (["overdue", "not-overdue", "next-7-days"].includes(token)) return field === "deadline";
+  if (isQueryDate(token)) return true;
+  const range = token.split("..");
+  return range.length === 2 && Boolean(range[0] || range[1])
+    && range.every(v => !v || isQueryDate(v))
+    && (!range[0] || !range[1] || range[0] <= range[1]);
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function validateAreaWhen(raw: unknown): QueryFieldIssue[] {
+  if (!record(raw)) return [{ field: "", rule: "object" }];
+  const issues: QueryFieldIssue[] = [];
+  const issue = (field: string, rule: string) => { issues.push({ field, rule }); };
+  for (const key of Object.keys(raw)) {
+    if (!["search", "tags", "status", "time"].includes(key)) issue(key, "unsupported");
+  }
+  if (raw.search !== undefined && typeof raw.search !== "string") issue("search", "string");
+  if (raw.status !== undefined && raw.status !== "all") {
+    const values = Array.isArray(raw.status) ? raw.status : [raw.status];
+    if (!values.every(isKnownTaskStatus)) issue("status", "status");
+  }
+  if (raw.time !== undefined) {
+    if (!record(raw.time)) issue("time", "object");
+    else for (const [field, token] of Object.entries(raw.time)) {
+      if (!["scheduled", "deadline", "completed", "created", "dropped"].includes(field)) issue(`time.${field}`, "unsupported");
+      else if (!validTimeToken(field, token)) issue(`time.${field}`, "date");
+    }
+  }
+  if (raw.tags !== undefined) {
+    const tags = raw.tags;
+    const tagList = (value: unknown): boolean => Array.isArray(value)
+      && value.every(t => typeof t === "string" && /^#?[^\s()#]+$/.test(t.trim()));
+    if (Array.isArray(tags)) {
+      if (!tagList(tags)) issue("tags", "tags");
+    } else if (typeof tags === "string") {
+      if (tags.trim() && !tagList(tags.split(",").map(t => t.trim()))) issue("tags", "tags");
+    } else if (record(tags)) {
+      if ("expr" in tags) {
+        if (Object.keys(tags).some(k => k !== "expr")) issue("tags", "tags");
+        if (typeof tags.expr !== "string") issue("tags.expr", "string");
+        else if (tags.expr.trim()) {
+          const parsed = parseTagExpr(tags.expr);
+          if (parsed.error) issues.push({ field: "tags.expr", rule: "expression", position: parsed.position });
+        }
+      } else {
+        if (Object.keys(tags).some(k => !["values", "mode", "exclude"].includes(k))) issue("tags", "tags");
+        if (tags.values !== undefined && !tagList(tags.values)) issue("tags.values", "tags");
+        if (tags.exclude !== undefined && !tagList(tags.exclude)) issue("tags.exclude", "tags");
+        if (tags.mode !== undefined && tags.mode !== "and" && tags.mode !== "or") issue("tags.mode", "tagMode");
+      }
+    } else issue("tags", "tags");
+  }
+  return issues;
+}
+
+export function validateAreaDrop(type: string, raw: unknown): QueryFieldIssue[] {
+  if (!record(raw) || Object.keys(raw).length !== 1) return [{ field: "onDrop", rule: "dropAction" }];
+  if (type === "drop") {
+    return raw.setStatus === "dropped" ? [] : [{ field: "onDrop", rule: "abandonOnly" }];
+  }
+  if (type !== "list" && type !== "grid") return [{ field: "onDrop", rule: "unsupported" }];
+  if ("setStatus" in raw && (raw.setStatus === "done" || raw.setStatus === "dropped")) return [];
+  if (raw.clearScheduled === true) return [];
+  if (typeof raw.setScheduled === "string") {
+    const token = raw.setScheduled.trim();
+    if (["today", "tomorrow", "next-week"].includes(token) || isQueryDate(token)) return [];
+  }
+  return [{ field: `onDrop.${Object.keys(raw)[0]}`, rule: "dropAction" }];
 }

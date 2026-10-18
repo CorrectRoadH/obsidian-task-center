@@ -12,6 +12,7 @@ function compilePure() {
     [
       "esbuild",
       "src/saved-views.ts",
+      "--alias:obsidian=./test/obsidian-stub.mjs",
       "--bundle=true",
       "--format=esm",
       "--platform=node",
@@ -25,6 +26,7 @@ function compilePure() {
   }
 }
 
+globalThis.window = { localStorage: { getItem: () => "zh" } };
 compilePure();
 const {
   normalizeQueryPreset,
@@ -228,9 +230,7 @@ test("US-109d4: plain AND include migrates to an and-joined expression", () => {
 test("VAL-CORE-006: validateQueryPreset — valid preset returns no errors", () => {
   const result = validateQueryPreset({
     name: "Valid",
-    filters: { search: "focus", tags: ["#work"], status: ["todo"], time: { scheduled: "today" } },
-    view: { type: "week" },
-    summary: [{ type: "count" }],
+    view: { layout: { type: "week", when: { search: "focus", tags: ["#work"], status: ["todo"], time: { scheduled: "today" } } } },
   });
 
   assert.equal(result.valid, true);
@@ -240,9 +240,7 @@ test("VAL-CORE-006: validateQueryPreset — valid preset returns no errors", () 
 test("VAL-CORE-006: validateQueryPreset — valid layout view returns no errors", () => {
   const result = validateQueryPreset({
     name: "ValidLayout",
-    filters: {},
     view: { layout: { dir: "col", children: [{ type: "week" }, { type: "list" }] } },
-    summary: [],
   });
 
   assert.equal(result.valid, true);
@@ -251,9 +249,7 @@ test("VAL-CORE-006: validateQueryPreset — valid layout view returns no errors"
 
 test("VAL-CORE-006: validateQueryPreset — missing name is a filters error", () => {
   const result = validateQueryPreset({
-    filters: {},
-    view: { type: "list" },
-    summary: [],
+    view: { layout: { type: "list" } },
   });
 
   assert.equal(result.valid, false);
@@ -274,54 +270,46 @@ test("VAL-CORE-006: validateQueryPreset — non-object root is a filters error",
 test("VAL-CORE-006: validateQueryPreset — invalid filters.status points to filters section", () => {
   const result = validateQueryPreset({
     name: "BadStatus",
-    filters: { status: 42 },
-    view: { type: "list" },
-    summary: [],
+    view: { layout: { type: "list", when: { status: 42 } } },
   });
 
   assert.equal(result.valid, false);
-  const statusErr = result.errors.find((e) => e.section === "filters" && e.code === "invalid_status");
+  const statusErr = result.errors.find((e) => e.section === "view" && e.code === "invalid_status");
   assert.ok(statusErr, "Expected invalid_status error in filters section");
 });
 
 test("VAL-CORE-006: validateQueryPreset — invalid filters.tags points to filters", () => {
   const result = validateQueryPreset({
     name: "BadTags",
-    filters: { tags: 42 }, // not string or array
-    view: { type: "list" },
-    summary: [],
+    view: { layout: { type: "list", when: { tags: 42 } } },
   });
 
   assert.equal(result.valid, false);
-  const tagErr = result.errors.find((e) => e.section === "filters" && e.code === "invalid_tags");
+  const tagErr = result.errors.find((e) => e.section === "view" && e.code === "invalid_tags");
   assert.ok(tagErr, "Expected invalid_tags error in filters section");
 });
 
 test("VAL-CORE-006: validateQueryPreset — invalid filters.time points to filters", () => {
   const result = validateQueryPreset({
     name: "BadTime",
-    filters: { time: "not-an-object" },
-    view: { type: "list" },
-    summary: [],
+    view: { layout: { type: "list", when: { time: "not-an-object" } } },
   });
 
   assert.equal(result.valid, false);
-  const timeErr = result.errors.find((e) => e.section === "filters" && e.code === "invalid_time");
+  const timeErr = result.errors.find((e) => e.section === "view" && e.code === "invalid_time");
   assert.ok(timeErr, "Expected invalid_time error in filters section");
 });
 
 test("VAL-CORE-006: validateQueryPreset — unknown legacy view.type points to view", () => {
   const result = validateQueryPreset({
     name: "BadView",
-    filters: {},
     view: { type: "gantt" },
-    summary: [],
   });
 
   assert.equal(result.valid, false);
-  const viewErr = result.errors.find((e) => e.section === "view" && e.code === "unknown_view_type");
+  const viewErr = result.errors.find((e) => e.section === "view" && e.code === "legacy_query");
   assert.ok(viewErr, "Expected unknown_view_type error in view section");
-  assert.ok(viewErr.message.includes("gantt"), "Error message should mention the bad type");
+  assert.ok(viewErr.message.includes("view.layout"));
 });
 
 test("VAL-CORE-006: validateQueryPreset — unsupported area type is accepted (renders as unknown)", () => {
@@ -329,9 +317,7 @@ test("VAL-CORE-006: validateQueryPreset — unsupported area type is accepted (r
   // `unknown` area and render "未知类型 + JSON". Only a non-string `type` errors.
   const result = validateQueryPreset({
     name: "BadAreaType",
-    filters: {},
     view: { layout: { type: "gantt" } },
-    summary: [],
   });
 
   assert.equal(result.valid, true);
@@ -345,9 +331,7 @@ test("VAL-CORE-006: validateQueryPreset — unsupported area type is accepted (r
 test("VAL-CORE-006: validateQueryPreset — non-string area type errors", () => {
   const result = validateQueryPreset({
     name: "BadAreaType",
-    filters: {},
     view: { layout: { type: 42 } },
-    summary: [],
   });
 
   assert.equal(result.valid, false);
@@ -358,9 +342,7 @@ test("VAL-CORE-006: validateQueryPreset — non-string area type errors", () => 
 test("VAL-CORE-006: validateQueryPreset — drop area without onDrop points to view", () => {
   const result = validateQueryPreset({
     name: "BadDrop",
-    filters: {},
     view: { layout: { type: "drop" } },
-    summary: [],
   });
 
   assert.equal(result.valid, false);
@@ -371,9 +353,7 @@ test("VAL-CORE-006: validateQueryPreset — drop area without onDrop points to v
 test("VAL-CORE-006: validateQueryPreset — stack with bad dir points to view", () => {
   const result = validateQueryPreset({
     name: "BadStackDir",
-    filters: {},
     view: { layout: { dir: "diagonal", children: [{ type: "list" }] } },
-    summary: [],
   });
 
   assert.equal(result.valid, false);
@@ -384,9 +364,7 @@ test("VAL-CORE-006: validateQueryPreset — stack with bad dir points to view", 
 test("VAL-CORE-006: validateQueryPreset — stack with empty children points to view", () => {
   const result = validateQueryPreset({
     name: "EmptyStack",
-    filters: {},
     view: { layout: { dir: "col", children: [] } },
-    summary: [],
   });
 
   assert.equal(result.valid, false);
@@ -397,9 +375,7 @@ test("VAL-CORE-006: validateQueryPreset — stack with empty children points to 
 test("VAL-CORE-006: validateQueryPreset — non-object view points to view", () => {
   const result = validateQueryPreset({
     name: "BadViewObj",
-    filters: {},
     view: "not-an-object",
-    summary: [],
   });
 
   assert.equal(result.valid, false);
@@ -414,7 +390,7 @@ test("VAL-CORE-006: validateQueryPreset — valid preset stays unchanged after v
     builtin: false,
     hidden: false,
     filters: { status: ["todo"] },
-    view: { type: "list" },
+    view: { layout: { type: "list" } },
   };
 
   const before = JSON.stringify(preset);
@@ -424,17 +400,16 @@ test("VAL-CORE-006: validateQueryPreset — valid preset stays unchanged after v
   assert.equal(before, after, "Preset must not be mutated by validation");
 });
 
-test("VAL-CORE-006: validateQueryPreset — multiple section errors collected together", () => {
+test("US-219: validateQueryPreset collects errors from multiple area fields", () => {
   const result = validateQueryPreset({
     name: "MultiError",
-    filters: { tags: 42 },
-    view: { type: "gantt" },
+    view: { layout: { type: "list", when: { tags: 42, search: 3 } } },
   });
 
   assert.equal(result.valid, false);
-  const sections = new Set(result.errors.map((e) => e.section));
-  assert.ok(sections.has("filters"), "Has filters error");
-  assert.ok(sections.has("view"), "Has view error");
+  assert.equal(result.errors.length, 2);
+  assert.ok(result.errors.some(e => e.message.includes("when.tags")));
+  assert.ok(result.errors.some(e => e.message.includes("when.search")));
 });
 
 // ── VAL-CORE-005 / VAL-CROSS-002: isLegacySavedTaskView ──
@@ -782,4 +757,70 @@ test("VAL-CORE-006: validateQueryPreset on invalid preset does not mutate the in
   validateQueryPreset(input);
 
   assert.equal(JSON.stringify(input), frozen, "Input must not be mutated by validation");
+});
+
+// US-219: reject malformed area predicates before normalization can erase them.
+for (const [field, value, suffix] of [
+  ['status', ['doing'], 'status'], ['tags', 5, 'tags'],
+  ['tags', { expr: '#a and (' }, 'tags.expr'], ['tags', ['#a', 5], 'tags'],
+  ['tags', { values: ['#a'], mode: 'xor' }, 'tags.mode'],
+  ['search', 3, 'search'], ['time', 'today', 'time'],
+  ['time', { scheduled: 'yesterday' }, 'time.scheduled'],
+  ['time', { scheduled: '2026-02-30' }, 'time.scheduled'],
+  ['time', { scheduled: '2026-10-20..2026-10-01' }, 'time.scheduled'],
+  ['time', { scheduled: 'overdue' }, 'time.scheduled'],
+  ['time', { scheduled: 'not-overdue' }, 'time.scheduled'],
+  ['time', { typo: 'today' }, 'time.typo'],
+]) {
+  test(`US-219: rejects invalid nested when.${suffix}: ${JSON.stringify(value)}`, () => {
+    const input = { name: 'Bad', view: { layout: { dir: 'col', children: [
+      { type: 'week', when: { [field]: value } },
+    ] } } };
+    const result = validateQueryPreset(input);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(e => e.message.includes(`view.layout.children[0].when.${suffix}`)));
+    assert.throws(() => parseQueryDsl(JSON.stringify(input)));
+  });
+}
+for (const onDrop of [{}, { setStatus: 'done' }, { clearScheduled: true }, { setStatus: 'dropped', clearScheduled: true }]) {
+  test(`US-100/US-219: drop only accepts abandonment: ${JSON.stringify(onDrop)}`, () => {
+    assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'Drop', view: { layout: { type: 'drop', onDrop } } })), /onDrop/);
+  });
+}
+test('US-219: list/grid onDrop accepts exactly one supported action', () => {
+  for (const type of ['list', 'grid']) {
+    for (const onDrop of [{ setStatus: 'done' }, { setStatus: 'dropped' }, { setScheduled: 'tomorrow' }, { clearScheduled: true }]) {
+      assert.deepEqual(parseQueryDsl(JSON.stringify({ name: 'Action', view: { layout: { type, onDrop } } })).view.layout.onDrop, onDrop);
+    }
+    for (const onDrop of [{}, { setStatus: 'doing' }, { clearScheduled: false }, { setScheduled: 'week' }, { setScheduled: 'today', clearScheduled: true }]) {
+      assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'Action', view: { layout: { type, onDrop } } })), /onDrop/);
+    }
+  }
+});
+test('US-109i/US-109t: dropped date survives round-trip and retired density is ignored on load', () => {
+  const preset = parseQueryDsl(JSON.stringify({ name: 'Dropped', view: { layout: { type: 'list', when: { time: { dropped: 'today' } } } } }));
+  assert.equal(JSON.parse(stringifyQueryPreset(preset)).view.layout.when.time.dropped, 'today');
+  const loaded = normalizeQueryPreset({ name: 'Old', view: { layout: { type: 'month', density: 'compact' } } });
+  assert.equal(loaded.view.layout.density, undefined);
+  assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'New', view: { layout: { type: 'month', density: 'compact' } } })), /density/);
+});
+test('US-217a: legacy fields mixed with layout are rejected', () => {
+  assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'Mixed', view: { type: 'week', layout: { type: 'list' } } })), /view.layout/);
+});
+
+
+test('US-219: DSL diagnostics follow the current Obsidian language', () => {
+  try {
+    globalThis.window.localStorage.getItem = () => 'en';
+    assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'Bad', view: { layout: { type: 'list', when: { search: 3 } } } })), /view.layout.when.search must be a string/);
+    globalThis.window.localStorage.getItem = () => 'zh';
+    assert.throws(() => parseQueryDsl(JSON.stringify({ name: 'Bad', view: { layout: { type: 'list', when: { search: 3 } } } })), /view.layout.when.search 必须是字符串/);
+  } finally { globalThis.window.localStorage.getItem = () => 'zh'; }
+});
+
+
+test('US-720b: deadline not-overdue survives DSL serialization and re-editing', () => {
+  const preset = parseQueryDsl(JSON.stringify({ name: 'Picks', view: { layout: { type: 'list', when: { time: { deadline: 'not-overdue' } } } } }));
+  const edited = parseQueryDsl(stringifyQueryPreset(preset));
+  assert.equal(edited.view.layout.when.time.deadline, 'not-overdue');
 });

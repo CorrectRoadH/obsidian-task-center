@@ -9,7 +9,7 @@ import type { QueryStatus, QueryTimeField, TaskStatus } from "../types";
 // The scheduled field is always shown; the rest are progressive (added on
 // demand). Shared by the area filter controls and the legacy filter popovers.
 export const PRIMARY_TIME_FIELD: QueryTimeField = "scheduled";
-export const SECONDARY_TIME_FIELDS: QueryTimeField[] = ["deadline", "completed", "created"];
+export const SECONDARY_TIME_FIELDS: QueryTimeField[] = ["deadline", "completed", "created", "dropped"];
 
 export function statusFilterOptions(): Array<{ value: "all" | TaskStatus; label: string }> {
   return [
@@ -28,6 +28,7 @@ export function timeFieldLabel(field: QueryTimeField): string {
   if (field === "scheduled") return tr("savedViews.timeScheduled");
   if (field === "deadline") return tr("savedViews.timeDeadline");
   if (field === "completed") return tr("savedViews.timeCompleted");
+  if (field === "dropped") return tr("savedViews.timeDropped");
   return tr("savedViews.timeCreated");
 }
 
@@ -36,7 +37,7 @@ export function timeFilterOptions(field: QueryTimeField): Array<readonly [string
     ["", tr("savedViews.timeAll", { field: timeFieldLabel(field) })],
   ];
   if (field === "deadline") {
-    base.push(["overdue", tr("savedViews.dateOverdue")], ["next-7-days", tr("savedViews.dateNext7Days")]);
+    base.push(["not-overdue", tr("savedViews.dateNotOverdue")], ["overdue", tr("savedViews.dateOverdue")], ["next-7-days", tr("savedViews.dateNext7Days")]);
   }
   base.push(
     ["today", tr("savedViews.dateToday")],

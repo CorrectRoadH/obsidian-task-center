@@ -188,7 +188,7 @@ export type AreaType = "list" | "grid" | "week" | "month" | "drop";
 
 // 卡片被拖入某个 area 时的写操作；三种语义互斥。
 export interface DropEffect {
-  setStatus?: "dropped";    // 放弃区
+  setStatus?: "dropped" | "done";    // list/grid 状态操作；drop 仅允许 dropped
   setScheduled?: string;    // 写排期 DateToken（week / month 日格隐式用当日）
   clearScheduled?: true;    // tray：清空被拖任务自己行的 ⏳
 }
@@ -235,7 +235,6 @@ export interface MonthAreaConfig extends AreaBase {
   type: "month";
   when?: QueryPresetFilters;
   firstDayOfWeek?: "monday" | "sunday";
-  density?: "compact" | "cards";
 }
 
 // drop：纯动作落区，无 query；onDrop 必填。放弃区就是 drop area。
