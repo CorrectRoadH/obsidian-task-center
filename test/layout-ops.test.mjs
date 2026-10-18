@@ -10,6 +10,7 @@ function compilePure() {
     [
       "esbuild",
       "src/layout-ops.ts",
+      "src/areas.ts",
       "--bundle=true",
       "--format=esm",
       "--platform=node",
@@ -141,4 +142,21 @@ test("reorderChild moves a child within its container", () => {
   const tree = { dir: "row", children: [{ type: "list", title: "a" }, { type: "list", title: "b" }, { type: "list", title: "c" }] };
   const after = reorderChild(tree, [], 0, 2);
   assert.deepEqual(after.children.map((c) => c.title), ["b", "c", "a"]);
+});
+
+
+test('US-100: converting a scheduled list to drop creates only the abandonment action', () => {
+  const result = setAreaType({ type: 'list', onDrop: { setScheduled: 'tomorrow' } }, 0, 'drop');
+  assert.deepEqual(result, { type: 'drop', onDrop: { setStatus: 'dropped' } });
+});
+
+
+test("US-100/US-109t: scheduled drop tokens resolve to one ISO day before API writes", async () => {
+  const { resolveScheduledDropDate } = await import("./.compiled/areas.js");
+  assert.equal(resolveScheduledDropDate("today", "2026-12-31"), "2026-12-31");
+  assert.equal(resolveScheduledDropDate("tomorrow", "2026-12-31"), "2027-01-01");
+  assert.equal(resolveScheduledDropDate("next-week", "2026-12-31"), "2027-01-07");
+  assert.equal(resolveScheduledDropDate("2028-02-29"), "2028-02-29");
+  assert.equal(resolveScheduledDropDate("2026-02-29"), undefined);
+  assert.equal(resolveScheduledDropDate("week"), undefined);
 });

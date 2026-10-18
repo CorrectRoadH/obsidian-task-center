@@ -1,5 +1,6 @@
 import { browser, expect, $ } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
+import { mkdir } from "node:fs/promises";
 
 // US-109z2: the area filter editor (per-area `when`). Guards the click-to-open
 // tag select and the time-field controls — regressions here previously shipped
@@ -93,5 +94,49 @@ describe("US-109z2 area filter editor", function () {
     // Adding a date field reveals it.
     await $('[data-action="add-time-field"][data-time-field="deadline"]').click();
     await expect($('[data-area-time-field="deadline"]')).toExist();
+    // US-109i: abandoned-on is a first-class progressive date field.
+    await $('[data-action="add-time-field"][data-time-field="dropped"]').click();
+    await expect($('[data-area-time-field="dropped"]')).toExist();
+    // US-109d4: live errors use character locations and keep the invalid edit local.
+    const expression = await $('[data-area-tag-expr]');
+    expect(await expression.getAttribute("placeholder")).toBe("#a and (#b or #c) and not #d");
+    await expression.setValue("#long #b");
+    await expect($(".bt-area-tag-expr-error.is-visible")).toHaveText(expect.stringContaining("7"));
+    await $(".modal-close-button").click();
+    await expect($('[data-query-editor-scope="area"]')).not.toExist();
   });
+
+  it("US-109t/US-109z2/US-109p9: calendar weekday overrides and title-only abandon head", async () => {
+    await browser.setWindowSize(1200, 1600);
+    await writeAndWait("Tasks/Inbox.md", "- [ ] Calendar sample ⏳ 2026-05-03\n");
+    await browser.executeObsidian(async ({ app }) => {
+      const plugin = (app as any).plugins.plugins["task-center"];
+      plugin.settings.weekStartsOn = 1;
+      plugin.settings.queryPresets = [{ id: "calendar-override", name: "Calendar override", view: { layout: { dir: "col", children: [
+        { type: "week", title: "Sunday week", firstDayOfWeek: "sunday" },
+        { type: "month", title: "Sunday month", firstDayOfWeek: "sunday" },
+        { type: "drop", title: "Abandon here", onDrop: { setStatus: "dropped" } },
+      ] } } }];
+      plugin.settings.lastSavedViewId = "calendar-override";
+      await plugin.saveSettings();
+      for (const leaf of app.workspace.getLeavesOfType("task-center-board")) leaf.detach();
+    });
+    await browser.executeObsidianCommand("task-center:open");
+    await browser.executeObsidian(({ app }) => {
+      const view = app.workspace.getLeavesOfType("task-center-board")[0].view as any;
+      view.state.anchorISO = "2026-05-04";
+      view.render();
+    });
+    await expect($(".bt-week-col[data-date='2026-05-03']")).toExist();
+    await expect($(".bt-area-drop .bt-area-head-title")).toHaveText(/Abandon here/i);
+    await expect($(".bt-area-drop [data-action=edit-area]")).not.toExist();
+    const firstDays = await browser.execute(() => ({
+      week: (document.querySelector(".bt-week-col") as HTMLElement)?.dataset.date,
+      month: (document.querySelector(".bt-month-cell") as HTMLElement)?.dataset.date,
+    }));
+    expect(firstDays).toEqual({ week: "2026-05-03", month: "2026-04-26" });
+    await mkdir("test/e2e/screenshots", { recursive: true });
+    await browser.saveScreenshot("test/e2e/screenshots/dsl-calendar-first-day.png");
+  });
+
 });

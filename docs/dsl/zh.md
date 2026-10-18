@@ -176,6 +176,7 @@ GUI 的标签 popover 有实时校验的表达式输入框与标签列表。追�
 | 带 `dir` 或 `children` 的节点视为 Stack，`dir` 必须是 `"row"` / `"col"` | `invalid_stack_dir` |
 | Stack 的 `children` 必须是非空数组 | `invalid_stack_children` |
 | area 的 `type` 必须是字符串（省略 = `list`） | `invalid_area_type` |
+| area 类型必须为 list / grid / week / month / drop | `unknown_area_type` |
 | `drop` area 必须带 `onDrop` 对象 | `drop_requires_on_drop` |
 
 `weight` 必须是正数，否则报错。
@@ -284,11 +285,11 @@ GUI 的标签 popover 有实时校验的表达式输入框与标签列表。追�
 { "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
 
-> drop 是放弃区（US-100 / US-123），只接受 `{ "setStatus": "dropped" }`，且只能有这个键。空对象、done、改期、清排期或多键都返回 `invalid_query`，不会静默变成放弃。放弃会级联仍为 todo 的子任务。drop 的 `title` 不显示。
+> drop 是放弃区（US-100 / US-123），只接受 `{ "setStatus": "dropped" }`，且只能有这个键。空对象、done、改期、清排期或多键都返回 `invalid_query`，不会静默变成放弃。放弃会级联仍为 todo 的子任务。区域头显示 `title`（省略时显示“放弃区”），没有“编辑区域”按钮（US-109p9）。
 
 ### 4.6 unknown —— 兜底
 
-不被支持的 area `type`（笔误，或已删除的旧类型如 `matrix`）**不是错误**：会被归一化成 `unknown`，保留原始 JSON，视图层渲染「未知类型 + JSON」，不会让整份配置加载失败。所以 `type` 拼错不会报错，只会渲染成一块没用的未知区。
+新提交的 DSL 若包含未知 area `type`，会拒绝保存并报 `invalid_query`，指出对应区域的 `.type`。只有已存配置中的未知类型（如新版类型或旧 `matrix`）会保留原始 JSON，显示“未知区域类型”，其它区域继续显示（US-103c）。
 
 ---
 
@@ -467,7 +468,7 @@ DSL 无法解析或校验失败时，`query-create` / `query-update` 返回 `inv
 2. **一个视图 = 一棵布局树**，没有视图类型枚举；渲染层不按 today / completed 等名字分支。
 3. **过滤只属于 area**：每个 area 的 `when` 就是它的全部过滤，没有 tab 级基础集、没有全局过滤状态。
 4. **动作是通用能力**：改排期 / 清排期 / 放弃由卡片和落区提供，不绑定某个视图。
-5. **未知类型不报错**：归一化成 `unknown` 兜底。
+5. **新 DSL 的未知类型会报错**；仅已存配置归一化成 `unknown` 兜底。
 6. **没有 `summary`**：顶部统计已移除；估时 / 复盘类统计走 `task-center:stats` / `review` CLI。
 
 ---

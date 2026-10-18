@@ -312,20 +312,14 @@ test("VAL-CORE-006: validateQueryPreset — unknown legacy view.type points to v
   assert.ok(viewErr.message.includes("view.layout"));
 });
 
-test("VAL-CORE-006: validateQueryPreset — unsupported area type is accepted (renders as unknown)", () => {
-  // Unsupported area types no longer hard-fail validation; they normalize to an
-  // `unknown` area and render "未知类型 + JSON". Only a non-string `type` errors.
-  const result = validateQueryPreset({
-    name: "BadAreaType",
-    view: { layout: { type: "gantt" } },
-  });
-
-  assert.equal(result.valid, true);
-  assert.equal(
-    result.errors.find((e) => e.code === "unknown_area_type" || e.code === "invalid_area_type"),
-    undefined,
-    "unsupported string type should not produce a validation error",
-  );
+test("US-103c/US-219: unknown types are rejected on submission but retained on stored-data loading", () => {
+  const input = { name: "Unknown", view: { layout: { type: "gantt", title: "Keep me" } } };
+  assert.equal(validateQueryPreset(input).valid, false);
+  assert.throws(() => parseQueryDsl(JSON.stringify(input)), /view.layout.type/);
+  const stored = normalizeQueryPreset(input).view.layout;
+  assert.equal(stored.type, "unknown");
+  assert.equal(stored.rawType, "gantt");
+  assert.equal(stored.raw.title, "Keep me");
 });
 
 test("VAL-CORE-006: validateQueryPreset — non-string area type errors", () => {

@@ -11,6 +11,9 @@
 // the unscheduled tray's "drop here clears ⏳" — stays data-driven on the area
 // itself via `onDrop`; it is not a per-type concern and so is not modelled here.
 
+import { addDays, todayISO } from "./dates";
+import { isQueryDate } from "./query/schema";
+
 import type {
   AreaConfig,
   AreaType,
@@ -123,3 +126,18 @@ export function areaSupportsWhen(area: AreaConfig): area is FilterableAreaConfig
 /** The area types a user can pick when adding / changing an area (excludes the
  *  internal `unknown` fallback). Order = the picker order. */
 export const SELECTABLE_AREA_TYPES: AreaType[] = ["list", "grid", "week", "month", "drop"];
+
+
+/** US-109t: per-area calendar settings override the global default. */
+export function areaWeekStartsOn(area: WeekAreaConfig | MonthAreaConfig, fallback: 0 | 1): 0 | 1 {
+  return area.firstDayOfWeek === "monday" ? 1 : area.firstDayOfWeek === "sunday" ? 0 : fallback;
+}
+
+/** Resolve one-day write tokens at drop time, before calling the ISO-only API. */
+export function resolveScheduledDropDate(token: string, today: string = todayISO()): string | undefined {
+  const value = token.trim();
+  if (value === "today") return today;
+  if (value === "tomorrow") return addDays(today, 1);
+  if (value === "next-week") return addDays(today, 7);
+  return isQueryDate(value) ? value : undefined;
+}

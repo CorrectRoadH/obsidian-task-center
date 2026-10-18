@@ -530,6 +530,16 @@ test("US-720b: an area promotes a matching child when its parent is filtered out
 });
 
 
+test('US-109t/US-109z2: calendar firstDayOfWeek overrides settings for dates and predicates', async () => {
+  const { projectWeekArea, projectMonthArea } = await import('../test/.compiled/projection.js');
+  const sunday = effectiveTask({ id: 'sunday', effectiveScheduled: '2026-05-03' });
+  const week = projectWeekArea([sunday], { type: 'week', firstDayOfWeek: 'sunday', when: { time: { scheduled: 'week' } } }, 1, '2026-05-04');
+  assert.equal(week.days[0].date, '2026-05-03');
+  assert.equal(week.days[0].tasks[0].id, 'sunday');
+  const month = projectMonthArea([sunday], { type: 'month', firstDayOfWeek: 'sunday', when: { time: { scheduled: 'week' } } }, '2026-05-04', 1);
+  assert.equal(month.cells.find(c => c.date === '2026-05-03').tasks.length, 1);
+});
+
 test("US-720b: factory recommendation includes future deadlines, excludes overdue and sorts deadline then created", async () => {
   const { readFile } = await import("node:fs/promises");
   const preset = JSON.parse(await readFile(new URL("../src/builtin-views/today.json", import.meta.url), "utf8"));

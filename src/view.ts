@@ -1,3 +1,4 @@
+import { resolveScheduledDropDate } from "./areas";
 import {
   ItemView,
   Modal,
@@ -188,7 +189,7 @@ const AREA_RENDERERS: Record<AreaType | "unknown", AreaRenderer> = {
   grid: (v, el, area, i) => v.renderListArea(el, area as GridAreaConfig, true, i),
   week: (v, el, area, i) => renderWeek(v, el, area as WeekAreaConfig, i),
   month: (v, el, area, i) => renderMonth(v, el, area as MonthAreaConfig, i),
-  drop: (v, el) => v.renderTrashZone(el),
+  drop: (v, el, area) => v.renderTrashZone(el, area),
   unknown: (v, el, area) => v.renderUnknownArea(el, area as UnknownAreaConfig),
 };
 
@@ -1340,11 +1341,12 @@ export class TaskCenterView extends ItemView {
   // UI intentionally avoids trash/delete wording. Mobile does not render an
   // abandon drop zone.
   // see USER_STORIES.md
-  renderTrashZone(parent: HTMLElement) {
-    // US-109p9: drop zone has no query (no title / 编辑 entry), but reserves an
-    // equal-height empty head so it lines up with sibling areas that do.
+  renderTrashZone(parent: HTMLElement, area: AreaConfig) {
+    // US-109p9: abandon areas have a title-only head, without an edit button.
     parent.addClass("bt-has-head");
-    parent.createDiv({ cls: "bt-area-head bt-area-head--empty" });
+    parent.createDiv({ cls: "bt-area-head" }).createSpan({
+      cls: "bt-area-head-title", text: area.title?.trim() || tr("trash.title"),
+    });
     const trash = parent.createDiv({ cls: "bt-trash" });
     // e2e drop-zone selector: `[data-drop-zone="abandon"]`. Stable across the
     // visible icon / label / theme. Desktop-only; mobile abandon is handled
@@ -1364,11 +1366,11 @@ export class TaskCenterView extends ItemView {
   }
 
   /**
-   * Wires `dragover` / `dragleave` / `drop` for the desktop abandon target.
-   * Drop = `api.drop(id)` (mark `[-] ❌`). Mobile does not call this helper;
+   * Wires desktop status drop targets (abandon zones or list/grid actions).
+   * Calls `api.drop(id)` or `api.done(id)`. Mobile does not call this helper;
    * its abandon paths are explicit swipe / action sheet operations.
    */
-  private wireTrashDropTarget(el: HTMLElement) {
+  private wireTrashDropTarget(el: HTMLElement, status: "dropped" | "done" = "dropped") {
     el.addEventListener("dragover", (e) => {
       const dt = e.dataTransfer;
       if (!dt || !dt.types.includes("text/task-id")) return;
@@ -1390,7 +1392,7 @@ export class TaskCenterView extends ItemView {
         // swipeAction — capture the before/after byte diff.
         const task = this.tasks.find((t) => t.id === id);
         const work = async () => {
-          const r = await this.api.drop(id);
+          const r = status === "done" ? await this.api.done(id) : await this.api.drop(id);
           if (!r.unchanged && task) {
             // fix-m4-abandon-undo-cascade: record one UndoOp per affected
             // line (parent + cascaded children) so Ctrl/Cmd+Z restores
@@ -1402,11 +1404,11 @@ export class TaskCenterView extends ItemView {
               after: [d.after],
             }));
             this.undoStack.push({
-              label: tr("dnd.droppedUndo"),
+              label: status === "done" ? tr("savedViews.statusDone") : tr("dnd.droppedUndo"),
               ops,
             });
           }
-          new Notice(tr("trash.dropped"));
+          new Notice(status === "done" ? tr("savedViews.statusDone") : tr("trash.dropped"));
         };
         try {
           await this.runWithRemoveAnim(id, work);
@@ -1577,6 +1579,8 @@ export class TaskCenterView extends ItemView {
       this.makeDropZone(parent, null);
     } else if (area.onDrop?.setScheduled) {
       this.makeDropZone(parent, area.onDrop.setScheduled);
+    } else if (area.onDrop?.setStatus) {
+      this.wireTrashDropTarget(parent, area.onDrop.setStatus);
     }
 
     // US-109p9: every list/grid area (including the unscheduled tray) gets the
@@ -1786,29 +1790,34 @@ export class TaskCenterView extends ItemView {
         if (!id) return;
         e.preventDefault();
         el.removeClass("drop-hover");
+        const resolvedDate = targetDate === null ? null : resolveScheduledDropDate(targetDate);
+        if (resolvedDate === undefined) {
+          new Notice(tr("dsl.date", { path: "onDrop.setScheduled" }), 4000);
+          return;
+        }
         const task = this.tasks.find((t) => t.id === id);
         // US-122a: when clearing schedule via tray and the task's effective
         // schedule is inherited from a parent (no own ⏳), warn the user
         // instead of silently no-oping. Inherited schedules cannot be
         // cleared by drag — the user must edit source or move the task
         // out of its parent subtree first.
-        if (targetDate === null && task && !task.scheduled) {
+        if (resolvedDate === null && task && !task.scheduled) {
           const effectiveTask = this.getEffectiveTasks().find((t) => t.id === id);
           if (effectiveTask?.effectiveScheduled) {
             new Notice(tr("dnd.inheritedSchedule"), 4000);
             return;
           }
         }
-        const willMove = !task || (task.scheduled ?? null) !== targetDate;
+        const willMove = !task || (task.scheduled ?? null) !== resolvedDate;
         const work = async () => {
-          const r = await this.api.schedule(id, targetDate);
+          const r = await this.api.schedule(id, resolvedDate);
           if (!r.unchanged && task) {
             this.undoStack.push({
-              label: targetDate ? `⏳ ${targetDate}` : "⏳ cleared",
+              label: resolvedDate ? `⏳ ${resolvedDate}` : "⏳ cleared",
               ops: [{ path: task.path, line: task.line, before: [r.before], after: [r.after] }],
             });
             new Notice(
-              targetDate ? tr("notice.scheduled", { date: targetDate }) : tr("notice.clearedSchedule"),
+              resolvedDate ? tr("notice.scheduled", { date: resolvedDate }) : tr("notice.clearedSchedule"),
             );
           }
         };

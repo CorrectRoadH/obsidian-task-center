@@ -363,8 +363,7 @@ function normalizeQueryTray(raw: unknown): QueryTray | undefined {
 }
 
 // ── 布局树校验与遍历 ──
-// 受支持的 area 类型：list / grid / week / month / drop。其它字符串 type 不
-// 报错，归一化成 unknown area 后由视图层渲染「未知类型 + JSON」。
+// 新提交 DSL 仅支持 list / grid / week / month / drop；已存未知类型由归一化兜底。
 
 function validationIssue(errors: QueryPresetValidationError[], path: string, rule: string, code = "invalid_field", position?: number): void {
   errors.push({ section: "view", code, message: tr(`dsl.${rule}` as Parameters<typeof tr>[0], { path, n: position ?? 1 }) });
@@ -389,8 +388,11 @@ function validateLayoutNode(raw: unknown, errors: QueryPresetValidationError[], 
     validationIssue(errors, `${path}.type`, "string", "invalid_area_type");
     return;
   }
-  // Unknown area types retain their JSON for the existing diagnostic renderer.
-  if (!["list", "grid", "week", "month", "drop"].includes(type)) return;
+  // US-103c: submission is strict; stored unknown nodes still use normalizeArea.
+  if (!["list", "grid", "week", "month", "drop"].includes(type)) {
+    validationIssue(errors, `${path}.type`, "areaType", "unknown_area_type");
+    return;
+  }
   const fields = ["type", "id", "title", "weight", "when", "onDrop", "firstDayOfWeek", "density", "emptyText", "limit", "orderBy"];
   for (const key of Object.keys(raw)) {
     if (!fields.includes(key)) validationIssue(errors, `${path}.${key}`, "unsupported");

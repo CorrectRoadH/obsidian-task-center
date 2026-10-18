@@ -137,7 +137,7 @@ export function setAreaType(layout: LayoutNode, areaIndex: number, type: AreaTyp
       case "month":
         return { ...base, type: "month" };
       case "drop":
-        return { ...base, type: "drop", onDrop: area.onDrop ?? { setStatus: "dropped" } };
+        return { ...base, type: "drop", onDrop: { setStatus: "dropped" } };
       default:
         return area;
     }

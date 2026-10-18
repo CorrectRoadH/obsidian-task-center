@@ -176,6 +176,7 @@ Structural validation (any failure rejects the whole DSL):
 | A node with `dir` or `children` is a Stack; `dir` must be `"row"` / `"col"` | `invalid_stack_dir` |
 | A Stack's `children` must be a non-empty array | `invalid_stack_children` |
 | An area's `type` must be a string (omitted = `list`) | `invalid_area_type` |
+| An area type must be list / grid / week / month / drop | `unknown_area_type` |
 | A `drop` area must have an `onDrop` object | `drop_requires_on_drop` |
 
 `weight` must be positive; invalid values are rejected.
@@ -284,11 +285,11 @@ A drop target with no query and no task cards; `onDrop` is required (missing it 
 { "type": "drop", "onDrop": { "setStatus": "dropped" } }
 ```
 
-> A drop area is an abandon zone (US-100 / US-123). It accepts only `{ "setStatus": "dropped" }`, with exactly that one key. Empty objects, done, scheduling, clearing or multiple keys return `invalid_query`. Abandoning cascades to todo children. The drop title is not shown.
+> A drop area is an abandon zone (US-100 / US-123). It accepts only `{ "setStatus": "dropped" }`, with exactly that one key. Empty objects, done, scheduling, clearing or multiple keys return `invalid_query`. Abandoning cascades to todo children. The area head displays `title` (or the localized abandon label when omitted), with no edit-area button (US-109p9).
 
 ### 4.6 unknown: the fallback
 
-An unsupported area `type` (a typo, or a removed legacy type such as `matrix`) is **not an error**: it normalizes to `unknown`, keeps the raw JSON, and the view renders "unknown type + JSON" instead of failing to load the whole config. So a misspelled `type` won't error; it just renders a useless unknown block.
+New DSL submissions reject unknown area types with `invalid_query` and the area’s `.type` path. Only unknown types in stored configurations normalize to `unknown`, preserving the raw JSON and showing an unknown-type notice while other areas continue rendering (US-103c).
 
 ---
 
@@ -466,7 +467,7 @@ If the DSL can't be parsed or fails validation, `query-create` / `query-update` 
 2. **One view = one layout tree**; no view-type enum, and the renderer never branches on names like today / completed.
 3. **Filtering belongs to the area**: each area's `when` is its entire filter, with no tab-level base set and no global filter state.
 4. **Actions are general capabilities**: reschedule / clear schedule / drop are provided by cards and drop targets, not bound to a view.
-5. **Unknown types don't error**: they normalize to an `unknown` fallback.
+5. **Unknown types in new DSL are rejected**; only stored configurations use the `unknown` fallback.
 6. **No `summary`**: top-of-view metrics were removed; estimate / retro stats live in the `task-center:stats` / `review` CLI.
 
 ---

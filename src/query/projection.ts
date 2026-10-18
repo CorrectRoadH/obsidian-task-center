@@ -1,3 +1,4 @@
+import { areaWeekStartsOn } from "../areas";
 // View projection — projects a filtered EffectiveTask[] into per-area render
 // models. Views are SwiftUI-style layout trees (row/col stacks of area leaves);
 // each area projects independently. Today/Completed/Unscheduled are just list
@@ -225,6 +226,7 @@ export function projectWeekArea(
   weekStartsOn: 0 | 1,
   anchorISO: string = todayISO(),
 ): WeekViewModel {
+  weekStartsOn = areaWeekStartsOn(area, weekStartsOn);
   // US-109z2: the week area filters by its own `when` (e.g. status: todo).
   const scoped = area.when && queryFilterHasActiveConditions(area.when)
     ? applyQueryFilters(tasks, area.when, weekStartsOn, anchorISO)
@@ -250,6 +252,7 @@ export function projectMonthArea(
   anchorISO: string = todayISO(),
   weekStartsOn: 0 | 1 = 1,
 ): MonthViewModel {
+  weekStartsOn = areaWeekStartsOn(area, weekStartsOn);
   // US-109z2: the month area filters by its own `when`.
   const scoped = area.when && queryFilterHasActiveConditions(area.when)
     ? applyQueryFilters(tasks, area.when, weekStartsOn, anchorISO)

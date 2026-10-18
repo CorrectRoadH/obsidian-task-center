@@ -5,6 +5,7 @@
 // 导出 renderWeek / renderMonth（area projector 调）；renderMobileMonthDayPanel
 // 为模块内部。后续可收窄为 CalendarRenderPort + PresentationCtx。
 
+import { areaWeekStartsOn } from "../../areas";
 import type { TaskCenterView } from "../../view";
 import type { EffectiveTask } from "../../task-tree";
 import type { WeekAreaConfig, MonthAreaConfig } from "../../types";
@@ -33,15 +34,16 @@ export function renderWeek(
   // is the view's first area shows the view name, e.g. "Week"); the date nav
   // lives in the area head on BOTH desktop and mobile — the head is the mobile
   // accordion toggle, so the nav (and the area's identity) belong here.
+  const weekStartsOn = areaWeekStartsOn(area, v.plugin.settings.weekStartsOn);
   v.renderAreaHead(parent, areaIndex, area, {
     title: v.resolveAreaHeadTitle(area),
-    renderNav: (host) => v.renderRangeNav(host),
+    renderNav: (host) => v.renderRangeNav(host, weekStartsOn),
   });
   const today = todayISO();
-  const days = buildWeekDays(v.state.anchorISO, v.plugin.settings.weekStartsOn);
+  const days = buildWeekDays(v.state.anchorISO, weekStartsOn);
 
   const filter = v.getTextFilter();
-  const effectiveTasks = v.scopeTasksToArea(v.getEffectiveTasks(), area.when);
+  const effectiveTasks = v.scopeTasksToArea(v.getEffectiveTasks(), area.when, weekStartsOn);
   // One pass over the task set instead of one full filter per day column.
   const dayBuckets = bucketByScheduledDay(effectiveTasks, filter);
   const isMobileLayout = v.contentEl.dataset.mobileLayout === "true";
@@ -156,14 +158,15 @@ export function renderMonth(
   // that is the view's first area shows the view name, e.g. "Month"); the date
   // nav lives in the area head on BOTH desktop and mobile — the head is the
   // mobile accordion toggle, so the nav (and the area's identity) belong here.
+  const weekStartsOn = areaWeekStartsOn(area, v.plugin.settings.weekStartsOn);
   v.renderAreaHead(parent, areaIndex, area, {
     title: v.resolveAreaHeadTitle(area),
-    renderNav: (host) => v.renderRangeNav(host),
+    renderNav: (host) => v.renderRangeNav(host, weekStartsOn),
   });
   const today = todayISO();
   const { first, last, gridStart, gridDays } = buildMonthGrid(
     v.state.anchorISO,
-    v.plugin.settings.weekStartsOn,
+    weekStartsOn,
   );
 
   const wrapper = parent.createDiv({ cls: "bt-month" });
@@ -175,7 +178,7 @@ export function renderMonth(
     header.createDiv({ text: weekdayLabel(d.getDay()), cls: "bt-month-dow" });
   }
 
-  const effectiveTasks = v.scopeTasksToArea(v.getEffectiveTasks(), area.when);
+  const effectiveTasks = v.scopeTasksToArea(v.getEffectiveTasks(), area.when, weekStartsOn);
   const filter = v.getTextFilter();
   // One pass over the task set instead of one full filter per grid cell
   // (up to 42 cells — the old per-cell sweep was O(cells × N)).

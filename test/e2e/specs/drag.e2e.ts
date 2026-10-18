@@ -365,4 +365,46 @@ describe("Task Center — 拖拽 (US-121/123)", function () {
     await expect(seen).toEqual([`${path}:L2`]);
   });
 
+  for (const type of ["list", "grid"]) {
+    for (const action of ["tomorrow", "done", "dropped"]) {
+      it(`US-109t/US-100: ${type} onDrop ${action} writes the configured action`, async function () {
+        const path = "Tasks/Inbox.md";
+        await writeAndWait(path, "- [ ] DSL action parent #dsl-action\n    - [ ] DSL action child\n");
+        await browser.executeObsidianCommand("task-center:open");
+        await forFlush();
+        await browser.executeObsidian(async ({ app }, areaType: string, effect: string) => {
+          const plugin = (app as any).plugins.plugins["task-center"];
+          const preset = { id: `dsl-action-${areaType}-${effect}`, name: "DSL action", builtin: false, hidden: false,
+            view: { layout: { dir: "col", children: [
+              { type: "list", when: { tags: ["#dsl-action"] } },
+              { type: areaType, title: "Action target", when: { search: "no-matching-task" },
+                onDrop: effect === "tomorrow" ? { setScheduled: effect } : { setStatus: effect } },
+            ] } } };
+          plugin.settings.queryPresets.push(preset);
+          const view = app.workspace.getLeavesOfType("task-center-board")[0].view as any;
+          view.state.savedViewId = preset.id;
+          view.state.tab = "list";
+          view.render();
+        }, type, action);
+        const source = `.task-center-view [data-task-id="${path}:L1"]`;
+        // Stable across cache-driven rerenders; the second area owns the action.
+        const targetSelector = ".task-center-view .bt-area:last-child";
+        await $(source).waitForExist({ timeout: 5000 });
+        await simulateDrag(source, targetSelector);
+        let observed = "";
+        const notices = new Set<string>();
+        await browser.waitUntil(async () => {
+          const notice = await browser.execute(() => document.querySelector(".notice-container")?.textContent ?? "");
+          if (notice) notices.add(notice);
+          const content = await readFile(path);
+          observed = content;
+          if (action === "tomorrow") return content.includes(`⏳ ${offsetISO(1)}`) || content.includes(`[scheduled:: ${offsetISO(1)}]`);
+          return content.includes(action === "done" ? "- [x] DSL action parent" : "- [-] DSL action parent");
+        }, { timeout: 5000 }).catch(error => { throw new Error(`${String(error)}; notices=${[...notices].join(" | ")}; content=${observed}`); });
+        const content = await readFile(path);
+        if (action !== "tomorrow") expect(content).toContain(action === "done" ? "- [x] DSL action child" : "- [-] DSL action child");
+      });
+    }
+  }
+
 });
