@@ -97,16 +97,13 @@ export function formatQueryRun(result: QueryRunResult, opts: CliFormatOptions = 
   lines.push(`view ${result.viewModel.type} · ${result.filteredTasks.length} tasks · anchor ${result.anchorISO}`);
   lines.push("");
 
-  switch (result.viewModel.type) {
-    case "list":
-      renderQueryList(lines, result.viewModel.tasks, opts);
-      break;
-    case "week":
-      renderQueryWeek(lines, result.viewModel.days, opts);
-      break;
-    case "month":
-      renderQueryMonth(lines, result.viewModel.cells, opts);
-      break;
+  for (const area of result.areas ?? [{ title: result.preset.name, viewModel: result.viewModel }]) {
+    lines.push(area.title);
+    switch (area.viewModel.type) {
+      case "list": renderQueryList(lines, area.viewModel.tasks, opts); break;
+      case "week": renderQueryWeek(lines, area.viewModel.days, opts); break;
+      case "month": renderQueryMonth(lines, area.viewModel.cells, opts); break;
+    }
   }
   return lines.join("\n");
 }
@@ -382,8 +379,12 @@ export function formatOkWrite(
   if (unchanged) {
     out.push(`    ${label}`);
   } else {
-    out.push(`    before  ${before.trim()}`);
-    out.push(`    after   ${after.trim()}`);
+    const oldLines = before.split("\n");
+    const newLines = after.split("\n");
+    for (let i = 0; i < Math.max(oldLines.length, newLines.length); i++) {
+      out.push(`    before  ${oldLines[i] ?? ""}`);
+      out.push(`    after   ${newLines[i] ?? ""}`);
+    }
   }
   return out.join("\n");
 }
@@ -402,9 +403,9 @@ export function formatError(code: string, message: string): string {
   // tr() returns the key string verbatim when it has no translation;
   // detect that and fall back to the raw message.
   const display = localized === key ? message : localized;
-  return `error  ${code}\n    ${display}`;
+  return `error ${code}\n${display.replace(/\s*\n\s*/g, " ")}`;
 }
 
 export function formatAdd(result: { path: string; line: number; created: string }): string {
-  return `ok  ${result.path}:L${result.line + 1}  created\n    ${result.created.trim()}`;
+  return `ok  ${result.path}:L${result.line + 1}  created (each run adds a new task)\n    ${result.created.trim()}`;
 }

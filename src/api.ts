@@ -1,9 +1,10 @@
 import { App } from "obsidian";
 import {
   ParsedTask,
+  isStackNode,
+  type LayoutNode,
   TaskStatus,
   type QueryPreset,
-  type QueryPresetFilters,
   type QueryPresetViewConfig,
   type QueryViewType,
   type TaskFormatFlavor,
@@ -25,12 +26,13 @@ import {
   TaskWriterError,
 } from "./writer";
 import { TaskCache } from "./cache";
-import { todayISO, resolveWhen, isValidISO } from "./dates";
+import { todayISO, resolveWhen, isValidISO, addDays } from "./dates";
 import { normalizeGroupingTags } from "./grouping";
 import { deriveEffectiveTasks, type EffectiveTask } from "./task-tree";
 import { collectAreas, normalizeQueryPreset } from "./saved-views";
 import { applyQueryFilters } from "./query/filter";
 import { projectArea, type ViewModel } from "./query/projection";
+import { areaWeekStartsOn } from "./areas";
 import { formatMinutes } from "./parser";
 
 // REMINDER: this module must NOT scan vault files directly. All parse work
@@ -52,7 +54,7 @@ export interface ListFilters {
   done?: string;
   overdue?: boolean;
   hasDeadline?: boolean;
-  status?: "todo" | "done" | "dropped";
+  status?: "todo" | "done" | "dropped" | "in_progress";
   tag?: string[];
   parent?: string;
   search?: string;
@@ -90,6 +92,7 @@ export interface QueryRunResult {
   anchorISO: string;
   filteredTasks: EffectiveTask[];
   viewModel: ViewModel;
+  areas: Array<{ title: string; filteredTasks: EffectiveTask[]; viewModel: ViewModel }>;
 }
 
 export interface AgentBriefAction {
@@ -182,6 +185,7 @@ export class TaskCenterApi {
     private readonly getWriteSettings: () => {
       taskFormatFlavor?: TaskFormatFlavor;
       scheduledWriteFormat?: TaskFormatFlavor;
+      weekStartsOn?: 0 | 1;
     } = () => ({}),
   ) {}
 
@@ -196,7 +200,13 @@ export class TaskCenterApi {
 
   async list(filters: ListFilters): Promise<ParsedTask[]> {
     const all = await this.cache.ensureAll();
-    return filterTasks(all, filters);
+    if (filters.parent) {
+      const parent = await this.show(filters.parent);
+      const ids = new Set(collectDescendants(parent, all.filter(t => t.path === parent.path)).map(t => t.id));
+      const selected = filterTasks(all, { ...filters, parent: undefined, limit: undefined }, this.getWriteSettings().weekStartsOn).filter(t => ids.has(t.id));
+      return filters.limit ? selected.slice(0, filters.limit) : selected;
+    }
+    return filterTasks(all, filters, this.getWriteSettings().weekStartsOn);
   }
 
   async show(id: string): Promise<ParsedTask> {
@@ -224,28 +234,21 @@ export class TaskCenterApi {
   async runQueryPreset(preset: QueryPreset, opts: QueryRunOpts): Promise<QueryRunResult> {
     const normalized = normalizeQueryPreset(preset);
     const effective = deriveEffectiveTasks(await this.cache.ensureAll());
-    // US-109z2: no tab-level filter — filtering lives on the primary content
-    // area's `when`. Compute it from the original preset, then carry it onto any
-    // overridden view so `view=week|month|list` still narrows.
-    const origAreas = collectAreas(normalized.view.layout);
-    const origPrimary = origAreas.find((a) => a.type !== "drop") ?? origAreas[0];
-    const primaryWhen =
-      origPrimary && origPrimary.type !== "drop" && origPrimary.type !== "unknown"
-        ? (origPrimary as { when?: QueryPresetFilters }).when
-        : undefined;
-    const view = normalizeViewOverride(normalized.view, opts.view, primaryWhen);
-    const areas = collectAreas(view.layout);
-    const primary = areas.find((a) => a.type !== "drop") ?? areas[0];
-    const viewModel = projectArea(primary, effective, opts.weekStartsOn, opts.anchorISO ?? todayISO());
-    const filtered = primaryWhen
-      ? applyQueryFilters(effective, primaryWhen, opts.weekStartsOn, opts.anchorISO ?? todayISO())
-      : effective;
+    const anchorISO = opts.anchorISO ?? todayISO();
+    const view = opts.view ? { ...normalized.view, layout: overrideLayout(normalized.view.layout, opts.view) } : normalized.view;
+    const areas = collectAreas(view.layout).filter(area => area.type !== "drop").map(area => {
+      const when = "when" in area ? area.when : undefined;
+      const weekStartsOn = area.type === "week" || area.type === "month" ? areaWeekStartsOn(area, opts.weekStartsOn) : opts.weekStartsOn;
+      return {
+        title: area.title ?? area.id ?? area.type,
+        filteredTasks: when ? applyQueryFilters(effective, when, weekStartsOn, anchorISO) : effective,
+        viewModel: projectArea(area, effective, weekStartsOn, anchorISO),
+      };
+    });
     return {
-      preset: normalized,
-      view,
-      anchorISO: opts.anchorISO ?? todayISO(),
-      filteredTasks: filtered,
-      viewModel,
+      preset: normalized, view, anchorISO, areas,
+      filteredTasks: [...new Map(areas.flatMap(area => area.filteredTasks).map(task => [task.id, task])).values()],
+      viewModel: areas[0]?.viewModel ?? { type: "list", tasks: [], total: 0 },
     };
   }
 
@@ -294,7 +297,7 @@ export class TaskCenterApi {
     // only this file's tasks.
     const fileTasks = this.cache.get(task.path)?.tasks ?? [task];
     const descendants = cascade
-      ? collectDescendants(task, fileTasks).filter((t) => t.status === "todo")
+      ? collectDescendants(task, fileTasks).filter((t) => (t.status === "todo" || t.status === "in_progress"))
       : [];
     const targets = [task, ...descendants];
     // Bottom-up so line numbers stay stable across each mutation.
@@ -338,7 +341,7 @@ export class TaskCenterApi {
     // §1.4) so we only need this file's tasks.
     const fileTasks = this.cache.get(task.path)?.tasks ?? [task];
     const descendants = cascade
-      ? collectDescendants(task, fileTasks).filter((t) => t.status === "todo")
+      ? collectDescendants(task, fileTasks).filter((t) => (t.status === "todo" || t.status === "in_progress"))
       : [];
     const targets = [task, ...descendants];
     // Drop bottom-up so descending line numbers stay stable across each mutation
@@ -395,7 +398,9 @@ export class TaskCenterApi {
   async rename(id: string, newTitle: string) {
     const task = await this.cache.resolveRef(id);
     if (!task) throw new TaskWriterError("not_found", id);
-    return await renameTask(this.app, task, newTitle);
+    const result = await renameTask(this.app, task, newTitle);
+    this.cache.recordRename(task, result.after);
+    return result;
   }
 
   async tag(id: string, tag: string, remove = false) {
@@ -419,23 +424,6 @@ export class TaskCenterApi {
   }
 }
 
-// CLI `view=` override replaces the layout with a single area of that type
-// (list / week / month). Any other value falls back to the preset's own layout.
-// US-109z2: a view override only changes presentation, not filtering — carry the
-// preset's primary-area `when` onto the overridden area so it still narrows.
-function normalizeViewOverride(
-  view: QueryPresetViewConfig,
-  override?: QueryViewType,
-  when?: QueryPresetFilters,
-): QueryPresetViewConfig {
-  if (!override) return view;
-  const w = when && Object.keys(when).length > 0 ? { when } : {};
-  if (override === "week") return { layout: { type: "week", ...w } };
-  if (override === "month") return { layout: { type: "month", ...w } };
-  if (override === "list") return { layout: { type: "list", ...w } };
-  return view;
-}
-
 function collectDescendants(task: ParsedTask, sameFileTasks: ParsedTask[]): ParsedTask[] {
   const out: ParsedTask[] = [];
   const queue: number[] = [...task.childrenLines];
@@ -453,8 +441,8 @@ function collectDescendants(task: ParsedTask, sameFileTasks: ParsedTask[]): Pars
   return out;
 }
 
-export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask[] {
-  let filtered = [...all];
+export function filterTasks(all: ParsedTask[], filters: ListFilters, weekStart: 0 | 1 = 1): ParsedTask[] {
+  let filtered = effectiveDates(all);
   // By default, hide tasks whose ancestor is done / dropped. Only keep them
   // when the caller explicitly asks for inherited-terminal context (e.g. status=done
   // lookups) — the terminal status filter below overrides this where needed.
@@ -462,9 +450,9 @@ export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask
     filtered = filtered.filter((t) => !t.inheritsTerminal);
   }
   if (filters.scheduled) {
-    const r = resolveWhen(filters.scheduled);
+    const r = resolveWhen(filters.scheduled, todayISO(), weekStart);
     if (r.unscheduled) {
-      filtered = filtered.filter((t) => !t.scheduled && t.status === "todo");
+      filtered = filtered.filter((t) => !t.scheduled && (t.status === "todo" || t.status === "in_progress"));
     } else if (r.exact) {
       filtered = filtered.filter((t) => t.scheduled === r.exact);
     } else if (r.from && r.to) {
@@ -474,7 +462,7 @@ export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask
     }
   }
   if (filters.done) {
-    const r = resolveWhen(filters.done);
+    const r = resolveWhen(filters.done, todayISO(), weekStart);
     if (r.exact) filtered = filtered.filter((t) => t.completed === r.exact);
     else if (r.from && r.to) {
       filtered = filtered.filter(
@@ -485,11 +473,11 @@ export function filterTasks(all: ParsedTask[], filters: ListFilters): ParsedTask
   if (filters.overdue) {
     const today = todayISO();
     filtered = filtered.filter(
-      (t) => t.status === "todo" && t.deadline && t.deadline < today,
+      (t) => (t.status === "todo" || t.status === "in_progress") && t.deadline && t.deadline < today,
     );
   }
   if (filters.hasDeadline) filtered = filtered.filter((t) => !!t.deadline);
-  if (filters.status) filtered = filtered.filter((t) => t.status === filters.status);
+  if (filters.status) filtered = filtered.filter((t) => t.status === filters.status || (filters.status === "todo" && t.status === "in_progress"));
   if (filters.tag && filters.tag.length > 0) {
     filtered = filtered.filter((t) => {
       return filters.tag!.every((needle) => {
@@ -555,9 +543,7 @@ export function computeStats(all: EffectiveTask[], opts: StatsOpts): StatsResult
   const to = opts.to ?? today;
   const days = opts.days ?? 7;
   if (!from) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - (days - 1));
-    from = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+    from = addDays(to, -(days - 1));
   }
 
   const done = all.filter(
@@ -626,12 +612,13 @@ export function computeStats(all: EffectiveTask[], opts: StatsOpts): StatsResult
 // can execute the next step without screen scraping.
 // see USER_STORIES.md
 export function buildAgentBrief(all: ParsedTask[], opts: AgentBriefOpts = {}): AgentBriefResult {
+  all = effectiveDates(all);
   const today = opts.today ?? todayISO();
   const limit = opts.limit && opts.limit > 0 ? opts.limit : 5;
   const tomorrow = addDaysISO(today, 1);
-  const actionable = all.filter((t) => t.status === "todo" && !t.inheritsTerminal);
+  const actionable = all.filter((t) => (t.status === "todo" || t.status === "in_progress") && !t.inheritsTerminal);
   const overdueRaw = actionable.filter(
-    (t) => !!t.deadline && t.deadline < today,
+    (t) => (!!t.deadline && t.deadline < today) || (!!t.scheduled && t.scheduled < today),
   );
   const overdueIds = new Set(overdueRaw.map((t) => t.id));
   const todayRaw = actionable.filter(
@@ -642,7 +629,7 @@ export function buildAgentBrief(all: ParsedTask[], opts: AgentBriefOpts = {}): A
     (t) => !overdueIds.has(t.id) && !todayIds.has(t.id) && !t.scheduled,
   );
 
-  const overdue = overdueRaw.slice(0, limit).map((t) => briefTask(t, `overdue deadline ${t.deadline}`, today, tomorrow));
+  const overdue = overdueRaw.slice(0, limit).map((t) => briefTask(t, `overdue ${t.deadline && t.deadline < today ? `deadline ${t.deadline}` : `scheduled ${t.scheduled}`}`, today, tomorrow));
   const todayTasks = todayRaw.slice(0, limit).map((t) => {
     const reason =
       t.scheduled === today && t.deadline === today
@@ -673,6 +660,7 @@ export function buildAgentBrief(all: ParsedTask[], opts: AgentBriefOpts = {}): A
 // week window so the output is useful at shutdown and during weekly retro.
 // see USER_STORIES.md
 export function buildReviewSummary(all: ParsedTask[], opts: ReviewOpts = {}): ReviewResult {
+  all = effectiveDates(all);
   const today = opts.today ?? todayISO();
   const days = opts.days && opts.days > 0 ? opts.days : 7;
   const limit = opts.limit && opts.limit > 0 ? opts.limit : 5;
@@ -704,7 +692,7 @@ function summarizeReviewRange(
       terminalDate(t)! <= to,
   );
   const delayedOpen = visible.filter(
-    (t) => t.status === "todo" && ((!!t.deadline && t.deadline < to) || (!!t.scheduled && t.scheduled < to)),
+    (t) => (t.status === "todo" || t.status === "in_progress") && ((!!t.deadline && t.deadline < to) || (!!t.scheduled && t.scheduled < to)),
   );
 
   const estimate = estimateReview(done);
@@ -846,4 +834,14 @@ function addDaysISO(iso: string, days: number): string {
 
 export function shortEst(mins: number | null): string {
   return mins ? formatMinutes(mins) : "—";
+}
+
+function effectiveDates(all: ParsedTask[]): ParsedTask[] {
+  return deriveEffectiveTasks(all).map(task => ({ ...task, scheduled: task.effectiveScheduled, deadline: task.effectiveDeadline }));
+}
+
+function overrideLayout(node: LayoutNode, type: QueryViewType): LayoutNode {
+  if (isStackNode(node)) return { ...node, children: node.children.map(child => overrideLayout(child, type)) };
+  if (node.type === "drop" || node.type === "unknown") return node;
+  return { ...node, type };
 }

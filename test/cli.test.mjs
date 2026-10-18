@@ -494,7 +494,7 @@ test("formatError — all required error codes", () => {
   for (const code of codes) {
     const out = formatError(code, `detail for ${code}`);
     assert.match(out, new RegExp(`^error\\s+${code}`), `${code}: first line must start with "error <code>"`);
-    assert.match(out, /\n\s{4}/, `${code}: second line must be indented`);
+    assert.match(out, /\n[^\n]+$/, `${code}: second line must contain human-readable detail`);
   }
 });
 
@@ -791,4 +791,203 @@ test("US-220: runQueryPreset projects month view by dated cells", async () => {
   assert.match(text, /dated cells · 1\/31/);
   assert.match(text, /2026-05-08 · 1 tasks/);
   assert.doesNotMatch(text, /2026-06-01/);
+});
+
+// US-201: exercise registered production handlers with real API/cache/writer.
+const esbuild = await import('esbuild');
+await esbuild.build({
+  stdin: { contents: 'export {default as Plugin} from "./src/main"; export {TaskCache,TFile} from "./src/cache"; export {TaskCenterApi} from "./src/api"; export {DEFAULT_SETTINGS} from "./src/types"; export {UndoStack} from "./src/view/undo";', resolveDir: process.cwd() },
+  bundle: true, format: 'esm', platform: 'node', outfile: 'test/.compiled/cli-handlers.bundle.js',
+  alias: { obsidian: './test/obsidian-stub.mjs' },
+  plugins: [{ name: 'ui-boundary', setup(build) {
+    build.onResolve({filter: /^\.\/(view|settings)$/}, args => args.importer.endsWith('/main.ts') ? {path:args.path,namespace:'ui'} : undefined);
+    build.onLoad({filter:/.*/,namespace:'ui'}, args => ({contents: args.path === './view' ? 'export class TaskCenterView {}' : 'export class TaskCenterSettingTab {}'}));
+  }}],
+});
+const runtime = await import('./.compiled/cli-handlers.bundle.js');
+function cliFixture(initial = '- [ ] Task') {
+  const files = new Map();
+  const content = new Map();
+  function put(path, data) {
+    let file = files.get(path);
+    if (!file) { file = new runtime.TFile(); Object.assign(file,{path,extension:'md',stat:{mtime:1}}); files.set(path,file); }
+    file.stat.mtime++; content.set(path,data); return file;
+  }
+  put('tasks.md', initial);
+  const app = {metadataCache:{getFileCache:()=>null,getCachedFiles:()=>[...files.keys()]}, vault:{
+    getAbstractFileByPath:path=>files.get(path), getMarkdownFiles:()=>[...files.values()],
+    cachedRead:async file=>content.get(file.path), read:async file=>content.get(file.path),
+    process:async(file,fn)=>{ if (app.beforeProcess) {const hook=app.beforeProcess; app.beforeProcess=null;hook(file);} put(file.path,fn(content.get(file.path))); },
+    create:async(path,data)=>put(path,data),createFolder:async()=>{},
+  }};
+  const plugin = new runtime.Plugin(); plugin.app=app;
+  plugin.settings=structuredClone(runtime.DEFAULT_SETTINGS);
+  plugin.cache=new runtime.TaskCache(app);
+  plugin.api=new runtime.TaskCenterApi(app,plugin.cache,()=>plugin.settings);
+  const handlers=new Map(); plugin.registerCliHandler=(name,_desc,_flags,handler)=>handlers.set(name,handler);
+  plugin.registerAllCliHandlers(); plugin.saveSettings=async()=>{}; plugin.refreshOpenViews=async()=>{};
+  return {plugin,app,put,content,run:(verb,args={})=>handlers.get(verb ? `task-center:${verb}`:'task-center')(args)};
+}
+test('US-203/222 handler preserves historical completion and clears cancelled dates',async()=>{
+  const f=cliFixture('- [x] Task ✅ 2020-01-01');
+  assert.match(await f.run('done',{ref:'tasks.md:L1'}),/unchanged/);
+  assert.equal(f.content.get('tasks.md'),'- [x] Task ✅ 2020-01-01');
+  const g=cliFixture('- [-] Task ❌ 2020-01-01');
+  await g.run('undone',{ref:'tasks.md:L1'}); assert.doesNotMatch(g.content.get('tasks.md'),/❌/);
+});
+test('US-211/221/410a/413a handler errors are two lines and never write invalid input',async()=>{
+  for (const [verb,args,code] of [
+    ['schedule',{ref:'tasks.md:L1'},'missing_arg'],['deadline',{ref:'tasks.md:L1',date:'2026-02-31'},'invalid_date'],['schedule',{ref:'tasks.md:L1',date:'constructor'},'invalid_date'],
+    ['actual',{ref:'tasks.md:L1',minutes:'1h30'},'invalid_arg'],['tag',{ref:'tasks.md:L1',tag:'c++'},'invalid_arg'],
+    ['list',{status:'foo'},'invalid_arg'],['stats',{days:'abc'},'invalid_arg'],['tag',{ref:'tasks.md:L1',tag:'#x',remove:'maybe'},'invalid_arg'],
+  ]) {const f=cliFixture();const output=await f.run(verb,args);assert.match(output,new RegExp(`^error ${code}\\n[^\\n]+$`));assert.equal(f.content.get('tasks.md'),'- [ ] Task');}
+});
+test('US-209/223 handler subtracts duration and matches full Unicode/hierarchical tags',async()=>{
+  const f=cliFixture('- [ ] Task #中文 #work/sub [actual:: 30m]');
+  await f.run('actual',{ref:'tasks.md:L1',minutes:'-15m'}); assert.match(f.content.get('tasks.md'),/actual:: 15m/);
+  assert.match(await f.run('tag',{ref:'tasks.md:L1',tag:'#中文'}),/unchanged/);
+  await f.run('tag',{ref:'tasks.md:L1',tag:'#work',remove:'true'}); assert.match(f.content.get('tasks.md'),/#work\/sub/);
+  await f.run('tag',{ref:'tasks.md:L1',tag:'#new',remove:'false'}); assert.match(f.content.get('tasks.md'),/#new/);
+});
+test('US-403 handler refuses a replaced line inside vault.process',async()=>{
+ const f=cliFixture();f.app.beforeProcess=()=>f.put('tasks.md','- [ ] Other');
+ assert.match(await f.run('done',{ref:'tasks.md:L1'}),/^error write_conflict\n/);
+ assert.equal(f.content.get('tasks.md'),'- [ ] Other');
+});
+test('US-410a/207/144/723 handler shares natural dates and inherited schedules',async()=>{
+ const today=todayLocal(); const f=cliFixture(`- [ ] Parent ⏳ ${today}\n    - [/] Child\n- [ ] Delayed ⏳ 2020-01-01`);
+ const tasks=JSON.parse(await f.run('list',{scheduled:'今天',format:'json'}));
+ assert.equal(tasks.length,2); assert.equal(tasks[1].scheduled,today);
+ await f.run('deadline',{ref:'tasks.md:L2',date:'tomorrow'});
+ assert.doesNotMatch(f.content.get('tasks.md'),/tomorrow/);
+ const brief=JSON.parse(await f.run('brief',{format:'json'}));assert.ok(brief.sections.overdue.some(t=>t.title==='Delayed'));
+});
+test('US-204/222 handler reports all cascaded line diffs',async()=>{
+ const f=cliFixture('- [ ] Parent\n    - [/] Child\n    - [x] Already ✅ 2020-01-01');
+ const out=await f.run('done',{ref:'tasks.md:L1'});
+ assert.equal((out.match(/before /g)??[]).length,2);assert.equal((out.match(/after /g)??[]).length,2);
+ assert.match(f.content.get('tasks.md'),/Already ✅ 2020-01-01/);
+});
+test('US-213/163 handler rejects different parent file and creates Daily Note from template',async()=>{
+ const f=cliFixture();assert.match(await f.run('add',{text:'Child',to:'other.md',parent:'tasks.md:L1'}),/^error invalid_arg\n/);
+ f.put('templates/daily.md','# Daily\nTemplate content\n');
+ f.app.internalPlugins={plugins:{'daily-notes':{instance:{options:{folder:'Daily',format:'YYYY_MM_DD',template:'templates/daily'}}}}};
+ const output=await f.run('add',{text:'Created',scheduled:'今天','stamp-created':'false'});
+ const path=`Daily/${todayLocal().replaceAll('-','_')}.md`;
+ assert.match(output,/^ok .*:L3/);assert.match(f.content.get(path),/^# Daily\nTemplate content\n- \[ \] Created ⏳ \d{4}-\d{2}-\d{2}$/);
+});
+test('US-216/217/218 handler honors hidden=false and refreshes default/update changes',async()=>{
+ const f=cliFixture(); f.plugin.settings.queryPresets=[{id:'a',name:'A',view:{layout:{type:'list'}}},{id:'b',name:'B',hidden:true,view:{layout:{type:'list'}}}];
+ assert.equal(JSON.parse(await f.run('query-list',{hidden:'false',format:'json'})).length,1);
+ let refreshed=0; f.plugin.refreshOpenViews=async()=>{refreshed++};
+ await f.run('query-set-default',{id:'a'});await f.run('query-set-default',{id:'null'});
+ await f.run('query-update',{id:'a',dsl:JSON.stringify({name:'Updated',view:{layout:{type:'list'}}})}); assert.equal(refreshed,3);
+});
+test('US-220 handler projects every content area in layout order',async()=>{
+ const f=cliFixture('- [ ] One #one\n- [ ] Two #two');
+ f.plugin.settings.queryPresets=[{id:'q',name:'Q',view:{layout:{dir:'col',children:[{type:'list',title:'First',when:{tag:'#one'}},{type:'drop',title:'Ignore'},{type:'list',title:'Second',when:{tag:'#two'}}]}}}];
+ const text=await f.run('query-run',{id:'q'}); assert.ok(text.indexOf('First') < text.indexOf('Second'));assert.doesNotMatch(text,/Ignore/);
+ const json=JSON.parse(await f.run('query-run',{id:'q',view:'week',format:'json'}));assert.equal(json.areas.length,2);assert.ok(json.areas.every(a=>a.model.type==='week'));
+});
+test('US-208/214 handler recovers refs across multiple moves and refreshes hash candidates',async()=>{
+ const f=cliFixture('- [ ] Original\n- [ ] Other');
+ const first=JSON.parse(await f.run('list',{format:'json'}))[0];
+ f.put('tasks.md','Heading\n- [ ] Original\n- [ ] Other');await f.plugin.cache.ensureFile('tasks.md');
+ f.put('tasks.md','Heading\nAnother heading\n- [ ] Original\n- [ ] Other');await f.plugin.cache.ensureFile('tasks.md');
+ await f.run('done',{ref:first.id});assert.match(f.content.get('tasks.md'),/- \[x\] Original/);assert.match(f.content.get('tasks.md'),/- \[ \] Other/);
+ f.put('tasks.md','- [ ] Changed');assert.match(await f.run('done',{ref:first.hash}),/^error not_found\n/);
+});
+test('US-209 handler actual delta uses current line inside process',async()=>{
+ const f=cliFixture('- [ ] Task [actual:: 30m]');f.app.beforeProcess=()=>f.put('tasks.md','- [ ] Task [actual:: 60m]');
+ const out=await f.run('actual',{ref:'tasks.md:L1',minutes:'+15m'});assert.match(out,/after.*actual:: 1h15m/);
+});
+test('US-206 handler stats counts seven local calendar days in negative UTC timezone',async()=>{
+ const previous=process.env.TZ;process.env.TZ='America/Los_Angeles';
+ try {const f=cliFixture();const stats=JSON.parse(await f.run('stats',{days:'7',format:'json'}));const end=new Date(`${stats.periodTo}T12:00:00`);end.setDate(end.getDate()-6);assert.equal(stats.periodFrom,`${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`);}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}
+});
+test('US-201a handler help documents implemented parameters',async()=>{
+ const help=await cliFixture().run('');
+ for(const parameter of ['done=','overdue=','has-deadline=','parent=','search=','limit=','yesterday','stamp-created=','from=','to=','today=']) assert.ok(help.includes(parameter),parameter);
+});
+test('US-112/207 handler week range follows Sunday-first setting',async()=>{
+ const f=cliFixture();f.plugin.settings.weekStartsOn=0;
+ const d=new Date();d.setDate(d.getDate()-d.getDay());const sunday=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+ f.put('tasks.md',`- [ ] Sunday ⏳ ${sunday}`);
+ assert.equal(JSON.parse(await f.run('list',{scheduled:'week',format:'json'})).length,1);
+});
+test('US-228/204 handler nest returns moved ref and all source/destination lines',async()=>{
+ const f=cliFixture('- [ ] Child ⏳ 2020-01-01\n    - [ ] Descendant\n- [ ] Parent');
+ const out=await f.run('nest',{ref:'tasks.md:L1',under:'tasks.md:L3'});
+ assert.match(out,/^ok  tasks.md:L2  nested/);assert.equal((out.match(/before /g)??[]).length,4);
+ assert.equal(f.content.get('tasks.md'),'- [ ] Parent\n    - [ ] Child\n        - [ ] Descendant');
+});
+test('US-216a/214 handler show includes metadata and refuses duplicate hashes',async()=>{
+ const f=cliFixture('- [ ] Parent #work\n    - [/] Child [actual:: 15m]');
+ const out=await f.run('show',{ref:'tasks.md:L2'});for(const key of ['hash','raw','parent','children','actual','created','cancelled'])assert.ok(out.includes(key));
+ const task=JSON.parse(await f.run('list',{format:'json'}))[0];f.put('tasks.md','- [ ] Parent #work\n- [ ] Parent #work');await f.plugin.cache.ensureFile('tasks.md');
+ assert.match(await f.run('show',{ref:task.hash}),/^error ambiguous_slug\n/);
+});
+
+test('US-205/216a handler show JSON exposes complete task details',async()=>{
+ const f=cliFixture('- [ ] Parent\n    - [/] Child #中文 [actual:: 15m]');
+ const detail=JSON.parse(await f.run('show',{ref:'tasks.md:L2',format:'json'}));
+ assert.equal(detail.id,'tasks.md:L2');assert.equal(detail.parent_id,'tasks.md:L1');assert.equal(detail.actual_minutes,15);assert.ok(detail.raw);assert.ok(detail.hash);assert.deepEqual(detail.children_ids,[]);
+});
+test('US-212 handler applies limit after descendant selection',async()=>{
+ const f=cliFixture('- [ ] Other\n- [ ] Parent\n    - [ ] Child\n        - [ ] Grandchild');
+ const tasks=JSON.parse(await f.run('list',{parent:'tasks.md:L2',limit:'1',format:'json'}));
+ assert.deepEqual(tasks.map(t=>t.title),['Child']);
+});
+test('US-203/227 handler repeated rename keeps the same ref usable',async()=>{
+ const f=cliFixture();await f.run('show',{ref:'tasks.md:L1'});await f.run('rename',{ref:'tasks.md:L1',title:'Renamed'});
+ assert.match(await f.run('rename',{ref:'tasks.md:L1',title:'Renamed'}),/unchanged/);
+});
+test('US-403 handler reports write_conflict if the cached line is deleted during write',async()=>{
+ const f=cliFixture('Heading\n- [ ] Target');f.app.beforeProcess=()=>f.put('tasks.md','Heading');
+ assert.match(await f.run('done',{ref:'tasks.md:L2'}),/^error write_conflict\n/);
+});
+test('US-163 handler refuses disabled Daily Notes even with saved options',async()=>{
+ const f=cliFixture();f.app.internalPlugins={plugins:{'daily-notes':{enabled:false,instance:{options:{folder:'Daily'}}}}};
+ assert.match(await f.run('add',{text:'New'}),/^error daily_notes_missing\n/);
+});
+test('US-109t/220 handler uses each area week start for query filtering',async()=>{
+ const f=cliFixture('- [ ] Sunday ⏳ 2026-10-18\n- [ ] Monday ⏳ 2026-10-19');
+ f.plugin.settings.queryPresets=[{id:'week',name:'Week',view:{layout:{type:'week',firstDayOfWeek:'sunday',when:{scheduled:'week'}}}}];
+ const result=JSON.parse(await f.run('query-run',{id:'week',anchor:'2026-10-18',format:'json'}));
+ assert.equal(result.total,2);
+});
+
+test('US-203 handler documents and reports non-idempotent add and actual deltas',async()=>{
+ const f=cliFixture('- [ ] Task [actual:: 30m]');
+ assert.match(await f.run(''),/each run|每次/);
+ assert.match(await f.run('actual',{ref:'tasks.md:L1',minutes:'-15m'}),/actual -= 15m/);
+ assert.match(await f.run('add',{text:'New',to:'tasks.md'}),/each run|每次/);
+});
+test('US-203/218 handler settings commands return unchanged without saves',async()=>{
+ const f=cliFixture();const preset={id:'a',name:'A',builtin:false,hidden:false,view:{layout:{type:'list'}}};f.plugin.settings.queryPresets=[preset];f.plugin.settings.defaultSavedViewId='a';
+ let saves=0;f.plugin.saveSettings=async()=>{saves++};
+ for(const [command,args] of [['query-set-default',{id:'a'}],['query-hide',{id:'a',hidden:'false'}],['query-rename',{id:'a',name:'A'}],['query-update',{id:'a',dsl:JSON.stringify({name:'A',view:preset.view})}]])assert.match(await f.run(command,args),/unchanged/);
+ assert.equal(saves,0);assert.match(await f.run('query-update',{id:'missing',dsl:'{}'}),/^error not_found\n/);
+});
+test('US-211 handler preserves nest_partial and reports source and destination refs',async()=>{
+ const f=cliFixture('- [ ] Child');f.put('parent.md','- [ ] Parent');
+ const process=f.app.vault.process;f.app.vault.process=async(file,fn)=>{if(file.path==='tasks.md')throw new Error('read-only');return process(file,fn)};
+ const out=await f.run('nest',{ref:'tasks.md:L1',under:'parent.md:L1'});
+ assert.match(out,/^error nest_partial\n/);assert.match(out,/parent.md:L2/);assert.match(out,/tasks.md:L1/);
+ assert.match(f.content.get('parent.md'),/Child/);assert.match(f.content.get('tasks.md'),/Child/);
+});
+
+
+test('US-128/208 handler tag edits followed by real undo preserve refs for nest',async()=>{
+ const f=cliFixture('- [ ] Parent #old\n- [ ] Child');
+ const stack=new runtime.UndoStack(f.app,{onApplied:()=>{},notify:message=>{if(message.startsWith("cannot undo"))assert.fail(message)}});
+ const ops=[];
+ for(const [tag,remove] of [['#old',true],['#new',false]]) {
+   const before=f.content.get('tasks.md').split('\n')[0];
+   assert.match(await f.run('tag',{ref:'tasks.md:L1',tag,remove:String(remove)}),/^ok/);
+   ops.push({path:'tasks.md',line:0,before:[before],after:[f.content.get('tasks.md').split('\n')[0]]});
+ }
+ stack.push({label:'tags',ops});await stack.pop();await f.plugin.cache.invalidateFile('tasks.md');
+ assert.match(await f.run('nest',{ref:'tasks.md:L2',under:'tasks.md:L1'}),/^ok/);
+ assert.equal(f.content.get('tasks.md'),'- [ ] Parent #old\n    - [ ] Child');
 });

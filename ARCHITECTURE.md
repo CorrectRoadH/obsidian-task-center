@@ -1260,7 +1260,7 @@ QueryPreset 动词调用 `QueryPresetService`：
 
 - `query-list [hidden=true] [format=json]`：列出 id、name、builtin、hidden、default；`hidden=false` 或省略时排除隐藏视图。（US-216 / US-413a）
 - `query-show id=<id>`：输出完整 DSL。
-- `query-run id=<id> [view=list|week|month] [anchor=YYYY-MM-DD]`：执行 QueryPreset 的主内容 area `when`，并按 view projection 输出结果；`view` 把本次展示临时替换成「单个该类型 area」的布局，不写回 preset。
+- `query-run id=<id> [view=list|week|month] [anchor=YYYY-MM-DD]`：按布局顺序执行每个内容 area 的 `when`，逐段输出标题和投影，跳过 drop；`view` 临时覆盖每块内容区域的展示类型并保留其过滤条件，JSON 包含全部区域结果，不写回 preset。（US-220）
 - `query-create dsl=`（别名 `query-save`）：读取 DSL 创建新 id。
 - `query-update id=<id> dsl=`：校验后覆盖，保留原 id。二者和 GUI 写同一存储，成功后刷新已打开看板；非法输入不改已保存配置。（US-217）
 - `query-rename` / `query-copy` / `query-hide` / `query-delete` / `query-set-default`。

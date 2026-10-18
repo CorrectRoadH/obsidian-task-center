@@ -143,8 +143,8 @@ export function resolveDateInput(raw: string, today: string = todayISO()): strin
   if (lc === "yesterday" || s === "昨天" || s === "昨日") return addDays(today, -1);
   if (s === "后天") return addDays(today, 2);
   if (lc === "next-week" || s === "下周") return addDays(today, 7);
-  if (s in ZH_DAYS) {
-    const target = ZH_DAYS[s];
+  const target = ZH_DAYS[s];
+  if (typeof target === "number") {
     const d = fromISO(today);
     const cur = d.getDay();
     const diff = (target - cur + 7) % 7 || 7;

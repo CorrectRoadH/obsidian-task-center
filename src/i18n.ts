@@ -228,13 +228,16 @@ const EN = {
   // src/cli.ts. The thrown TaskWriterError keeps the English `message`
   // as a developer-facing detail; the i18n template wraps it in the
   // user's current locale.
+  "err.missing_arg": "Missing required argument: {ref}",
+  "err.invalid_arg": "Invalid argument; check the command help: {ref}",
+  "err.undo_diverged": "Content changed; reload before undoing: {ref}",
   "err.not_found": "task not found: {ref}",
   "err.invalid_date": "invalid date: {ref}",
   "err.invalid_query": "invalid query: {ref}",
   "err.query_not_found": "query not found: {ref}",
   "err.write_conflict": "write conflict: {ref}",
-  "err.daily_notes_missing": "{ref}",
-  "err.daily_notes_folder_missing": "{ref}",
+  "err.daily_notes_missing": "Enable and configure Daily Notes before adding tasks: {ref}",
+  "err.daily_notes_folder_missing": "Configure the Daily Notes folder before adding tasks: {ref}",
   "err.invalid_nest": "invalid nest: {ref}",
   "err.ambiguous_slug": "ambiguous slug: {ref}",
   "err.nest_partial": "nest partial: {ref}",
@@ -714,13 +717,16 @@ const ZH: Partial<typeof EN> = {
     "AI（Claude Code 等）可以直接调用这些命令 — 不需要 eval hack。",
 
   // US-412: error messages（中文）
+  "err.missing_arg": "缺少必填参数：{ref}",
+  "err.invalid_arg": "参数无效，请检查命令帮助：{ref}",
+  "err.undo_diverged": "内容已变更，请刷新后再撤销：{ref}",
   "err.not_found": "找不到任务：{ref}",
   "err.invalid_date": "日期无效：{ref}",
   "err.invalid_query": "查询无效：{ref}",
   "err.query_not_found": "找不到查询：{ref}",
   "err.write_conflict": "写入冲突：{ref}",
-  "err.daily_notes_missing": "{ref}",
-  "err.daily_notes_folder_missing": "{ref}",
+  "err.daily_notes_missing": "请启用并配置日记插件后再新建任务：{ref}",
+  "err.daily_notes_folder_missing": "请先设置日记插件的文件夹：{ref}",
   "err.invalid_nest": "嵌套无效：{ref}",
   "err.ambiguous_slug": "前缀歧义：{ref}",
   "err.nest_partial": "部分嵌套成功：{ref}",

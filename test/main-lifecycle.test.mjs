@@ -102,6 +102,7 @@ async function compile() {
                   export function formatQueryRun(result) { return "Query " + result.preset.id + " · " + result.preset.name + "\\nview " + result.view.type + " · " + result.filteredTasks.length + " tasks · anchor " + result.anchorISO; }
                   export function formatOkWrite() { return ""; }
                   export function formatAdd() { return ""; }
+                  export function formatError(code, message) { return "error " + code + "\\n" + message; }
                 `);
               case "./api":
                 return stubModule(`
@@ -123,7 +124,7 @@ async function compile() {
               case "./i18n":
                 return stubModule("export function t(key) { return key; }");
               case "./dates":
-                return stubModule("export function todayISO() { return '2026-04-29'; }");
+                return stubModule("export function todayISO() { return '2026-04-29'; } export function resolveDateInput(value) { return /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value : undefined; }");
               case "./parser":
                 return stubModule("export function parseDurationToMinutes() { return null; }");
               case "./writer":
@@ -251,7 +252,7 @@ test("CLI write handlers rely on cache events instead of directly refreshing ope
   };
   plugin.api = {
     async done() {
-      return { before: "- [ ] A", after: "- [x] A", unchanged: false };
+      return { before: "- [ ] A", after: "- [x] A", unchanged: false, results: [{ path: "Tasks/Inbox.md", line: 0, before: "- [ ] A", after: "- [x] A", unchanged: false }] };
     },
     async show() {
       return { id: "Tasks/Inbox.md:L1", completed: "2026-04-29" };
@@ -667,7 +668,7 @@ test("query-copy / hide / set-default / delete 维护 preset 生命周期与默�
     },
   ]);
   assert.equal(calls.save, 5);
-  assert.equal(calls.refresh, 3);
+  assert.equal(calls.refresh, 5);
 });
 
 // ── CLI query-save / query-update negative tests ──
@@ -907,11 +908,11 @@ test("US-219: query-update without name preserves the existing name", async () =
   await plugin.cliQueryUpdate({ id: "sv-alpha", dsl: invalidDsl });
   assert.equal(plugin.settings.queryPresets[0].name, "Alpha");
 
-  // Identity and name preserved; layout is updated.
+  // US-203: identical normalized layout and name require no write or refresh.
   assert.equal(plugin.settings.queryPresets.length, 1);
   assert.equal(plugin.settings.queryPresets[0].id, "sv-alpha");
-  assert.equal(calls.save, 1);
-  assert.equal(calls.refresh, 1);
+  assert.equal(calls.save, 0);
+  assert.equal(calls.refresh, 0);
 });
 
 test("query-update rejects invalid QueryPreset DSL (multi-section errors) with invalid_query", async () => {

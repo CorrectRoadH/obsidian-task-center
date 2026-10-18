@@ -11,6 +11,7 @@ import {
   formatQueryRun,
   formatOkWrite,
   formatAdd,
+  formatError,
 } from "./cli";
 import { TaskCenterApi, type QueryRunResult } from "./api";
 import { TaskCache } from "./cache";
@@ -20,6 +21,7 @@ import { QuickAddModal } from "./quickadd";
 import { t as tr } from "./i18n";
 import { todayISO } from "./dates";
 import { parseDurationToMinutes } from "./parser";
+import { resolveDateInput } from "./dates";
 import { TaskWriterError } from "./writer";
 import { __setTestForceMobile } from "./platform";
 import {
@@ -82,6 +84,7 @@ export default class TaskCenterPlugin extends Plugin {
     for (const ref of this.cache.bind()) this.registerEvent(ref);
     this.api = new TaskCenterApi(this.app, this.cache, () => ({
       taskFormatFlavor: this.settings.taskFormatFlavor,
+      weekStartsOn: this.settings.weekStartsOn,
     }));
 
     // View
@@ -371,26 +374,37 @@ export default class TaskCenterPlugin extends Plugin {
   // no `eval` hacks, the CLI is the same surface Obsidian itself ships.
   // see USER_STORIES.md
   private registerAllCliHandlers() {
-    this.registerCliHandler(
+    const register: Plugin["registerCliHandler"] = (command, description, flags, handler) =>
+      this.registerCliHandler(command, description, flags, async (args) => {
+        try { return await handler(args); }
+        catch (error) {
+          const e = error as { code?: string; hint?: string; message?: string };
+          const aliases: Record<string, string> = { query_not_found: "not_found", invalid_nest: "invalid_arg", undo_diverged: "write_conflict" };
+          const code = aliases[e.code ?? ""] ?? e.code ?? "invalid_arg";
+          const known = ["not_found", "ambiguous_slug", "missing_arg", "invalid_arg", "invalid_date", "invalid_query", "daily_notes_missing", "daily_notes_folder_missing", "write_conflict", "nest_partial"];
+          return formatError(known.includes(code) ? code : "invalid_arg", e.hint ?? e.message ?? String(error));
+        }
+      });
+    register(
       "task-center",
       "Show Task Center CLI help",
       {},
       () => this.cliHelp(),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:list",
       "List tasks with filters",
       {
         scheduled: {
           value: "<when>",
           description:
-            "today | tomorrow | unscheduled | week | next-week | month | next-month | YYYY-MM-DD | FROM..TO",
+            "today | tomorrow | yesterday | unscheduled | week | next-week | month | next-month | YYYY-MM-DD | FROM..TO",
         },
         done: { value: "<when>", description: "Completed in this range" },
         overdue: { description: "Only todo tasks past their 📅" },
         "has-deadline": { description: "Only tasks with a deadline" },
-        status: { value: "todo|done|dropped", description: "Filter by status" },
+        status: { value: "todo|done|dropped|in_progress", description: "Filter by status" },
         tag: {
           value: "<tag,tag>",
           description: "Tag filter (comma-separated; supports '#*象限')",
@@ -403,16 +417,17 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliList(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:show",
       "Show one task in full detail",
       {
+        format: { value: "text|json", description: "Output format (default: text)" },
         ref: { value: "<path:line|hash>", description: "Task id", required: true },
       },
       (args) => this.cliShow(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:stats",
       "Estimate accuracy + tag distribution (rolling window)",
       {
@@ -425,7 +440,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliStats(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:brief",
       "Agent brief: today status + executable next actions",
       {
@@ -436,7 +451,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliBrief(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:review",
       "Review mode: today/week completion, abandonment, delay, estimate accuracy, grouping",
       {
@@ -448,7 +463,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliReview(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:schedule",
       "Set or clear ⏳ scheduled date on a task",
       {
@@ -458,7 +473,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliSchedule(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:deadline",
       "Set or clear 📅 deadline on a task",
       {
@@ -468,7 +483,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliDeadline(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:actual",
       "Set or add actual minutes ([actual:: Nm]) on a task",
       {
@@ -478,7 +493,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliActual(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:estimate",
       "Set or clear [estimate:: Nm] on a task",
       {
@@ -488,7 +503,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliEstimate(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:done",
       "Mark a task done (✅ today unless at= given)",
       {
@@ -498,7 +513,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliDone(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:undone",
       "Unmark a task (remove ✅ and reset checkbox)",
       {
@@ -507,7 +522,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliUndone(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:abandon",
       "Mark a task abandoned ([-] + ❌ today; children cascade)",
       {
@@ -518,7 +533,7 @@ export default class TaskCenterPlugin extends Plugin {
 
     // Deprecated alias kept for backward compatibility — `abandon` is the
     // preferred verb (matches README's `[-] ❌` = "Abandoned" terminology).
-    this.registerCliHandler(
+    register(
       "task-center:drop",
       "Alias for task-center:abandon (deprecated)",
       {
@@ -527,7 +542,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliAbandon(args, "dropped"),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:add",
       "Create a new task line",
       {
@@ -546,7 +561,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliAdd(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:tag",
       "Add or remove a tag on a task",
       {
@@ -557,7 +572,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliTag(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:nest",
       "Move a task (and its subtree) to become a subtask of another (works cross-file)",
       {
@@ -567,7 +582,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliNest(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:rename",
       "Rename a task title (preserves all metadata)",
       {
@@ -577,7 +592,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliRename(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-list",
       "List saved query presets",
       {
@@ -587,7 +602,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryList(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-show",
       "Show one saved query preset as DSL",
       {
@@ -596,7 +611,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryShow(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-run",
       "Run a saved query preset and render its view",
       {
@@ -610,7 +625,7 @@ export default class TaskCenterPlugin extends Plugin {
 
     // VAL-CLI-006: query-create is an alias that reuses the same QueryPreset
     // create implementation as query-save (stable id, invalid_query rejection).
-    this.registerCliHandler(
+    register(
       "task-center:query-save",
       "Create a saved query preset from DSL JSON",
       {
@@ -619,7 +634,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQuerySave(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-create",
       "Create a saved query preset from DSL JSON (alias for query-save)",
       {
@@ -628,7 +643,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQuerySave(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-update",
       "Replace an existing saved query preset from DSL JSON",
       {
@@ -638,7 +653,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryUpdate(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-rename",
       "Rename a saved query preset",
       {
@@ -648,7 +663,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryRename(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-copy",
       "Duplicate a saved query preset",
       {
@@ -658,7 +673,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryCopy(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-hide",
       "Hide or unhide a saved query preset",
       {
@@ -668,7 +683,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryHide(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-delete",
       "Delete a saved query preset",
       {
@@ -677,7 +692,7 @@ export default class TaskCenterPlugin extends Plugin {
       (args) => this.cliQueryDelete(args),
     );
 
-    this.registerCliHandler(
+    register(
       "task-center:query-set-default",
       "Set or clear the default saved query preset",
       {
@@ -697,22 +712,24 @@ export default class TaskCenterPlugin extends Plugin {
       "Task Center CLI",
       "",
       "Task verbs:",
-      "  task-center:list scheduled=today|tomorrow|unscheduled|week|next-week|month|next-month|YYYY-MM-DD|FROM..TO [status=todo|done|dropped] [tag=#work] [format=json]",
-      "  task-center:show ref=<task-id>",
-      "  task-center:add text=<text> [to=<path>] [tag=#work,#home] [scheduled=YYYY-MM-DD] [deadline=YYYY-MM-DD] [estimate=30m] [parent=<task-id>]",
+      "  add creates a new task on each run; actual +/- applies the delta on each run. Check show/list before retrying.",
+      "  task-center:list [scheduled=today|tomorrow|yesterday|unscheduled|week|next-week|month|next-month|YYYY-MM-DD|FROM..TO] [done=<date|range>] [overdue=true|false] [has-deadline=true|false] [parent=<task-id>] [search=<text>] [limit=<positive integer>] [status=todo|done|dropped|in_progress] [tag=#work] [format=json]",
+      "  task-center:show ref=<task-id> [format=json]",
+      "  task-center:add text=<text> [to=<path>] [tag=#work,#home] [scheduled=YYYY-MM-DD] [deadline=YYYY-MM-DD] [estimate=30m] [parent=<task-id>] [stamp-created=true|false]",
       "  task-center:schedule ref=<task-id> date=<YYYY-MM-DD|null>",
       "  task-center:deadline ref=<task-id> date=<YYYY-MM-DD|null>",
       "  task-center:done ref=<task-id> [at=YYYY-MM-DD]",
       "  task-center:undone ref=<task-id>",
       "  task-center:abandon ref=<task-id>",
-      "  task-center:actual ref=<task-id> minutes=<30m|+15m>",
+      "  task-center:drop ref=<task-id> (alias of abandon)",
+      "  task-center:actual ref=<task-id> minutes=<30m|1h30m|+15m|-15m>",
       "  task-center:estimate ref=<task-id> minutes=<30m|null>",
-      "  task-center:tag ref=<task-id> tag=<#tag> [remove]",
+      "  task-center:tag ref=<task-id> tag=<#tag> [remove=true|false]",
       "  task-center:nest ref=<task-id> under=<parent-task-id>",
       "  task-center:rename ref=<task-id> title=<new-title>",
-      "  task-center:stats [days=7] [group=象限] [format=json]",
-      "  task-center:brief [today=YYYY-MM-DD] [format=json]",
-      "  task-center:review [days=7] [format=json]",
+      "  task-center:stats [from=<date>] [to=<date>] [days=7] [group=象限] [format=json]",
+      "  task-center:brief [today=<date>] [limit=<positive integer>] [format=json]",
+      "  task-center:review [today=<date>] [limit=<positive integer>] [days=7] [format=json]",
       "",
       "Query Tab verbs:",
       "  task-center:query-list [hidden=true] [format=json]",
@@ -743,13 +760,14 @@ export default class TaskCenterPlugin extends Plugin {
     const filters: Parameters<TaskCenterApi["list"]>[0] = {};
     if (args.scheduled) filters.scheduled = args.scheduled;
     if (args.done) filters.done = args.done;
-    if (args.overdue) filters.overdue = true;
-    if (args["has-deadline"]) filters.hasDeadline = true;
+    filters.overdue = booleanArg(args.overdue);
+    filters.hasDeadline = booleanArg(args["has-deadline"]);
+    if (args.status && !["todo", "done", "dropped", "in_progress"].includes(args.status)) throw new TaskWriterError("invalid_arg", "status=todo|done|dropped|in_progress");
     if (args.status) filters.status = args.status as "todo" | "done" | "dropped";
     if (args.tag) filters.tag = splitList(args.tag);
     if (args.parent) filters.parent = args.parent;
     if (args.search) filters.search = args.search;
-    if (args.limit) filters.limit = parseInt(args.limit, 10);
+    if (args.limit !== undefined) filters.limit = positiveInteger(args.limit);
     const all = await this.api.list(filters);
     if (args.format === "json") {
       return JSON.stringify(
@@ -782,7 +800,13 @@ export default class TaskCenterPlugin extends Plugin {
 
   private async cliShow(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
-    return formatShow(await this.api.show(ref), { groupingTags: this.settings.groupingTags });
+    const task = await this.api.show(ref);
+    if (args.format === "json") return JSON.stringify({
+      ...task, line: task.line + 1, raw: task.rawLine, estimate_minutes: task.estimate, actual_minutes: task.actual,
+      parent_id: task.parentLine === null ? null : `${task.path}:L${task.parentLine + 1}`,
+      children_ids: task.childrenLines.map(line => `${task.path}:L${line + 1}`),
+    }, null, 2);
+    return formatShow(task, { groupingTags: this.settings.groupingTags });
   }
 
   // US-206: `stats days=N` returns the estimate-vs-actual ratio plus the
@@ -794,12 +818,12 @@ export default class TaskCenterPlugin extends Plugin {
   //          machine consumers.
   // see USER_STORIES.md
   private async cliStats(args: CliArgs): Promise<string> {
-    const days = args.days ? parseInt(args.days, 10) : 7;
+    const days = args.days !== undefined ? positiveInteger(args.days) : 7;
     const stats = await this.api.stats({
       days,
       group: args.group,
-      from: args.from,
-      to: args.to,
+      from: args.from === undefined ? undefined : cliDate(args.from),
+      to: args.to === undefined ? undefined : cliDate(args.to),
     });
     if (args.format === "json") return JSON.stringify(stats, null, 2);
     return formatStats(stats);
@@ -807,8 +831,8 @@ export default class TaskCenterPlugin extends Plugin {
 
   private async cliBrief(args: CliArgs): Promise<string> {
     const brief = await this.api.agentBrief({
-      today: args.today,
-      limit: args.limit ? parseInt(args.limit, 10) : undefined,
+      today: args.today === undefined ? undefined : cliDate(args.today),
+      limit: args.limit !== undefined ? positiveInteger(args.limit) : undefined,
     });
     if (args.format === "json") return JSON.stringify(brief, null, 2);
     return formatAgentBrief(brief);
@@ -816,9 +840,9 @@ export default class TaskCenterPlugin extends Plugin {
 
   private async cliReview(args: CliArgs): Promise<string> {
     const review = await this.api.review({
-      today: args.today,
-      days: args.days ? parseInt(args.days, 10) : undefined,
-      limit: args.limit ? parseInt(args.limit, 10) : undefined,
+      today: args.today === undefined ? undefined : cliDate(args.today),
+      days: args.days !== undefined ? positiveInteger(args.days) : undefined,
+      limit: args.limit !== undefined ? positiveInteger(args.limit) : undefined,
       groupingTags: this.settings.groupingTags,
     });
     if (args.format === "json") return JSON.stringify(review, null, 2);
@@ -827,18 +851,18 @@ export default class TaskCenterPlugin extends Plugin {
 
   private async cliSchedule(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
-    const date = args.date ?? "";
-    const clear = date === "null" || date === "--" || date === "";
-    const r = await this.api.schedule(ref, clear ? null : date);
+    const date = requireArg(args.date, "date");
+    const clear = date === "null";
+    const r = await this.api.schedule(ref, clear ? null : cliDate(date));
     const t = await this.api.show(ref);
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "schedule cleared" : `scheduled ${date}`);
   }
 
   private async cliDeadline(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
-    const date = args.date ?? "";
-    const clear = date === "null" || date === "--" || date === "";
-    const r = await this.api.deadline(ref, clear ? null : date);
+    const date = requireArg(args.date, "date");
+    const clear = date === "null";
+    const r = await this.api.deadline(ref, clear ? null : cliDate(date));
     const t = await this.api.show(ref);
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "deadline cleared" : `deadline ${date}`);
   }
@@ -850,21 +874,22 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliActual(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const spec = requireArg(args.minutes, "minutes");
-    const add = spec.startsWith("+");
+    const add = /^[+-]/.test(spec);
     const value = add ? spec.slice(1) : spec;
-    const minutes = parseDurationToMinutes(value);
-    if (minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
-    const r = await this.api.actual(ref, minutes, add ? "add" : "set");
+    const minutes = durationArg(value);
+    if (minutes === null) throw new TaskWriterError("invalid_arg", `not a duration: ${spec}`);
+    const r = await this.api.actual(ref, spec.startsWith("-") ? -minutes : minutes, add ? "add" : "set");
     const t = await this.api.show(ref);
-    return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, `actual ${add ? "+=" : "="} ${minutes}m`);
+    const action = `actual ${add ? (spec.startsWith("-") ? "-=" : "+=") : "="} ${minutes}m${add ? " (each run applies the delta)" : ""}`;
+    return `${formatOkWrite(t, null, null, r.before, r.after, r.unchanged, action)}\n    ${action}`;
   }
 
   private async cliEstimate(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const spec = requireArg(args.minutes, "minutes");
     const clear = spec === "null" || spec === "--";
-    const minutes = clear ? null : parseDurationToMinutes(spec);
-    if (!clear && minutes === null) throw new TaskWriterError("invalid_date", `not a duration: ${spec}`);
+    const minutes = clear ? null : durationArg(spec);
+    if (!clear && minutes === null) throw new TaskWriterError("invalid_arg", `not a duration: ${spec}`);
     const r = await this.api.estimate(ref, minutes);
     const t = await this.api.show(ref);
     return formatOkWrite(t, null, null, r.before, r.after, r.unchanged, clear ? "estimate cleared" : `estimate ${minutes}m`);
@@ -877,11 +902,9 @@ export default class TaskCenterPlugin extends Plugin {
   // see USER_STORIES.md
   private async cliDone(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
-    const at = args.at ?? null;
+    const at = args.at === undefined ? null : cliDate(args.at);
     const r = await this.api.done(ref, at);
-    const t = await this.api.show(ref);
-    if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "already done", `unchanged (already done ✅ ${t.completed ?? ""})`);
-    return formatOkWrite(t, null, null, r.before, r.after, false, "done");
+    return r.results.map(row => formatOkWrite(null, row.path, row.line, row.before, row.after, row.unchanged, "done")).join("\n");
   }
 
   private async cliUndone(args: CliArgs): Promise<string> {
@@ -895,11 +918,7 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliAbandon(args: CliArgs, label: "abandoned" | "dropped"): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const r = await this.api.drop(ref);
-    const t = await this.api.show(ref);
-    if (r.unchanged) {
-      return formatOkWrite(t, null, null, r.before, r.after, true, `already ${label}`, `unchanged (already ${label})`);
-    }
-    return formatOkWrite(t, null, null, r.before, r.after, false, label);
+    return r.results.map(row => formatOkWrite(null, row.path, row.line, row.before, row.after, row.unchanged, label)).join("\n");
   }
 
   // US-213: `add stamp-created=true|false` lets the caller override the
@@ -910,19 +929,19 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliAdd(args: CliArgs): Promise<string> {
     const text = requireArg(args.text, "text");
     const estimateSpec = args.estimate;
-    const estimate = estimateSpec ? parseDurationToMinutes(estimateSpec) ?? undefined : undefined;
+    const estimate = estimateSpec !== undefined ? durationArg(estimateSpec) : undefined;
     // `stampCreated` flag lets caller override the setting (default: true). Pass
     // `stamp-created=false` on the CLI to disable.
     const stampCreated =
       args["stamp-created"] !== undefined
-        ? args["stamp-created"] !== "false"
+        ? booleanArg(args["stamp-created"])
         : this.settings.stampCreated;
     const r = await this.api.add({
       text,
       to: args.to,
       tag: args.tag ? splitList(args.tag) : undefined,
-      scheduled: args.scheduled,
-      deadline: args.deadline,
+      scheduled: args.scheduled === undefined ? undefined : cliDate(args.scheduled),
+      deadline: args.deadline === undefined ? undefined : cliDate(args.deadline),
       estimate,
       parent: args.parent,
       stampCreated,
@@ -933,7 +952,7 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliTag(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const tag = requireArg(args.tag, "tag");
-    const remove = !!args.remove;
+    const remove = booleanArg(args.remove);
     const r = remove ? await this.api.tag(ref, tag, true) : await this.api.tag(ref, tag);
     const t = await this.api.show(ref);
     if (r.unchanged) return formatOkWrite(t, null, null, r.before, r.after, true, "no-op", "unchanged");
@@ -949,14 +968,13 @@ export default class TaskCenterPlugin extends Plugin {
     const ref = requireArg(args.ref, "ref");
     const under = requireArg(args.under, "under");
     const r = await this.api.nest(ref, under);
-    // After nest, the original ref may not resolve (line moved); show the parent instead.
-    const parent = await this.api.show(under);
-    const label = r.unchanged
-      ? "already nested"
-      : r.crossFile
-        ? `nested under ${parent.id} (cross-file)`
-        : `nested under ${parent.id}`;
-    return formatOkWrite(parent, null, null, r.before, r.after, r.unchanged, label, r.unchanged ? "unchanged" : undefined);
+    const insertion = r.undoOps.find(op => op.after.length > 0);
+    const path = insertion?.path ?? ref.slice(0, ref.lastIndexOf(":L"));
+    const line = insertion?.line ?? Number(ref.slice(ref.lastIndexOf(":L") + 2)) - 1;
+    if (r.unchanged) return formatOkWrite(null, path, line, r.before, r.after, true, "nested");
+    return `ok  ${path}:L${line + 1}  nested\n` + r.undoOps.map(op =>
+      formatOkWrite(null, op.path, op.line, op.before.join("\n"), op.after.join("\n"), false, "nested")
+    ).join("\n");
   }
 
   // US-227: `rename ref=<id> title=<new title>` — rename a task's title
@@ -966,8 +984,8 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliRename(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const title = requireArg(args.title, "title");
-    const r = await this.api.rename(ref, title);
     const t = await this.api.show(ref);
+    const r = await this.api.rename(ref, title);
     // US-227: pass titleOverride so the output header reflects the new title
     // even when the cache is stale (metadataCache.changed fires asynchronously
     // after vault.process). Without this, the header shows the old title from
@@ -976,7 +994,7 @@ export default class TaskCenterPlugin extends Plugin {
   }
 
   private cliQueryList(args: CliArgs): string {
-    const all = args.hidden ? this.settings.queryPresets.map((view) => normalizeQueryPreset(view)) : visibleQueryPresets(this.settings.queryPresets);
+    const all = booleanArg(args.hidden) ? this.settings.queryPresets.map((view) => normalizeQueryPreset(view)) : visibleQueryPresets(this.settings.queryPresets);
     if (args.format === "json") {
       return JSON.stringify(
         all.map((view) => ({
@@ -1011,7 +1029,7 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliQueryRun(args: CliArgs): Promise<string> {
     const preset = this.requireQueryPreset(requireArg(args.id, "id"));
     const view = args.view ? parseQueryViewType(args.view) : undefined;
-    const anchorISO = args.anchor ?? todayISO();
+    const anchorISO = args.anchor === undefined ? todayISO() : cliDate(args.anchor);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorISO)) {
       throw new TaskWriterError("invalid_date", `anchor requires YYYY-MM-DD: ${anchorISO}`);
     }
@@ -1054,9 +1072,10 @@ export default class TaskCenterPlugin extends Plugin {
     // VAL-CORE-005 / VAL-CORE-006 / VAL-CROSS-002: validate before any mutation.
     // Invalid DSL (including legacy flat shape) leaves the existing preset
     // completely unchanged — we throw before touching settings.
+    const dsl = requireArg(args.dsl, "dsl");
     let parsed: QueryPreset;
     try {
-      parsed = parseQueryDsl(requireArg(args.dsl, "dsl"), existing);
+      parsed = parseQueryDsl(dsl, existing);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new TaskWriterError("invalid_query", message);
@@ -1066,6 +1085,7 @@ export default class TaskCenterPlugin extends Plugin {
       id: existing.id,
       builtin: existing.builtin,
     });
+    if (JSON.stringify(existing) === JSON.stringify(normalized)) return `ok  ${id}  unchanged`;
     this.settings.queryPresets = this.settings.queryPresets.map((view) => (view.id === id ? normalized : view));
     await this.saveSettings();
     await this.refreshOpenViews();
@@ -1074,8 +1094,10 @@ export default class TaskCenterPlugin extends Plugin {
 
   private async cliQueryRename(args: CliArgs): Promise<string> {
     const id = requireArg(args.id, "id");
-    this.requireQueryPreset(id);
-    this.settings.queryPresets = renameQueryPresetById(this.settings.queryPresets, id, requireArg(args.name, "name"));
+    const existing = this.requireQueryPreset(id);
+    const name = requireArg(args.name, "name").trim();
+    if (existing.name === name) return `ok  ${id}  unchanged`;
+    this.settings.queryPresets = renameQueryPresetById(this.settings.queryPresets, id, name);
     await this.saveSettings();
     await this.refreshOpenViews();
     const renamed = this.requireQueryPreset(id);
@@ -1098,11 +1120,12 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliQueryHide(args: CliArgs): Promise<string> {
     const id = requireArg(args.id, "id");
     this.requireQueryPreset(id);
-    const raw = args.hidden;
+    const raw = requireArg(args.hidden, "hidden");
     if (raw !== "true" && raw !== "false") {
-      throw new TaskWriterError("invalid_query", "hidden is required (pass hidden=true|false)");
+      throw new TaskWriterError("invalid_arg", "hidden is required (pass hidden=true|false)");
     }
     const hidden = raw === "true";
+    if (Boolean(this.requireQueryPreset(id).hidden) === hidden && !(hidden && (this.settings.defaultSavedViewId === id || this.settings.lastSavedViewId === id))) return `ok  ${id}  unchanged`;
     this.settings.queryPresets = setQueryPresetHiddenById(this.settings.queryPresets, id, hidden);
     if (hidden && this.settings.defaultSavedViewId === id) {
       this.settings.defaultSavedViewId = null;
@@ -1134,16 +1157,20 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliQuerySetDefault(args: CliArgs): Promise<string> {
     const id = requireArg(args.id, "id");
     if (id === "null") {
+      if (this.settings.defaultSavedViewId === null) return "ok  default-query-preset  unchanged";
       this.settings.defaultSavedViewId = null;
       await this.saveSettings();
+      await this.refreshOpenViews();
       return "ok  default-query-preset\n    cleared";
     }
     const view = this.requireQueryPreset(id);
     if (view.hidden) {
       throw new TaskWriterError("invalid_query", `query preset is hidden: ${id}`);
     }
+    if (this.settings.defaultSavedViewId === view.id) return `ok  ${id}  unchanged`;
     this.settings.defaultSavedViewId = view.id;
     await this.saveSettings();
+    await this.refreshOpenViews();
     return `ok  ${view.id}  ${view.name}\n    set as default query preset`;
   }
 
@@ -1155,8 +1182,8 @@ export default class TaskCenterPlugin extends Plugin {
 }
 
 function requireArg(v: string | undefined, name: string): string {
-  if (v === undefined || v === "" || v === "true") {
-    throw new TaskWriterError("invalid_date", `${name} is required (pass ${name}=<value>)`);
+  if (v === undefined || v.trim() === "") {
+    throw new TaskWriterError("missing_arg", `${name} is required (pass ${name}=<value>)`);
   }
   return v;
 }
@@ -1178,6 +1205,7 @@ function toQueryRunJson(result: QueryRunResult): unknown {
     anchor: result.anchorISO,
     total: result.filteredTasks.length,
     model: mapViewModel(result.viewModel),
+    areas: (result.areas ?? []).map(area => ({ title: area.title, total: area.filteredTasks.length, model: mapViewModel(area.viewModel) })),
   };
 }
 
@@ -1244,4 +1272,27 @@ function describeFilters(f: Parameters<TaskCenterApi["list"]>[0]): string {
   if (f.search) parts.push(`search "${f.search}"`);
   if (f.limit) parts.push(`limit ${f.limit}`);
   return parts.length > 0 ? parts.join(" · ") : "all";
+}
+
+function booleanArg(value: string | undefined): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new TaskWriterError("invalid_arg", `expected true|false: ${value}`);
+}
+function positiveInteger(value: string): number {
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) throw new TaskWriterError("invalid_arg", `expected positive integer: ${value}`);
+  return Number(value);
+}
+function cliDate(value: string): string {
+  const date = resolveDateInput(value);
+  if (!date) throw new TaskWriterError("invalid_date", value);
+  return date;
+}
+function durationArg(value: string): number {
+  value = value.trim().toLowerCase();
+  if (/^0(?:m|h)?$/.test(value)) return 0;
+  if (!/^(?:\d+(?:\.\d+)?h(?:\d+m)?|\d+(?:\.\d+)?m?|\d+h\d+m)$/.test(value.trim())) throw new TaskWriterError("invalid_arg", `invalid duration: ${value}`);
+  const minutes = parseDurationToMinutes(value);
+  if (minutes === null || !Number.isFinite(minutes) || !Number.isSafeInteger(minutes)) throw new TaskWriterError("invalid_arg", value);
+  return minutes;
 }
