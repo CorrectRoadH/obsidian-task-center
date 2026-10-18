@@ -28,6 +28,8 @@ function inWeekNeighbor(): string {
 }
 
 async function writeAndWait(path: string, body: string) {
+  await browser.reloadObsidian({ vault: VAULT });
+  await setDataviewFlavor();
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
       let f = app.vault.getAbstractFileByPath(p);

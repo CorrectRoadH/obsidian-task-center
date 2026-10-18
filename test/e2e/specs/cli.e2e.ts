@@ -18,7 +18,8 @@ import { obsidianPage } from "wdio-obsidian-service";
 
 const VAULT = "test/e2e/vaults/simple";
 
-async function writeAndWait(path: string, body: string) {
+async function writeAndWait(path: string, body: string, preserveSession = false) {
+  if (!preserveSession) await browser.reloadObsidian({ vault: VAULT });
   await browser.executeObsidian(
     async ({ app }, p: string, content: string) => {
       let f = app.vault.getAbstractFileByPath(p);
@@ -219,12 +220,12 @@ describe("Task Center — CLI API (US-201/203/204/208/214)", function () {
 
     // Prepend a line to shift the task from L1 to L2.
     const original = await readFile("Tasks/Inbox.md");
-    await writeAndWait("Tasks/Inbox.md", `- [ ] Prepended line ⏳ ${today}\n` + original);
+    await writeAndWait("Tasks/Inbox.md", `- [ ] Prepended line ⏳ ${today}\n` + original, true);
     await forFlush();
 
-    // L1 now points to the prepended task, not the original one.
+    // US-208: an issued L1 ref still resolves the original task after drift.
     const l1Info = await callApi((api) => api.show("Tasks/Inbox.md:L1")) as { title: string };
-    await expect(l1Info.title).toBe("Prepended line");
+    await expect(l1Info.title).toBe("Hash-fallback task");
 
     // Resolving by hash must still find the original task at its new location.
     // callApi can't capture outer variables (function is serialised), so call executeObsidian directly.

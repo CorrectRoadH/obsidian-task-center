@@ -991,3 +991,8 @@ test('US-128/208 handler tag edits followed by real undo preserve refs for nest'
  assert.match(await f.run('nest',{ref:'tasks.md:L2',under:'tasks.md:L1'}),/^ok/);
  assert.equal(f.content.get('tasks.md'),'- [ ] Parent #old\n    - [ ] Child');
 });
+
+test('US-202/228 handler unchanged nest by hash returns the current task ref',async()=>{
+ const f=cliFixture('- [ ] Parent\n    - [ ] Child');const tasks=JSON.parse(await f.run('list',{format:'json'}));
+ const out=await f.run('nest',{ref:tasks[1].hash,under:tasks[0].hash});assert.match(out,/^ok  tasks.md:L2 /);assert.match(out,/unchanged/);
+});

@@ -967,10 +967,11 @@ export default class TaskCenterPlugin extends Plugin {
   private async cliNest(args: CliArgs): Promise<string> {
     const ref = requireArg(args.ref, "ref");
     const under = requireArg(args.under, "under");
+    const child = await this.api.show(ref);
     const r = await this.api.nest(ref, under);
     const insertion = r.undoOps.find(op => op.after.length > 0);
-    const path = insertion?.path ?? ref.slice(0, ref.lastIndexOf(":L"));
-    const line = insertion?.line ?? Number(ref.slice(ref.lastIndexOf(":L") + 2)) - 1;
+    const path = insertion?.path ?? child.path;
+    const line = insertion?.line ?? child.line;
     if (r.unchanged) return formatOkWrite(null, path, line, r.before, r.after, true, "nested");
     return `ok  ${path}:L${line + 1}  nested\n` + r.undoOps.map(op =>
       formatOkWrite(null, op.path, op.line, op.before.join("\n"), op.after.join("\n"), false, "nested")
