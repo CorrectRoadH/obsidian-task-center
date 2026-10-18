@@ -127,10 +127,23 @@ describe("US-109x/z2 area filter model", function () {
       return JSON.parse(JSON.stringify(plugin.settings.queryPresets));
     });
     await obsidianPage.disablePlugin("task-center");
-    await obsidianPage.enablePlugin("task-center");
+    const loadErrors = await browser.executeObsidian(async ({ app }) => {
+      const errors: string[] = [];
+      const original = console.error;
+      console.error = (...args: unknown[]) => {
+        errors.push(args.map((arg) => arg instanceof Error ? arg.stack : String(arg)).join(" "));
+        original(...args);
+      };
+      try {
+        await (app as any).plugins.enablePluginAndSave("task-center");
+      } finally {
+        console.error = original;
+      }
+      return errors;
+    });
     await browser.waitUntil(async () => browser.executeObsidian(({ app }) =>
       !!(app as any).plugins.plugins["task-center"]), {
-      timeout: 10000, timeoutMsg: "Task Center did not finish enabling after reload",
+      timeout: 10000, timeoutMsg: `Task Center did not finish enabling after reload: ${loadErrors.join("\n")}`,
     });
     const reloaded = await browser.executeObsidian(({ app }) =>
       (app as any).plugins.plugins["task-center"].settings.queryPresets);
