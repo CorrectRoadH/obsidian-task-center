@@ -856,53 +856,114 @@ npx skills add CorrectRoadH/obsidian-task-center
 
 ## 16. CLI / AI Agent 故事
 
-### 16.1 任务读写
+CLI 是给 AI agent 和脚本用的主入口，和看板读写的是同一批任务。agent 没法“看一眼界面确认”，所以 CLI 的每个结果都必须明确、可重复、可核对。
 
-`US-201` 注册命令到 Obsidian CLI，不另写独立 CLI。
+### 16.1 基本约定
 
-`US-201a` `obsidian task-center` 作为根帮助入口，列出任务读写、Query Tab 管理和 AI skill 安装命令，避免用户只输入 namespace 时得到 “Command not found”。
+`US-201` 命令注册到 Obsidian 自带的 CLI（`obsidian task-center:<命令>`），不另做一个独立程序。只在桌面端可用。
 
-`US-202` `list` 每行第一列是稳定 id，例如 `path:L42` 或 hash。
+`US-201a` 只输入 `obsidian task-center` 时，列出所有命令和它们的全部参数。帮助里写的参数必须和实际支持的一致，不多也不少。
 
-`US-203` 写操作重复执行结果相同。对已完成任务再跑 `done` 返回 `ok … unchanged`。
+`US-202` 每条任务有一个固定编号 `path:L行号`。`list` 每行第一列就是它，`show` 和 JSON 输出里还附带按标题算的 hash。所有接受 `ref=` 的命令都既认 `path:Lnn` 也认 hash。
 
-`US-204` 每次写都返回 `before / after` 两行 diff。
+`US-208` 文件被改过、行号对不上时，按标题 hash 找回原任务。找回时必须确认那一行确实还是这条任务，不能写到别的任务上；找不到就报 `not_found`。
 
-`US-205` `list` 和 `stats` 输出必须 human-readable，同时对 AI 友好；不强制 JSON。
+`US-214` 一个 hash 对应多条任务时，返回 `ambiguous_slug` 和候选列表，绝不自己猜一条。
 
-`US-206` `stats days=N` 显示估时 vs 实际耗时比率，以及 top tag 分钟数。
+`US-203` 同一条命令重复执行，结果一样。对已经完成的任务再跑 `done`（哪怕隔了几天、不带 `at=`）返回 `ok … unchanged`，不改完成日期。所有写命令都是这样。
 
-`US-207` CLI 排期词：`today / tomorrow / week / next-week / month / YYYY-MM-DD / FROM..TO`。`unscheduled` 只表示缺少有效 `⏳`。
+`US-204` 每次真的改了文件，输出改前、改后两行（`before` / `after`）。一条命令改了多行时（例如完成父任务连带完成子任务、嵌套移动任务），每一行改动都要列出来；`add` 输出新任务的编号和写入的那一行；`nest` 输出被移动任务的新编号。
 
-`US-208` 行号失效时按标题 hash 找回任务；hash 撞了返回候选，不猜。
+`US-205` 默认输出是人和 AI 都容易读的纯文本，每行一条，适合 grep；加 `format=json` 输出结构化数据。
 
-`US-209` 支持增量改时间，例如 `actual minutes=+30m`。
+`US-211` 出错时输出两行：第一行 `error <code>`，第二行一句人话说明怎么办。`code` 是固定的英文短码，含义不重叠：
 
-`US-210` 文档要给出“典型一天收尾 / 快速捕捉 / 补记完成”三种工作流。
+- `not_found`：找不到任务。
+- `ambiguous_slug`：hash 对应多条任务。
+- `missing_arg`：缺少必填参数。
+- `invalid_arg`：参数值不合法（时长、数字、布尔值、标签等）。
+- `invalid_date`：日期认不出或不存在（如 `2026-02-31`）。
+- `invalid_query`：视图 DSL 不合法。
+- `daily_notes_missing` / `daily_notes_folder_missing`：日记插件没开或没设文件夹。
+- `write_conflict`：写入时发现那一行已经被别处改了。
 
-`US-211` 报错两行：`error <code>` + 一句人话。code 是短而固定的英文集合。
+参数值里有特殊字符（如 `tag=c++`）也只能报 `invalid_arg`，不能让程序崩溃。
 
-`US-212` `list parent=<id>` 能筛出某父任务的所有子任务。
+`US-412` 错误码永远是英文；第二行的人话跟随 Obsidian 语言。
 
-`US-213` `add` 支持 `stamp-created=true|false`。
+`US-410a` CLI 里所有日期参数都认自然语言：`today`、`tomorrow`、`今天`、`明天`、`周六`、`next-week` 等（同 US-410），先换成 `YYYY-MM-DD` 再写。认不出就报 `invalid_date`，绝不把原词写进文件。
 
-`US-214` hash 撞到多条任务时，返回 `ambiguous_slug` + 候选列表，绝不猜。
+`US-413a` 布尔参数按值判断：`remove=false`、`hidden=false` 就是“否”。数字参数（`days=`、`limit=`）不是正整数时报 `invalid_arg`。
 
-`US-228` `nest ref=A under=B` 能跨文件把 A 变成 B 的子任务，语义与 GUI US-125 一致。
+### 16.2 查任务
 
-### 16.2 Query Preset 管理
+`US-207` `list` 按条件列任务：
 
-`US-216` CLI 能列出 query tabs / presets，并查看某个 preset 的完整 DSL。
+- `scheduled=` / `done=`：`today`、`tomorrow`、`yesterday`、`week`、`next-week`、`month`、`next-month`、`YYYY-MM-DD`、`FROM..TO`，以及 `unscheduled`（没有有效排期）。
+- `status=todo|done|dropped`，`tag=`，`search=`（标题包含，不分大小写），`overdue`，`has-deadline`，`parent=<id>`，`limit=`。
+- 排期按有效排期算：子任务没写 `⏳` 就跟父任务，和看板一致（US-144）。
+- `week` 的范围跟随设置里“一周从哪天开始”（US-112）。
 
-`US-217` CLI 能创建和更新 query preset DSL。它与 GUI 的保存 / 更新使用同一份存储。
+`US-212` `list parent=<id>` 列出某个任务下面的全部子任务。
 
-`US-217a` CLI 创建 / 更新 Query DSL 时，如果输入是 1.0 前的旧 DSL（顶层 `search/tag/time/status`、顶层 `filters` / `summary`，或 `view.type/preset/sections/tray/matrix` 而不是 `view.layout`），必须返回 `invalid_query`，并明确提示 Task Center 1.0 已改为 `view.layout` + area `when`，让 agent / 用户更新 `CorrectRoadH/obsidian-task-center` skill 后重试。不能静默丢弃旧字段后创建全量视图。
+`US-216a` `show ref=` 显示一条任务的全部信息：原文、状态、各日期、标签、估时 / 实际、父任务和子任务编号。
 
-`US-218` CLI 能重命名、复制、隐藏、删除、设默认 query tab。目标必须使用稳定 id。
+### 16.3 改任务
 
-`US-219` CLI 与 GUI 共用同一份 DSL schema 与校验规则。
+所有写命令都按设置里的任务格式风味写（US-111），只改目标那一行需要改的部分，其它内容原样保留（US-407）。
 
-`US-220` CLI 能按某个 query tab / preset 的 DSL 执行查询，并按该 preset 的 view 展示结果。用户或 AI 可以查看 `preset-today` 的默认 list，也可以临时指定 `view=week` 或 `view=month`，用同一份 filters 看周 / 月分布。CLI 展示必须保留稳定任务 id，week 按 7 天分组，month 按日期分组，list 按任务树组织；JSON 输出要暴露 view model，方便代理继续处理。
+`US-213` `add text= [to=] [tag=] [scheduled=] [deadline=] [estimate=] [parent=] [stamp-created=true|false]` 新建任务。不写 `to=` 时写进今天的日记（US-163）；写了 `parent=` 就插到那个任务下面，作为它的子任务（`to=` 和 `parent=` 指向不同文件时报 `invalid_arg`）。
+
+`US-221` `schedule ref= date=` 改排期，`date=null` 清空排期；`deadline ref= date=` 改截止，`date=null` 清空。缺 `date=` 报 `missing_arg`，不能当成清空。
+
+`US-222` `done ref= [at=]` 标成完成；`undone ref=` 改回未完成；`abandon ref=` 标成放弃（`drop` 是旧名字，效果一样）。
+
+- 完成 / 放弃父任务时，未完成的子任务跟着完成 / 放弃，已完成的子任务不动（US-145 / US-124）。
+- 状态之间来回切时清掉旧状态的日期：改回未完成时去掉 `✅` 和 `❌`；放弃改成完成时去掉 `❌`。
+
+`US-209` `actual ref= minutes=` 记录实际耗时：`45m`、`1h30m` 是设成这个值，`+30m` 是加上，`-15m` 是减去（最少到 0）。加减按写入那一刻文件里的值算，不按缓存。`estimate ref= minutes=` 设估时，`minutes=null` 清除。时长写法认不出时报 `invalid_arg`。
+
+`US-223` `tag ref= tag=#x [remove]` 给任务加或删一个标签。中文标签、带 `/` 的层级标签都按完整标签匹配：加已有的标签返回 unchanged；删 `#work` 不会动到 `#work/sub`。
+
+`US-227` `rename ref= title=` 只改任务标题，标签、日期、行内字段、块引用 `^id` 都保留。标题为空报 `missing_arg`。
+
+`US-228` `nest ref=A under=B` 把 A（连同它的子任务）移到 B 下面，跨文件也可以，规则和看板拖拽嵌套一样（US-125）：清空 A 自己的 `⏳`，跟随 B 的排期。
+
+### 16.4 每日简报与复盘
+
+`US-723` `brief [today=] [limit=] [format=json]`：agent 每天开工时用，回答“现在该做什么”。
+
+- 分三组：逾期（截止已过，或排期已过但还没做）、今天（排期或截止是今天）、未排期候选。
+- 每组给数量和前几条任务；每条附上可以直接执行的后续命令（完成、放弃、排到今天 / 明天、记实际耗时）。
+- 一条未完成任务只要排期或截止落在今天及以前，就必须出现在某一组里，不能漏掉。
+
+`US-722` `review [today=] [days=7] [limit=] [format=json]`：晚上或周末复盘用。
+
+- 分“今天”和“最近 N 天”两段，每段列出完成了什么、放弃了什么、哪些拖期了。
+- 给出估时和实际耗时的对比、按分组标签的统计，以及样例任务编号。
+
+`US-206` `stats [days=7] [from=] [to=] [group=] [format=json]`：估时 vs 实际耗时的比例，以及按标签的耗时排行。`group=象限` 把名字含“象限”的标签单独汇总。`days=7` 就是包含今天在内的 7 天，在任何时区都一样。
+
+`US-210` 文档（README 和 AI skill）给出三种常见用法的完整命令示例：一天收尾、快速记下一件事、事后补记已完成。
+
+### 16.5 管理视图
+
+`US-216` `query-list [hidden=true] [format=json]` 列出所有视图；`query-show id=` 显示某个视图的完整 DSL。`hidden=false` 或不写时不列出隐藏的视图。
+
+`US-217` `query-create dsl=`（同 `query-save`）新建视图，`query-update id= dsl=` 覆盖更新。和看板的保存 / 更新存在同一个地方，改完已打开的看板立即刷新。
+
+`US-217a` 传进来的是 1.0 之前的旧 DSL（顶层 `search/tag/time/status`、顶层 `filters` / `summary`、`view.type/preset/sections/tray/matrix`）时，返回 `invalid_query`，并提示 1.0 已改成 `view.layout` + 每块区域自己的 `when`，请更新 AI skill 后重试。不能丢掉旧字段后建出一个显示全部任务的视图。
+
+`US-219` CLI 和看板用同一套 DSL 规则检查。区域里任何字段写错（状态值、日期写法、标签表达式、放弃区的 `onDrop` 等）都返回 `invalid_query`，并指出是哪块区域的哪个字段，不能静默改成默认值。报错文字跟随 Obsidian 语言。
+
+`US-218` `query-rename`、`query-copy`、`query-hide`、`query-delete`、`query-set-default` 管理视图，目标一律用视图 id。出厂视图也能删（US-109l）。
+
+`US-220` `query-run id= [view=list|week|month] [anchor=] [format=json]` 按某个视图的配置查任务，输出和看板上看到的一致：
+
+- 视图有几块区域，就按布局顺序分几段输出，每段带区域标题；放弃区不输出。
+- week 按 7 天分组，month 按日期分组，list 按任务树。
+- `view=week` / `view=month` 把每块显示任务的区域都换成这种类型来看，过滤条件不变。
+- 每条任务都带固定编号；JSON 输出包含每块区域的结果，方便 agent 继续处理。
 
 ## 17. 精力管理故事
 
