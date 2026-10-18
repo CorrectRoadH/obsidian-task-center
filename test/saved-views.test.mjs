@@ -59,7 +59,7 @@ test("US-109c1 #8/#9: reload preserves mixed tab order and edited builtin layout
     { type: "list", title: "My tasks", limit: 12, when: { search: "work" } },
     { type: "week" },
   ] } };
-  const custom = createQueryPreset("My tab");
+  const custom = createQueryPreset("My tab", {});
   const saved = [custom, builtins[2], builtins[0], ...builtins.filter((_, i) => i !== 0 && i !== 2)];
   const normalized = saved.map(normalizeQueryPreset);
   const reloaded = ensureBuiltinQueryPresets(JSON.parse(JSON.stringify(saved)));
@@ -68,7 +68,7 @@ test("US-109c1 #8/#9: reload preserves mixed tab order and edited builtin layout
 });
 
 test("US-109l #9: missing defaults append without moving existing tabs or reviving deletions", () => {
-  const custom = createQueryPreset("First");
+  const custom = createQueryPreset("First", {});
   const saved = [custom, ensureBuiltinQueryPresets([])[2]];
   const reloaded = ensureBuiltinQueryPresets(saved, {}, ["preset-today"]);
   assert.deepEqual(reloaded.slice(0, 2), saved);
