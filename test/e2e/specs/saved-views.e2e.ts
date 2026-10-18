@@ -143,7 +143,7 @@ describe("US-109x/z2 area filter model", function () {
     await browser.executeObsidianCommand("task-center:open");
     await forFlush();
     await $('[data-query-tab-id="preset-today"]').click();
-    await expect($(".task-center-view")).toHaveText(expect.stringContaining("Persisted layout"));
+    await expect($(".task-center-view")).toHaveText(expect.stringContaining("PERSISTED LAYOUT"));
     const firstTab = await $(".bt-tabbar [data-query-tab-id]").getAttribute("data-query-tab-id");
     expect(firstTab).toBe("sv-reload");
   });
