@@ -111,6 +111,33 @@ describe("US-109x/z2 area filter model", function () {
     }
   });
 
+  it("US-109c1 #8/#9: plugin reload keeps saved builtin layout and mixed tab order", async function () {
+    const saved = await browser.executeObsidian(async ({ app }) => {
+      const plugins = (app as any).plugins;
+      const plugin = plugins.plugins["task-center"];
+      const today = plugin.settings.queryPresets.find((p: any) => p.id === "preset-today");
+      today.view = { layout: { type: "list", title: "Persisted layout", limit: 12 } };
+      const custom = { id: "sv-reload", name: "Reload test", builtin: false, hidden: false,
+        view: { layout: { type: "list" } } };
+      plugin.settings.queryPresets = [custom, today,
+        ...plugin.settings.queryPresets.filter((p: any) => p.id !== today.id)];
+      plugin.settings.defaultSavedViewId = today.id;
+      plugin.settings.lastSavedViewId = today.id;
+      await plugin.saveSettings();
+      const expected = JSON.parse(JSON.stringify(plugin.settings.queryPresets));
+      await plugins.disablePlugin("task-center");
+      await plugins.enablePlugin("task-center");
+      return { expected, actual: plugins.plugins["task-center"].settings.queryPresets };
+    });
+    expect(saved.actual).toEqual(saved.expected);
+    await browser.executeObsidianCommand("task-center:open");
+    await forFlush();
+    await $('[data-query-tab-id="preset-today"]').click();
+    await expect($(".task-center-view")).toHaveText(expect.stringContaining("Persisted layout"));
+    const firstTab = await $(".bt-tabbar [data-query-tab-id]").getAttribute("data-query-tab-id");
+    expect(firstTab).toBe("sv-reload");
+  });
+
   it("US-109x: editing an area's `when` (tag) filters its cards and saves into a new tab", async function () {
     const today = todayISO();
     await writeAndWait(

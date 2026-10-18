@@ -331,8 +331,8 @@ function migrateLegacyViewToLayout(cfg: Record<string, unknown>): LayoutNode {
   else if (type === "month") base = { type: "month" };
   else {
     // Legacy `sections` are intentionally dropped: list no longer groups
-    // internally. The builtin Today layout (col[ list×3 ]) is re-seeded from
-    // src/builtin-views on every load, so it doesn't rely on this migration.
+    // internally. Legacy builtin layouts are seeded once by
+    // migrateLegacyQueryPreset; modern saved layouts remain user-owned.
     const list: ListAreaConfig = { type: "list" };
     if (orderBy && orderBy.length > 0) list.orderBy = orderBy;
     base = list;
@@ -624,6 +624,10 @@ export function migrateLegacyQueryPreset(raw: unknown): QueryPreset {
     if (isRecord(obj.time)) filters.time = obj.time;
   }
   const baseFilters = normalizeQueryPresetFilters(filters);
+  const builtinKind = typeof obj.id === "string" ? builtinSavedViewKind(obj.id) : null;
+  const legacyBuiltinView = builtinKind && !(isRecord(obj.view) && "layout" in obj.view)
+    ? seededBuiltinQueryPreset(builtinKind, DEFAULT_BUILTIN_LABELS[builtinKind]).view
+    : null;
   const normalized = normalizeQueryPreset({
     id: typeof obj.id === "string" ? obj.id : defaultSavedViewId(),
     name: typeof obj.name === "string" ? obj.name : "",
@@ -631,7 +635,7 @@ export function migrateLegacyQueryPreset(raw: unknown): QueryPreset {
     hidden: !!obj.hidden,
     // Old `view` is the legacy {type, preset, sections, tray, matrix} shape;
     // normalizeQueryPresetView migrates it to a layout tree.
-    view: isRecord(obj.view) ? obj.view : {},
+    view: legacyBuiltinView ?? (isRecord(obj.view) ? obj.view : {}),
   } as unknown as QueryPreset);
   return normalizeQueryPreset({
     ...normalized,
@@ -705,7 +709,7 @@ export function createBuiltinQueryPresets(
 
 /**
  * Ensure the 7 builtin QueryPreset tabs are present, preserving user
- * modifications. Custom presets are appended after builtins.
+ * modifications and saved order. Only missing defaults are appended.
  * This is the QueryPreset-native replacement for `ensureBuiltinSavedViews`
  * — it does NOT call `fromQueryPreset`.
  */
@@ -714,40 +718,20 @@ export function ensureBuiltinQueryPresets(
   labels: Partial<Record<BuiltinQueryTab, string>> = {},
   deletedBuiltinIds: readonly string[] = [],
 ): QueryPreset[] {
-  // 内置 view 的布局是出厂规范（含本地化所需的稳定 id），不作为用户就地
-  // 编辑面（自定义路径是「复制后修改」）。因此 builtin 的 view 始终用最新
-  // 出厂布局刷新，保证升级后布局结构、area id、本地化保持一致；用户对
-  // 名称 / 隐藏 / 排序 / filters 的改动仍然保留。
   const tombstoned = new Set(deletedBuiltinIds);
-  const existingRaw = new Map(presets.map((p) => [p.id, p]));
-  const out: QueryPreset[] = [];
+  const existingIds = new Set(presets.map((p) => p.id));
+  const out = presets.map((preset) => {
+    const current = isLegacyQueryPresetShape(preset) ? migrateLegacyQueryPreset(preset) : preset;
+    return normalizeQueryPreset({
+      ...current,
+      builtin: isBuiltinSavedViewId(current.id) || current.builtin,
+    });
+  });
   for (const tab of BUILTIN_QUERY_TABS) {
     const seeded = seededBuiltinQueryPreset(tab, labels[tab] ?? DEFAULT_BUILTIN_LABELS[tab]);
-    const current = existingRaw.get(seeded.id);
-    existingRaw.delete(seeded.id);
-    if (current) {
-      const currentRecord = current as unknown as Record<string, unknown>;
-      const legacyFilters = isRecord(currentRecord.filters)
-        ? normalizeQueryPresetFilters(currentRecord.filters)
-        : {};
-      const seededView = queryFiltersHaveActiveConditions(legacyFilters)
-        ? { layout: applyBaseFiltersToLayout(seeded.view.layout, legacyFilters) }
-        : seeded.view;
-      out.push(normalizeQueryPreset({
-        ...current,
-        builtin: true,
-        view: seededView,
-      }));
-    } else if (tombstoned.has(seeded.id)) {
-      // US-109l: the user permanently deleted this preset — don't re-seed it.
-      continue;
-    } else {
-      out.push(normalizeQueryPreset(seeded));
+    if (!existingIds.has(seeded.id) && !tombstoned.has(seeded.id)) {
+      out.push(seeded);
     }
-  }
-  for (const preset of presets) {
-    if (isBuiltinSavedViewId(preset.id)) continue;
-    out.push(normalizeQueryPreset(preset));
   }
   return out;
 }
@@ -776,7 +760,7 @@ export function restoreBuiltinQueryPresets(
   labels: Partial<Record<BuiltinQueryTab, string>> = {},
 ): QueryPreset[] {
   const customPresets = presets.filter((p) => !isBuiltinSavedViewId(p.id));
-  return ensureBuiltinQueryPresets(customPresets, labels);
+  return [...createBuiltinQueryPresets(labels), ...customPresets.map(normalizeQueryPreset)];
 }
 
 // US-109z2: a preset is identity + view only (no tab-level filters). Filter

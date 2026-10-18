@@ -252,9 +252,8 @@ export default class TaskCenterPlugin extends Plugin {
     // tray/matrix} instead of {layout}. Both are migrated into normalized
     // QueryPresets instead of being discarded. Flat shapes need their flat
     // fields collapsed into `filters` first; old-DSL views are migrated by
-    // `ensureBuiltinQueryPresets` → `normalizeQueryPreset` downstream. Builtin
-    // entries keep their user edits (name/hidden/order/filters) while
-    // their layout is refreshed to the latest factory JSON.
+    // `migrateLegacyQueryPreset`. Only legacy builtin layouts use factory JSON;
+    // modern saved layouts and mixed tab order survive initialization.
     const rawViews: unknown[] = merged.queryPresets ?? [];
     const legacyRaw = rawViews.filter((v) => isLegacyQueryPresetShape(v));
     this.migratedLegacyCount = legacyRaw.length;

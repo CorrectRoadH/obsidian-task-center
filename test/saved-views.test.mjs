@@ -65,6 +65,10 @@ test("US-109c1 #8/#9: reload preserves mixed tab order and edited builtin layout
   const reloaded = ensureBuiltinQueryPresets(JSON.parse(JSON.stringify(saved)));
   assert.deepEqual(reloaded, normalized);
   assert.deepEqual(ensureBuiltinQueryPresets(reloaded), normalized);
+  const restored = restoreBuiltinQueryPresetById(reloaded, "preset-today");
+  assert.deepEqual(restored.map((p) => p.id), normalized.map((p) => p.id));
+  assert.deepEqual(restored.find((p) => p.id === "preset-today").view,
+    ensureBuiltinQueryPresets([])[0].view);
 });
 
 test("US-109l #9: missing defaults append without moving existing tabs or reviving deletions", () => {
@@ -2029,6 +2033,8 @@ test("US-414: legacy builtin view keeps user edits but refreshes layout from fac
   assert.equal(today.builtin, true);
   // layout comes from the factory JSON, not the degraded legacy {type:list}
   assert.ok(today.view.layout, "factory layout applied");
+  assert.equal(today.view.layout.children.length, 3);
+  assert.deepEqual(today.view.layout.children[1].when.status, ["todo"]);
 });
 
 test("US-414: full settings-shaped migration keeps builtins + custom views", () => {
