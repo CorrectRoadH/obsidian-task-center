@@ -112,6 +112,10 @@ describe("US-109x/z2 area filter model", function () {
   });
 
   it("US-109c1 #8/#9: plugin reload keeps saved builtin layout and mixed tab order", async function () {
+    // resetVault removes the installed plugin assets while the old instance
+    // remains in memory. Reinstall through the service before testing reload.
+    await browser.reloadObsidian({ vault: VAULT });
+    await resetSavedViewTestState();
     const saved = await browser.executeObsidian(async ({ app }) => {
       const plugins = (app as any).plugins;
       const plugin = plugins.plugins["task-center"];
@@ -127,23 +131,10 @@ describe("US-109x/z2 area filter model", function () {
       return JSON.parse(JSON.stringify(plugin.settings.queryPresets));
     });
     await obsidianPage.disablePlugin("task-center");
-    const loadErrors = await browser.executeObsidian(async ({ app }) => {
-      const errors: string[] = [];
-      const original = console.error;
-      console.error = (...args: unknown[]) => {
-        errors.push(args.map((arg) => arg instanceof Error ? arg.stack : String(arg)).join(" "));
-        original(...args);
-      };
-      try {
-        await (app as any).plugins.enablePluginAndSave("task-center");
-      } finally {
-        console.error = original;
-      }
-      return errors;
-    });
+    await obsidianPage.enablePlugin("task-center");
     await browser.waitUntil(async () => browser.executeObsidian(({ app }) =>
       !!(app as any).plugins.plugins["task-center"]), {
-      timeout: 10000, timeoutMsg: `Task Center did not finish enabling after reload: ${loadErrors.join("\n")}`,
+      timeout: 10000, timeoutMsg: "Task Center did not finish enabling after reload",
     });
     const reloaded = await browser.executeObsidian(({ app }) =>
       (app as any).plugins.plugins["task-center"].settings.queryPresets);
