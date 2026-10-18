@@ -110,15 +110,17 @@ export interface DepHealthBannerOptions {
  */
 export class DepHealthBanner {
   private active: DepWarningCode[] = [];
+  private readonly timer: number;
 
   constructor(
     private readonly el: HTMLElement,
     private readonly app: App,
-    opts: DepHealthBannerOptions,
+    private readonly opts: DepHealthBannerOptions,
   ) {
     this.el.addClass("task-center-dep-health");
-    this.el.addEventListener("click", opts.onClick);
     this.refresh();
+    // Plugin enable/disable and settings changes have no public dedicated event.
+    this.timer = window.setInterval(() => this.refresh(), 1000);
   }
 
   /** Re-read dep state and repaint. Cheap — safe to call from any event. */
@@ -130,14 +132,24 @@ export class DepHealthBanner {
     this.active = next;
     this.el.empty();
     for (const code of next) {
-      const item = this.el.createDiv({ cls: `task-center-dep-warning task-center-dep-warning-${code}` });
+      const item = this.el.createEl("button", { cls: `task-center-dep-warning task-center-dep-warning-${code}` });
       item.dataset.depWarning = code;
       item.setText(`⚠ ${tr(warningMessageKey(code))}`);
       item.title = tr("dep.openSettings");
+      item.addEventListener("click", () => {
+        const setting = (this.app as unknown as { setting?: {
+          open?: () => void; openTabById?: (id: string) => void;
+        } }).setting;
+        if (!setting?.open) { this.opts.onClick(); return; }
+        setting.open();
+        setting.openTabById?.(code.startsWith("task-format-") ? "community-plugins"
+          : code === "daily-notes-disabled" ? "core-plugins" : "daily-notes");
+      });
     }
   }
 
   dispose(): void {
+    window.clearInterval(this.timer);
     this.el.empty();
     this.active = [];
   }

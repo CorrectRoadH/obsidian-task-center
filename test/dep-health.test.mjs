@@ -49,3 +49,32 @@ test("US-701e: installed but disabled companion reports disabled", () => {
 test("US-701d: no Tasks or Dataview companion reports missing", () => {
   assert.equal(checkTaskFormatCompanion(appWith()), "task-format-companion-missing");
 });
+
+test("US-701d/e/f: warning opens community plugins, self-refreshes and releases its timer", async () => {
+  const { DepHealthBanner } = await import("../test/.compiled/dep-health.bundle.js");
+  class Element extends EventTarget {
+    children = []; dataset = {};
+    addClass() {} setText(text) { this.text = text; }
+    empty() { this.children = []; }
+    createEl() { const child = new Element(); this.children.push(child); return child; }
+    createDiv() { return this.createEl(); }
+  }
+  let tick; let released = false; let opened = false; let tab;
+  const originalWindow = globalThis.window;
+  globalThis.window = { setInterval: cb => { tick = cb; return 123; }, clearInterval: id => { released = id === 123; } };
+  try {
+    const app = appWith();
+    app.internalPlugins = { plugins: { "daily-notes": { enabled: true, instance: { options: { folder: "Daily" } } } } };
+    app.setting = { open: () => { opened = true; }, openTabById: id => { tab = id; } };
+    const el = new Element();
+    const banner = new DepHealthBanner(el, app, { onClick: () => {} });
+    el.children[0].dispatchEvent(new Event("click"));
+    assert.equal(opened, true);
+    assert.equal(tab, "community-plugins");
+    app.plugins.plugins.dataview = {};
+    tick();
+    assert.equal(el.children.length, 0);
+    banner.dispose();
+    assert.equal(released, true);
+  } finally { globalThis.window = originalWindow; }
+});
