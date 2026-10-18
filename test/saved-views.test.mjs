@@ -53,6 +53,29 @@ const {
 } = await import("../test/.compiled/saved-views.js");
 
 // ── US-720d2: 全空布局不再折叠成一个 view 级居中空状态——每个 area 各显示各自
+test("US-109c1 #8/#9: reload preserves mixed tab order and edited builtin layout", () => {
+  const builtins = ensureBuiltinQueryPresets([]);
+  builtins[0].view = { layout: { dir: "row", children: [
+    { type: "list", title: "My tasks", limit: 12, when: { search: "work" } },
+    { type: "week" },
+  ] } };
+  const custom = createQueryPreset("My tab");
+  const saved = [custom, builtins[2], builtins[0], ...builtins.filter((_, i) => i !== 0 && i !== 2)];
+  const normalized = saved.map(normalizeQueryPreset);
+  const reloaded = ensureBuiltinQueryPresets(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(reloaded, normalized);
+  assert.deepEqual(ensureBuiltinQueryPresets(reloaded), normalized);
+});
+
+test("US-109l #9: missing defaults append without moving existing tabs or reviving deletions", () => {
+  const custom = createQueryPreset("First");
+  const saved = [custom, ensureBuiltinQueryPresets([])[2]];
+  const reloaded = ensureBuiltinQueryPresets(saved, {}, ["preset-today"]);
+  assert.deepEqual(reloaded.slice(0, 2), saved);
+  assert.equal(reloaded.some((p) => p.id === "preset-today"), false);
+  assert.equal(new Set(reloaded.map((p) => p.id)).size, reloaded.length);
+});
+
 // 的空状态。四象限 col[row,row] 全空时仍渲染 4 个 area（不被压平、不被一个空状态
 // 盖住）。collectAreas 仍按 DFS 收集到 4 个叶子。──
 
