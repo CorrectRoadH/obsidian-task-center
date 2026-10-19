@@ -1,29 +1,8 @@
 #!/bin/sh
-# Pre-push lint gate — enforced in CODE (committed hook, wired via package.json
-# `prepare` → `core.hooksPath=.githooks`), NOT via agent / AGENTS.md docs.
-#
-# Mirrors the CI "Lint" gate (.github/workflows/{ci,release}.yml run `pnpm lint`)
-# so a lint failure can never reach CI or get baked into a release tag — exactly
-# the miss that broke the first 1.1.0 release attempt (a redundant `| unknown`
-# union tsc accepts but eslint rejects).
-#
-# Order is cheapest-first. Emergency bypass: `git push --no-verify`.
-set -e
+# US-602: validation runs on the isolated Crabbox provider, never on the
+# developer machine. Missing configuration or a failed gate blocks the push.
+set -eu
 
-echo "[pre-push] eslint (pnpm lint)…"
-pnpm run --silent lint
-
-# harness-lint is the project's LDD gate. Optional: skip (don't block the push)
-# when the CLI isn't installed, so a fresh clone without it can still push.
-if command -v harness-lint >/dev/null 2>&1; then
-  echo "[pre-push] harness-lint…"
-  if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
-    harness-lint check --base origin/main
-  else
-    harness-lint check --changed
-  fi
-else
-  echo "[pre-push] harness-lint not installed — skipping (npx skills add CorrectRoadH/harness-lint)"
-fi
-
-echo "[pre-push] lint gate passed ✓"
+echo "[pre-push] Crabbox remote gate (pnpm run test:remote)…"
+pnpm run test:remote
+echo "[pre-push] remote gate passed ✓"

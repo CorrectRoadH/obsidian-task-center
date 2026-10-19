@@ -1,6 +1,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+
+test("US-602: pre-push runs the remote gate without local dependencies and propagates failure", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "task-center-pre-push-"));
+  try {
+    await mkdir(join(dir, "bin"));
+    await writeFile(join(dir, "hook"), await readFile(".githooks/pre-push"));
+    await writeFile(join(dir, "bin", "pnpm"), '#!/bin/sh\n[ "$*" = "run test:remote" ] || exit 91\nexit "$GATE_STATUS"\n', { mode: 0o755 });
+    for (const status of [0, 23]) {
+      const result = spawnSync("/bin/sh", [join(dir, "hook")], {
+        cwd: dir,
+        env: { PATH: join(dir, "bin"), GATE_STATUS: String(status) },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, status, result.stderr + result.stdout);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("US-602: remote gate fails closed on missing config, empty command, and prepare failure", async () => {
+  const pkg = JSON.parse(await readFile("package.json", "utf8"));
+  const dir = await mkdtemp(join(tmpdir(), "task-center-remote-gate-"));
+  const run = () => spawnSync("/bin/sh", ["-c", pkg.scripts["test:remote"]], { cwd: dir, encoding: "utf8" });
+  try {
+    assert.notEqual(run().status, 0, "missing configuration must block the gate");
+    await mkdir(join(dir, ".crabbox"));
+    for (const [config, expected] of [
+      ["CRABBOX_TEST_GATE=''\n", 1],
+      ["CRABBOX_TEST_PREPARE='false'\nCRABBOX_TEST_GATE='true'\n", 1],
+      ["CRABBOX_TEST_PREPARE='exit 17'\nCRABBOX_TEST_GATE='true'\n", 17],
+      ["CRABBOX_TEST_PREPARE=''\nCRABBOX_TEST_GATE='exit 23'\n", 23],
+      ["CRABBOX_TEST_PREPARE=''\nCRABBOX_TEST_GATE='true'\n", 0],
+    ]) {
+      await writeFile(join(dir, ".crabbox", "remote-test.env"), config);
+      const result = run();
+      if (expected === 1) assert.notEqual(result.status, 0, "invalid configuration or failed prepare must block the gate");
+      else assert.equal(result.status, expected, result.stderr);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 
 async function readWorkflow(name) {
   return readFile(`.github/workflows/${name}`, "utf8");

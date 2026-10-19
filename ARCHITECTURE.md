@@ -1458,6 +1458,7 @@ E2E 等待 cache 刷新时使用 `data-test-cache-version`，不使用固定 sle
 
 - 严格 semver tag，不带 `v`，不带 pre-release。
 - pre-flight gate：typecheck、lint、unit test、e2e。
+- 本地 pre-push 通过 `pnpm run test:remote` 发起 Crabbox 正式 gate，不依赖本地 `node_modules`。远端配置缺失、前置连接失败或 gate 失败均阻止推送，不静默跳过检查。
 - 每次发版更新 `versions.json`。
 - Release body 从 PR / issue 标题按 conventional 前缀分组生成，可手动覆写。
 - Release asset 挂 `main.js`、`manifest.json`、`styles.css`；禁止 build 产物 commit 回 main。
